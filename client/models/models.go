@@ -37,3 +37,4 @@ type FetchResult struct {
 	SubscriptionID uint32 // Subscription ID for ack/nack
 	Messages       []Msg  // Fetched messages
 }
+

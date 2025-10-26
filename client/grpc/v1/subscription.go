@@ -1,5 +1,3 @@
-//go:build grpc
-
 package v1
 
 import (
@@ -31,3 +29,4 @@ func (s *subscription) Close() error {
 
 	return nil
 }
+

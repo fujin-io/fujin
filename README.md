@@ -77,8 +77,10 @@ The server uses Go build tags to conditionally compile features:
 
 **Available Build Tags:**
 - **Broker Connectors**: `kafka`, `nats_core`, `amqp091`, `amqp10`, `resp_pubsub`, `resp_streams`, `mqtt`, `nsq`
+- **Protocols**: 
+  - `fujin` - Native QUIC-based Fujin protocol (recommended for performance)
+  - `grpc` - gRPC server implementation (language-agnostic)
 - **Observability**: `observability` - Prometheus metrics and OpenTelemetry tracing
-- **gRPC**: `grpc` - gRPC server implementation
 
 **Building the server:**
 
@@ -86,18 +88,26 @@ The server uses Go build tags to conditionally compile features:
 # Build with all features (default)
 make build
 
-# Build with specific connectors only
-make build GO_BUILD_TAGS="kafka,nats_core"
+# Build with Fujin protocol only
+make build GO_BUILD_TAGS="kafka,fujin"
 
-# Build with gRPC support
+# Build with gRPC only
 make build GO_BUILD_TAGS="kafka,grpc"
 
-# Build minimal (no observability, no gRPC)
+# Build with both protocols
+make build GO_BUILD_TAGS="kafka,fujin,grpc"
+
+# Build minimal (Kafka only, no protocols)
 make build GO_BUILD_TAGS="kafka"
 
 # Or use go build directly
-cd server && go build -tags="kafka,grpc" -o ../bin/fujin ./cmd
+cd server && go build -tags="kafka,fujin,grpc" -o ../bin/fujin ./cmd
 ```
+
+**Binary Size Comparison (Kafka connector):**
+- Without protocols: ~9.7 MB
+- With Fujin only: ~12.8 MB (+3.1 MB - QUIC)
+- With Fujin + gRPC + observability: ~21 MB (full)
 
 ## Contributing
 

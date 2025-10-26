@@ -1,5 +1,3 @@
-//go:build grpc
-
 package v1
 
 import "github.com/ValerySidorin/fujin/client/models"
@@ -28,3 +26,4 @@ type Stream interface {
 type Subscription interface {
 	Close() error
 }
+

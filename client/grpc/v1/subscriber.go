@@ -1,5 +1,3 @@
-//go:build grpc
-
 package v1
 
 import (
@@ -139,3 +137,4 @@ func (c *Subscriber) Close() error {
 	c.logger.Info("subscriber closed")
 	return nil
 }
+

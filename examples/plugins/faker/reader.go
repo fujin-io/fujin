@@ -108,3 +108,4 @@ func (r *Reader) IsAutoCommit() bool {
 }
 
 func (r *Reader) Close() {}
+

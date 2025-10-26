@@ -1,5 +1,3 @@
-//go:build grpc
-
 package v1
 
 import (
@@ -963,3 +961,4 @@ func (s *stream) Nack(subscriptionID uint32, messageIDs ...[]byte) (models.NackR
 		return models.NackResult{}, s.ctx.Err()
 	}
 }
+

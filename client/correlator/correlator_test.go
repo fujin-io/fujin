@@ -143,3 +143,4 @@ func TestCorrelatorClose(t *testing.T) {
 	corr.Send(id1, "test")
 	corr.Send(id2, "test")
 }
+

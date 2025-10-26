@@ -1,3 +1,5 @@
+//go:build fujin
+
 package server
 
 import "sync"

@@ -31,3 +31,4 @@ func main() {
 
 	service.RunCLI(ctx)
 }
+

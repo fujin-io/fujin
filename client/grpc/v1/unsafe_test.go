@@ -1,5 +1,3 @@
-//go:build grpc
-
 package v1
 
 import (
@@ -134,3 +132,4 @@ func BenchmarkHeaderConversion(b *testing.B) {
 		}
 	})
 }
+

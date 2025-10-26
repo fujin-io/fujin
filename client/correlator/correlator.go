@@ -52,3 +52,4 @@ func (c *Correlator[T]) Close() {
 	}
 	c.m = make(map[uint32]chan T)
 }
+

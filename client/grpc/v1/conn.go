@@ -1,5 +1,3 @@
-//go:build grpc
-
 package v1
 
 import (
@@ -103,3 +101,4 @@ func (c *conn) Close() error {
 	c.logger.Info("connection closed")
 	return nil
 }
+

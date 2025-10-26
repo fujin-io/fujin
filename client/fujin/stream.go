@@ -1350,3 +1350,5 @@ func (s *Stream) CheckParseStateAfterOpForTests() error {
 
 	return nil
 }
+
+

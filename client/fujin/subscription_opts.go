@@ -19,3 +19,5 @@ func WithPoolConfig(pool PoolConfig) func(*Subscription) {
 		s.conf.Pool = pool
 	}
 }
+
+

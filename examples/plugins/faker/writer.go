@@ -52,3 +52,4 @@ func (w *Writer) Endpoint() string {
 func (w *Writer) Close() error {
 	return nil
 }
+
