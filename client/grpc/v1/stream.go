@@ -1,3 +1,5 @@
+//go:build grpc
+
 package v1
 
 import (
@@ -9,9 +11,9 @@ import (
 	"time"
 	"unsafe"
 
+	pb "github.com/ValerySidorin/fujin/api/grpc/v1"
 	"github.com/ValerySidorin/fujin/client/correlator"
 	"github.com/ValerySidorin/fujin/client/models"
-	pb "github.com/ValerySidorin/fujin/public/grpc/v1"
 )
 
 // stringToBytes converts string to []byte without allocation using unsafe.

@@ -66,12 +66,38 @@ Consider alternatives if:
 ## Documentation
 
 - [Native Protocol Specification](protocol.md)
-- [gRPC Protocol Specification](public/grpc/v1/fujin.proto)
+- [gRPC Protocol Specification](api/grpc/v1/fujin.proto)
 - [Configuration Guide](examples/assets/config/config.yaml)
 
-## TODO
+## Build Options
 
-- Request/Reply
+### Server Build
+
+The server uses Go build tags to conditionally compile features:
+
+**Available Build Tags:**
+- **Broker Connectors**: `kafka`, `nats_core`, `amqp091`, `amqp10`, `resp_pubsub`, `resp_streams`, `mqtt`, `nsq`
+- **Observability**: `observability` - Prometheus metrics and OpenTelemetry tracing
+- **gRPC**: `grpc` - gRPC server implementation
+
+**Building the server:**
+
+```bash
+# Build with all features (default)
+make build
+
+# Build with specific connectors only
+make build GO_BUILD_TAGS="kafka,nats_core"
+
+# Build with gRPC support
+make build GO_BUILD_TAGS="kafka,grpc"
+
+# Build minimal (no observability, no gRPC)
+make build GO_BUILD_TAGS="kafka"
+
+# Or use go build directly
+cd server && go build -tags="kafka,grpc" -o ../bin/fujin ./cmd
+```
 
 ## Contributing
 

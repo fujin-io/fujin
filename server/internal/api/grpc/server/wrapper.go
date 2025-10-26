@@ -1,3 +1,5 @@
+//go:build grpc
+
 package server
 
 import (

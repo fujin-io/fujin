@@ -32,6 +32,7 @@ tempo
 
 ## Dev configs
 config.dev.yaml
+.env
 
 ## test files and dirs
 # sandbox

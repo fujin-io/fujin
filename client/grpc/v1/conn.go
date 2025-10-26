@@ -1,3 +1,5 @@
+//go:build grpc
+
 package v1
 
 import (
@@ -5,7 +7,7 @@ import (
 	"log/slog"
 	"sync"
 
-	pb "github.com/ValerySidorin/fujin/public/grpc/v1"
+	pb "github.com/ValerySidorin/fujin/api/grpc/v1"
 	"google.golang.org/grpc"
 )
 

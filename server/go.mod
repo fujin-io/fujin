@@ -4,9 +4,9 @@ go 1.24.2
 
 require (
 	github.com/Azure/go-amqp v1.5.0
+	github.com/ValerySidorin/fujin/api v0.0.0-00010101000000-000000000000
 	github.com/bytedance/sonic v1.14.1
 	github.com/eclipse/paho.mqtt.golang v1.5.1
-	github.com/nats-io/nats-server/v2 v2.12.0
 	github.com/nats-io/nats.go v1.46.1
 	github.com/nsqio/go-nsq v1.1.0
 	github.com/panjf2000/ants/v2 v2.11.3
@@ -28,7 +28,6 @@ require (
 )
 
 require (
-	github.com/antithesishq/antithesis-sdk-go v0.5.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic/loader v0.3.0 // indirect
@@ -39,15 +38,12 @@ require (
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/golang/snappy v1.0.0 // indirect
-	github.com/google/go-tpm v0.9.6 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.3 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
-	github.com/minio/highwayhash v1.0.3 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/nats-io/jwt/v2 v2.8.0 // indirect
 	github.com/nats-io/nkeys v0.4.11 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/onsi/gomega v1.36.3 // indirect
@@ -69,8 +65,12 @@ require (
 	golang.org/x/net v0.46.0 // indirect
 	golang.org/x/sys v0.37.0 // indirect
 	golang.org/x/text v0.30.0 // indirect
-	golang.org/x/time v0.14.0 // indirect
 	golang.org/x/tools v0.38.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251007200510-49b9836ed3ff // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251007200510-49b9836ed3ff // indirect
+)
+
+replace (
+	github.com/ValerySidorin/fujin/api => ../api
+	github.com/ValerySidorin/fujin/examples/plugins/faker => ../examples/plugins/faker
 )

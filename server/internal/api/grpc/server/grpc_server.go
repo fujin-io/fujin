@@ -1,3 +1,5 @@
+//go:build grpc
+
 package server
 
 import (
@@ -8,10 +10,10 @@ import (
 	"net"
 	"sync"
 
+	pb "github.com/ValerySidorin/fujin/api/grpc/v1"
 	"github.com/ValerySidorin/fujin/internal/connectors"
 	internal_reader "github.com/ValerySidorin/fujin/public/connectors/reader"
 	"github.com/ValerySidorin/fujin/public/connectors/writer"
-	pb "github.com/ValerySidorin/fujin/public/grpc/v1"
 	"github.com/ValerySidorin/fujin/public/server/config"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
