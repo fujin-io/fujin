@@ -9,9 +9,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/ValerySidorin/fujin/internal/api/fujin/ferr"
-	"github.com/ValerySidorin/fujin/internal/api/fujin/pool"
-	"github.com/ValerySidorin/fujin/internal/common/assert"
+	v1 "github.com/ValerySidorin/fujin/api/fujin/v1"
+	"github.com/ValerySidorin/fujin/server/internal/api/fujin/pool"
+	"github.com/ValerySidorin/fujin/server/internal/common/assert"
 	"github.com/quic-go/quic-go"
 )
 
@@ -75,7 +75,7 @@ func (i *inbound) readLoop(ctx context.Context) {
 			if errors.Is(err, io.EOF) {
 				break
 			}
-			i.str.CancelRead(ferr.ConnErr)
+			i.str.CancelRead(v1.ConnErr)
 			i.l.Error("read stream", "err", err)
 			break
 		}
@@ -84,14 +84,14 @@ func (i *inbound) readLoop(ctx context.Context) {
 		if err != nil {
 			if !errors.Is(err, ErrClose) {
 				i.l.Error("handle buf", "err", err)
-				i.str.CancelRead(ferr.ConnErr)
+				i.str.CancelRead(v1.ConnErr)
 			}
 			break
 		}
 		buf = buf[:0]
 
 		if i.h.stopRead {
-			i.str.CancelRead(ferr.NoErr)
+			i.str.CancelRead(v1.NoErr)
 			break
 		}
 	}
@@ -105,7 +105,7 @@ func (i *inbound) waitAndDisconnect() {
 }
 
 func (i *inbound) close() {
-	i.str.CancelRead(ferr.NoErr)
+	i.str.CancelRead(v1.NoErr)
 	i.h.wg.Wait()
 	i.h.out.Close()
 	<-i.h.closed

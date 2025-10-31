@@ -6,8 +6,8 @@ import (
 
 	std_tls "crypto/tls"
 
-	"github.com/ValerySidorin/fujin/public/connectors/cerr"
-	"github.com/ValerySidorin/fujin/public/server/config/tls"
+	"github.com/ValerySidorin/fujin/server/public/connectors/cerr"
+	"github.com/ValerySidorin/fujin/server/public/server/config/tls"
 )
 
 type RedisConfig struct {

@@ -5,7 +5,7 @@ package server_test
 import (
 	"testing"
 
-	"github.com/ValerySidorin/fujin/internal/api/fujin/server"
+	"github.com/ValerySidorin/fujin/server/internal/api/fujin/server"
 	"github.com/stretchr/testify/assert"
 )
 

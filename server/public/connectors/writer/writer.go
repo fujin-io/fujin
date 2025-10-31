@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/ValerySidorin/fujin/public/connectors/writer/config"
+	"github.com/ValerySidorin/fujin/server/public/connectors/writer/config"
 )
 
 var (

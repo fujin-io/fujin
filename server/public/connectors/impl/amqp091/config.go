@@ -3,7 +3,7 @@ package amqp091
 import (
 	"time"
 
-	"github.com/ValerySidorin/fujin/public/connectors/cerr"
+	"github.com/ValerySidorin/fujin/server/public/connectors/cerr"
 	"github.com/rabbitmq/amqp091-go"
 )
 

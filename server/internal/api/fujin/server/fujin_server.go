@@ -13,20 +13,19 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ValerySidorin/fujin/internal/api/fujin"
-	"github.com/ValerySidorin/fujin/internal/api/fujin/ferr"
-	"github.com/ValerySidorin/fujin/internal/api/fujin/pool"
-	"github.com/ValerySidorin/fujin/internal/api/fujin/proto/request"
-	"github.com/ValerySidorin/fujin/internal/api/fujin/version"
-	"github.com/ValerySidorin/fujin/internal/connectors"
-	"github.com/ValerySidorin/fujin/internal/observability"
-	"github.com/ValerySidorin/fujin/public/server/config"
+	v1 "github.com/ValerySidorin/fujin/api/fujin/v1"
+	"github.com/ValerySidorin/fujin/api/fujin/v1/proto"
+	"github.com/ValerySidorin/fujin/common/fujin"
+	"github.com/ValerySidorin/fujin/common/fujin/pool"
+	"github.com/ValerySidorin/fujin/server/internal/connectors"
+	"github.com/ValerySidorin/fujin/server/internal/observability"
+	"github.com/ValerySidorin/fujin/server/public/server/config"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/metrics"
 )
 
 var (
-	NextProtos = []string{version.Fujin1}
+	NextProtos = []string{v1.Version}
 )
 
 type FujinServer struct {
@@ -137,15 +136,15 @@ func (s *FujinServer) ListenAndServe(ctx context.Context) error {
 
 			negotiated := conn.ConnectionState().TLS.NegotiatedProtocol
 			if negotiated == "" {
-				_ = conn.CloseWithError(ferr.ConnErr, "unsupported protocol: none")
+				_ = conn.CloseWithError(v1.ConnErr, "unsupported protocol: none")
 				continue
 			}
 			switch negotiated {
-			case version.Fujin1:
+			case v1.Version:
 				// ok – current version
 			default:
 				s.l.Warn("rejecting connection: unsupported ALPN", "alpn", negotiated)
-				_ = conn.CloseWithError(ferr.ConnErr, "unsupported protocol: "+negotiated)
+				_ = conn.CloseWithError(v1.ConnErr, "unsupported protocol: "+negotiated)
 				continue
 			}
 
@@ -174,7 +173,7 @@ func (s *FujinServer) ListenAndServe(ctx context.Context) error {
 							retryCount++
 							s.l.Error("open ping stream error", "err", err, "retry", retryCount)
 							if retryCount >= s.conf.PingMaxRetries {
-								if err := conn.CloseWithError(ferr.PingErr, "open stream failed after retries: "+err.Error()); err != nil {
+								if err := conn.CloseWithError(v1.PingErr, "open stream failed after retries: "+err.Error()); err != nil {
 									s.l.Error("close with error", "err", err)
 								}
 								return
@@ -183,13 +182,13 @@ func (s *FujinServer) ListenAndServe(ctx context.Context) error {
 						}
 						retryCount = 0
 
-						pingBuf[0] = byte(request.OP_CODE_PING)
+						pingBuf[0] = byte(proto.OP_CODE_PING)
 						if _, err := str.Write(pingBuf); err != nil {
 							retryCount++
 							s.l.Error("write ping error", "err", err, "retry", retryCount)
 							_ = str.Close()
 							if retryCount >= s.conf.PingMaxRetries {
-								if err := conn.CloseWithError(ferr.PingErr, "write failed after retries: "+err.Error()); err != nil {
+								if err := conn.CloseWithError(v1.PingErr, "write failed after retries: "+err.Error()); err != nil {
 									s.l.Error("close with error", "err", err)
 								}
 								return
@@ -211,7 +210,7 @@ func (s *FujinServer) ListenAndServe(ctx context.Context) error {
 							retryCount++
 							s.l.Error("read ping response error", "err", err, "retry", retryCount)
 							if retryCount >= s.conf.PingMaxRetries {
-								if err := conn.CloseWithError(ferr.PingErr, "read failed after retries: "+err.Error()); err != nil {
+								if err := conn.CloseWithError(v1.PingErr, "read failed after retries: "+err.Error()); err != nil {
 									s.l.Error("close with error", "err", err)
 								}
 								return
@@ -228,7 +227,7 @@ func (s *FujinServer) ListenAndServe(ctx context.Context) error {
 					str, err := conn.AcceptStream(ctx)
 					if err != nil {
 						if err != ctx.Err() {
-							if err := conn.CloseWithError(ferr.ConnErr, "accept stream: "+err.Error()); err != nil {
+							if err := conn.CloseWithError(v1.ConnErr, "accept stream: "+err.Error()); err != nil {
 								s.l.Error("close with error", "err", err)
 							}
 						}

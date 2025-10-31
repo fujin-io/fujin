@@ -14,16 +14,16 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ValerySidorin/fujin/public/connectors"
-	"github.com/ValerySidorin/fujin/public/server"
-	"github.com/ValerySidorin/fujin/public/server/config"
+	"github.com/ValerySidorin/fujin/server/public/connectors"
+	"github.com/ValerySidorin/fujin/server/public/server"
+	"github.com/ValerySidorin/fujin/server/public/server/config"
 	nats_server "github.com/nats-io/nats-server/v2/server"
 
-	reader_config "github.com/ValerySidorin/fujin/public/connectors/reader/config"
-	writer_config "github.com/ValerySidorin/fujin/public/connectors/writer/config"
+	reader_config "github.com/ValerySidorin/fujin/server/public/connectors/reader/config"
+	writer_config "github.com/ValerySidorin/fujin/server/public/connectors/writer/config"
 
-	_ "github.com/ValerySidorin/fujin/public/connectors/impl/nats/core"
-	nats_core "github.com/ValerySidorin/fujin/public/connectors/impl/nats/core"
+	_ "github.com/ValerySidorin/fujin/server/public/connectors/impl/nats/core"
+	nats_core "github.com/ValerySidorin/fujin/server/public/connectors/impl/nats/core"
 )
 
 var DefaultFujinServerTestConfig = config.FujinServerConfig{

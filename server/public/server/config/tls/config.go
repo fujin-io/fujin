@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ValerySidorin/fujin/public/connectors/cerr"
+	"github.com/ValerySidorin/fujin/server/public/connectors/cerr"
 )
 
 type ClientTLSConfig struct {

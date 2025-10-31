@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/ValerySidorin/fujin/internal/connectors"
-	"github.com/ValerySidorin/fujin/public/server/config"
+	"github.com/ValerySidorin/fujin/server/internal/connectors"
+	"github.com/ValerySidorin/fujin/server/public/server/config"
 )
 
 var ErrGRPCNotCompiledIn = fmt.Errorf("grpc is not compiled in")

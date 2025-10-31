@@ -3,7 +3,7 @@ package pool_test
 import (
 	"testing"
 
-	"github.com/ValerySidorin/fujin/internal/common/pool"
+	"github.com/ValerySidorin/fujin/server/internal/common/pool"
 )
 
 func TestBytePool_GetPut0(t *testing.T) {

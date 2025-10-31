@@ -7,8 +7,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ValerySidorin/fujin/internal/api/fujin/pool"
-	"github.com/ValerySidorin/fujin/internal/api/fujin/proto/request"
+	"github.com/ValerySidorin/fujin/api/fujin/v1/proto"
+	"github.com/ValerySidorin/fujin/common/fujin/pool"
 	"github.com/panjf2000/ants/v2"
 )
 
@@ -90,7 +90,7 @@ func (s *Stream) Subscribe(
 
 	buf := pool.Get(10 + len(topic))
 
-	buf = append(buf, byte(request.OP_CODE_SUBSCRIBE))
+	buf = append(buf, byte(proto.OP_CODE_SUBSCRIBE))
 	buf = binary.BigEndian.AppendUint32(buf, id)
 	buf = append(buf, boolToByte(autoCommit))
 	buf = binary.BigEndian.AppendUint32(buf, uint32(len(topic)))
@@ -183,7 +183,7 @@ func (s *Stream) HSubscribe(
 
 	buf := pool.Get(10 + len(topic))
 
-	buf = append(buf, byte(request.OP_CODE_HSUBSCRIBE))
+	buf = append(buf, byte(proto.OP_CODE_HSUBSCRIBE))
 	buf = binary.BigEndian.AppendUint32(buf, id)
 	buf = append(buf, boolToByte(autoCommit))
 	buf = binary.BigEndian.AppendUint32(buf, uint32(len(topic)))
@@ -228,7 +228,7 @@ func (s *Subscription) Close() error {
 	id := s.stream.cm.Next(ch)
 
 	buf := pool.Get(6)
-	buf = append(buf, byte(request.OP_CODE_UNSUBSCRIBE))
+	buf = append(buf, byte(proto.OP_CODE_UNSUBSCRIBE))
 	buf = binary.BigEndian.AppendUint32(buf, id)
 	buf = append(buf, s.id)
 

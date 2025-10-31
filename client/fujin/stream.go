@@ -11,18 +11,17 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ValerySidorin/fujin/api/fujin/v1/proto"
 	"github.com/ValerySidorin/fujin/client/correlator"
-	"github.com/ValerySidorin/fujin/internal/api/fujin"
-	"github.com/ValerySidorin/fujin/internal/api/fujin/pool"
-	"github.com/ValerySidorin/fujin/internal/api/fujin/proto/request"
-	"github.com/ValerySidorin/fujin/internal/api/fujin/proto/response"
+	"github.com/ValerySidorin/fujin/common/fujin"
+	"github.com/ValerySidorin/fujin/common/fujin/pool"
 	"github.com/quic-go/quic-go"
 )
 
 var (
 	ErrStreamClosed = errors.New("stream closed")
 
-	PONG_RESP = []byte{byte(response.RESP_CODE_PONG)}
+	PONG_RESP = []byte{byte(proto.RESP_CODE_PONG)}
 )
 
 type Stream struct {
@@ -63,7 +62,7 @@ func (c *Conn) Connect(id string) (*Stream, error) {
 	buf := pool.Get(5)
 	defer pool.Put(buf)
 
-	buf = append(buf, byte(request.OP_CODE_CONNECT))
+	buf = append(buf, byte(proto.OP_CODE_CONNECT))
 	buf = binary.BigEndian.AppendUint32(buf, uint32(len(id)))
 	buf = append(buf, id...)
 
@@ -108,7 +107,7 @@ func (s *Stream) Produce(topic string, p []byte) error {
 	ch := make(chan error, 1)
 	id := s.cm.Next(ch)
 
-	buf = append(buf, byte(request.OP_CODE_PRODUCE))
+	buf = append(buf, byte(proto.OP_CODE_PRODUCE))
 	buf = binary.BigEndian.AppendUint32(buf, id)
 	buf = binary.BigEndian.AppendUint32(buf, uint32(len(topic)))
 	buf = append(buf, topic...)
@@ -155,7 +154,7 @@ func (s *Stream) HProduce(topic string, p []byte, hs map[string]string) error {
 	ch := make(chan error, 1)
 	id := s.cm.Next(ch)
 
-	buf = append(buf, byte(request.OP_CODE_HPRODUCE))
+	buf = append(buf, byte(proto.OP_CODE_HPRODUCE))
 	buf = binary.BigEndian.AppendUint32(buf, id)
 	buf = binary.BigEndian.AppendUint32(buf, uint32(len(topic)))
 	buf = append(buf, topic...)
@@ -189,15 +188,15 @@ func (s *Stream) HProduce(topic string, p []byte, hs map[string]string) error {
 }
 
 func (s *Stream) BeginTx() error {
-	return s.sendTxCmd(byte(request.OP_CODE_TX_BEGIN))
+	return s.sendTxCmd(byte(proto.OP_CODE_TX_BEGIN))
 }
 
 func (s *Stream) CommitTx() error {
-	return s.sendTxCmd(byte(request.OP_CODE_TX_COMMIT))
+	return s.sendTxCmd(byte(proto.OP_CODE_TX_COMMIT))
 }
 
 func (s *Stream) RollbackTx() error {
-	return s.sendTxCmd(byte(request.OP_CODE_TX_ROLLBACK))
+	return s.sendTxCmd(byte(proto.OP_CODE_TX_ROLLBACK))
 }
 
 func (s *Stream) Fetch(
@@ -215,7 +214,7 @@ func (s *Stream) Fetch(
 	id := s.fcm.next(eCh, autoCommit)
 	defer s.fcm.delete(id)
 
-	buf = append(buf, byte(request.OP_CODE_FETCH))
+	buf = append(buf, byte(proto.OP_CODE_FETCH))
 	buf = binary.BigEndian.AppendUint32(buf, id)
 	buf = append(buf, boolToByte(autoCommit))
 	buf = binary.BigEndian.AppendUint32(buf, uint32(len(topic)))
@@ -254,7 +253,7 @@ func (s *Stream) HFetch(
 	id := s.fcm.next(eCh, autoCommit)
 	defer s.fcm.delete(id)
 
-	buf = append(buf, byte(request.OP_CODE_HFETCH))
+	buf = append(buf, byte(proto.OP_CODE_HFETCH))
 	buf = binary.BigEndian.AppendUint32(buf, id)
 	buf = append(buf, boolToByte(autoCommit))
 	buf = binary.BigEndian.AppendUint32(buf, uint32(len(topic)))
@@ -301,11 +300,11 @@ func (s *Stream) Close() error {
 }
 
 func (s *Stream) ack(subID byte, id []byte) (AckResponse, error) {
-	return s.sendAckCmd(byte(request.OP_CODE_ACK), subID, id)
+	return s.sendAckCmd(byte(proto.OP_CODE_ACK), subID, id)
 }
 
 func (s *Stream) nack(subID byte, id []byte) (AckResponse, error) {
-	return s.sendAckCmd(byte(request.OP_CODE_NACK), subID, id)
+	return s.sendAckCmd(byte(proto.OP_CODE_NACK), subID, id)
 }
 
 func (s *Stream) sendAckCmd(cmd byte, subID byte, msgID []byte) (AckResponse, error) {
@@ -410,49 +409,49 @@ func (s *Stream) parse(buf []byte) error {
 		switch s.ps.state {
 		case OP_START:
 			switch b {
-			case byte(response.RESP_CODE_PRODUCE):
+			case byte(proto.RESP_CODE_PRODUCE):
 				s.ps.state = OP_PRODUCE
-			case byte(response.RESP_CODE_MSG):
+			case byte(proto.RESP_CODE_MSG):
 				s.ps.state = OP_MSG
-			case byte(response.RESP_CODE_FETCH):
+			case byte(proto.RESP_CODE_FETCH):
 				s.ps.state = OP_FETCH
-			case byte(response.RESP_CODE_HPRODUCE):
+			case byte(proto.RESP_CODE_HPRODUCE):
 				s.ps.state = OP_PRODUCE_H
-			case byte(response.RESP_CODE_HMSG):
+			case byte(proto.RESP_CODE_HMSG):
 				s.ps.state = OP_MSG_H
-			case byte(response.RESP_CODE_HFETCH):
+			case byte(proto.RESP_CODE_HFETCH):
 				s.ps.state = OP_FETCH_H
-			case byte(response.RESP_CODE_ACK):
+			case byte(proto.RESP_CODE_ACK):
 				s.ps.state = OP_ACK
-			case byte(response.RESP_CODE_NACK):
+			case byte(proto.RESP_CODE_NACK):
 				s.ps.state = OP_NACK
-			case byte(response.RESP_CODE_TX_BEGIN):
+			case byte(proto.RESP_CODE_TX_BEGIN):
 				s.ps.state = OP_TX_BEGIN
-			case byte(response.RESP_CODE_TX_COMMIT):
+			case byte(proto.RESP_CODE_TX_COMMIT):
 				s.ps.state = OP_TX_COMMIT
-			case byte(response.RESP_CODE_TX_ROLLBACK):
+			case byte(proto.RESP_CODE_TX_ROLLBACK):
 				s.ps.state = OP_TX_ROLLBACK
-			case byte(request.OP_CODE_PING):
+			case byte(proto.OP_CODE_PING):
 				s.writePong()
-			case byte(response.RESP_CODE_SUBSCRIBE):
+			case byte(proto.RESP_CODE_SUBSCRIBE):
 				s.ps.state = OP_SUBSCRIBE
-			case byte(response.RESP_CODE_HSUBSCRIBE):
+			case byte(proto.RESP_CODE_HSUBSCRIBE):
 				s.ps.state = OP_SUBSCRIBE_H
-			case byte(response.RESP_CODE_UNSUBSCRIBE):
+			case byte(proto.RESP_CODE_UNSUBSCRIBE):
 				s.ps.state = OP_UNSUBSCRIBE
-			case byte(response.RESP_CODE_DISCONNECT):
+			case byte(proto.RESP_CODE_DISCONNECT):
 				close(s.disconnectCh)
 				return nil
-			case byte(request.OP_CODE_STOP):
+			case byte(proto.OP_CODE_STOP):
 				go s.Close() // we probably can do something smarter here
 				return nil
 			}
 		case OP_PRODUCE, OP_PRODUCE_H:
-			s.ps.ca.cID = pool.Get(fujin.Uint32Len)
+			s.ps.ca.cID = pool.Get(Uint32Len)
 			s.ps.ca.cID = append(s.ps.ca.cID, b)
 			s.ps.state = OP_CORRELATION_ID_ARG
 		case OP_CORRELATION_ID_ARG:
-			toCopy := fujin.Uint32Len - len(s.ps.ca.cID)
+			toCopy := Uint32Len - len(s.ps.ca.cID)
 			avail := len(buf) - i
 
 			if avail < toCopy {
@@ -468,19 +467,19 @@ func (s *Stream) parse(buf []byte) error {
 				s.ps.ca.cID = append(s.ps.ca.cID, b)
 			}
 
-			if len(s.ps.ca.cID) >= fujin.Uint32Len {
+			if len(s.ps.ca.cID) >= Uint32Len {
 				s.ps.ca.cIDUint32 = binary.BigEndian.Uint32(s.ps.ca.cID)
 				s.ps.state = OP_ERROR_CODE_ARG
 				pool.Put(s.ps.ca.cID)
 			}
 		case OP_ERROR_CODE_ARG:
 			switch b {
-			case byte(response.ERR_CODE_NO):
+			case byte(proto.ERR_CODE_NO):
 				s.cm.Send(s.ps.ca.cIDUint32, nil)
 				s.ps.ca, s.ps.state = correlationIDArg{}, OP_START
 				continue
-			case byte(response.ERR_CODE_YES):
-				s.ps.argBuf = pool.Get(fujin.Uint32Len)
+			case byte(proto.ERR_CODE_YES):
+				s.ps.argBuf = pool.Get(Uint32Len)
 				s.ps.state = OP_ERROR_PAYLOAD_ARG
 			default:
 				s.quicStream.Close()
@@ -488,7 +487,7 @@ func (s *Stream) parse(buf []byte) error {
 			}
 		case OP_ERROR_PAYLOAD_ARG:
 			s.ps.argBuf = append(s.ps.argBuf, b)
-			if len(s.ps.argBuf) >= fujin.Uint32Len {
+			if len(s.ps.argBuf) >= Uint32Len {
 				if err := s.parseErrLenArg(); err != nil {
 					pool.Put(s.ps.argBuf)
 					s.quicStream.Close()
@@ -540,11 +539,11 @@ func (s *Stream) parse(buf []byte) error {
 				s.ps.state = OP_MSG_ARG
 				continue
 			}
-			s.ps.argBuf = pool.Get(fujin.Uint32Len)
+			s.ps.argBuf = pool.Get(Uint32Len)
 			s.ps.state = OP_MSG_ID_ARG
 		case OP_MSG_ID_ARG:
 			s.ps.argBuf = append(s.ps.argBuf, b)
-			if len(s.ps.argBuf) >= fujin.Uint32Len {
+			if len(s.ps.argBuf) >= Uint32Len {
 				s.ps.ma.idLen = binary.BigEndian.Uint32(s.ps.argBuf)
 				pool.Put(s.ps.argBuf)
 				s.ps.argBuf, s.ps.metaBuf = nil, pool.Get(int(s.ps.ma.idLen))
@@ -557,12 +556,12 @@ func (s *Stream) parse(buf []byte) error {
 		case OP_MSG_ID_PAYLOAD:
 			s.ps.metaBuf = append(s.ps.metaBuf, b)
 			if len(s.ps.metaBuf) >= int(s.ps.ma.idLen) {
-				s.ps.argBuf = pool.Get(fujin.Uint32Len)
+				s.ps.argBuf = pool.Get(Uint32Len)
 				s.ps.state = OP_MSG_ARG
 			}
 		case OP_MSG_ARG:
 			s.ps.argBuf = append(s.ps.argBuf, b)
-			if len(s.ps.argBuf) >= fujin.Uint32Len {
+			if len(s.ps.argBuf) >= Uint32Len {
 				if err := s.parseMsgLenArg(); err != nil {
 					pool.Put(s.ps.argBuf)
 					s.quicStream.Close()
@@ -620,11 +619,11 @@ func (s *Stream) parse(buf []byte) error {
 				return errors.New("subscription not found")
 			}
 			s.ps.ma.sub = sub
-			s.ps.argBuf = pool.Get(fujin.Uint16Len)
+			s.ps.argBuf = pool.Get(Uint16Len)
 			s.ps.state = OP_MSG_H_HEADERS_COUNT_ARG
 		case OP_MSG_H_HEADERS_COUNT_ARG:
 			s.ps.argBuf = append(s.ps.argBuf, b)
-			if len(s.ps.argBuf) >= fujin.Uint16Len {
+			if len(s.ps.argBuf) >= Uint16Len {
 				s.ps.ma.headerCount = binary.BigEndian.Uint16(s.ps.argBuf)
 				pool.Put(s.ps.argBuf)
 				s.ps.argBuf = nil
@@ -633,7 +632,7 @@ func (s *Stream) parse(buf []byte) error {
 						s.ps.state = OP_MSG_ARG
 						continue
 					}
-					s.ps.argBuf = pool.Get(fujin.Uint32Len)
+					s.ps.argBuf = pool.Get(Uint32Len)
 					s.ps.state = OP_MSG_ID_ARG
 				}
 				s.ps.ma.headers = make(map[string]string, s.ps.ma.headerCount/2)
@@ -642,7 +641,7 @@ func (s *Stream) parse(buf []byte) error {
 			}
 		case OP_MSG_H_HEADER_LEN:
 			s.ps.argBuf = append(s.ps.argBuf, b)
-			if len(s.ps.argBuf) >= fujin.Uint32Len {
+			if len(s.ps.argBuf) >= Uint32Len {
 				s.ps.ma.headerLen = binary.BigEndian.Uint32(s.ps.argBuf)
 				pool.Put(s.ps.argBuf)
 				s.ps.argBuf = nil
@@ -668,28 +667,28 @@ func (s *Stream) parse(buf []byte) error {
 						s.ps.state = OP_MSG_ARG
 						continue
 					}
-					s.ps.argBuf = pool.Get(fujin.Uint32Len)
+					s.ps.argBuf = pool.Get(Uint32Len)
 					s.ps.state = OP_MSG_ID_ARG
 				}
 			}
 		case OP_TX_BEGIN:
-			s.ps.ca.cID = pool.Get(fujin.Uint32Len)
+			s.ps.ca.cID = pool.Get(Uint32Len)
 			s.ps.ca.cID = append(s.ps.ca.cID, b)
 			s.ps.state = OP_CORRELATION_ID_ARG
 		case OP_TX_COMMIT:
-			s.ps.ca.cID = pool.Get(fujin.Uint32Len)
+			s.ps.ca.cID = pool.Get(Uint32Len)
 			s.ps.ca.cID = append(s.ps.ca.cID, b)
 			s.ps.state = OP_CORRELATION_ID_ARG
 		case OP_TX_ROLLBACK:
-			s.ps.ca.cID = pool.Get(fujin.Uint32Len)
+			s.ps.ca.cID = pool.Get(Uint32Len)
 			s.ps.ca.cID = append(s.ps.ca.cID, b)
 			s.ps.state = OP_CORRELATION_ID_ARG
 		case OP_FETCH:
-			s.ps.ca.cID = pool.Get(fujin.Uint32Len)
+			s.ps.ca.cID = pool.Get(Uint32Len)
 			s.ps.ca.cID = append(s.ps.ca.cID, b)
 			s.ps.state = OP_FETCH_CORRELATION_ID_ARG
 		case OP_FETCH_CORRELATION_ID_ARG:
-			toCopy := fujin.Uint32Len - len(s.ps.ca.cID)
+			toCopy := Uint32Len - len(s.ps.ca.cID)
 			avail := len(buf) - i
 
 			if avail < toCopy {
@@ -705,20 +704,20 @@ func (s *Stream) parse(buf []byte) error {
 				s.ps.ca.cID = append(s.ps.ca.cID, b)
 			}
 
-			if len(s.ps.ca.cID) >= fujin.Uint32Len {
+			if len(s.ps.ca.cID) >= Uint32Len {
 				s.ps.ca.cIDUint32 = binary.BigEndian.Uint32(s.ps.ca.cID)
 				s.ps.fa.msgs, s.ps.fa.autoCommit, s.ps.fa.err = s.fcm.get(s.ps.ca.cIDUint32)
-				s.ps.argBuf = pool.Get(fujin.Uint32Len)
+				s.ps.argBuf = pool.Get(Uint32Len)
 				s.ps.state = OP_FETCH_ERROR_CODE_ARG
 			}
 		case OP_FETCH_ERROR_CODE_ARG:
 			switch b {
-			case byte(response.ERR_CODE_NO):
+			case byte(proto.ERR_CODE_NO):
 				pool.Put(s.ps.ca.cID)
 				s.ps.state = OP_FETCH_SUBSCRIPTION_ID_ARG
 				continue
-			case byte(response.ERR_CODE_YES):
-				s.ps.argBuf = pool.Get(fujin.Uint32Len)
+			case byte(proto.ERR_CODE_YES):
+				s.ps.argBuf = pool.Get(Uint32Len)
 				s.ps.state = OP_FETCH_ERROR_PAYLOAD_ARG
 			default:
 				s.quicStream.Close()
@@ -726,11 +725,11 @@ func (s *Stream) parse(buf []byte) error {
 			}
 		case OP_FETCH_SUBSCRIPTION_ID_ARG:
 			s.ps.fa.subID = b
-			s.ps.argBuf = pool.Get(fujin.Uint32Len)
+			s.ps.argBuf = pool.Get(Uint32Len)
 			s.ps.state = OP_FETCH_N_ARG
 		case OP_FETCH_ERROR_PAYLOAD_ARG:
 			s.ps.argBuf = append(s.ps.argBuf, b)
-			if len(s.ps.argBuf) >= fujin.Uint32Len {
+			if len(s.ps.argBuf) >= Uint32Len {
 				if err := s.parseErrLenArg(); err != nil {
 					pool.Put(s.ps.argBuf)
 					pool.Put(s.ps.ca.cID)
@@ -777,7 +776,7 @@ func (s *Stream) parse(buf []byte) error {
 				}
 			}
 		case OP_FETCH_N_ARG:
-			toCopy := fujin.Uint32Len - len(s.ps.argBuf)
+			toCopy := Uint32Len - len(s.ps.argBuf)
 			avail := len(buf) - i
 
 			if avail < toCopy {
@@ -793,10 +792,10 @@ func (s *Stream) parse(buf []byte) error {
 				s.ps.argBuf = append(s.ps.argBuf, b)
 			}
 
-			if len(s.ps.argBuf) >= fujin.Uint32Len {
+			if len(s.ps.argBuf) >= Uint32Len {
 				s.ps.fa.n = binary.BigEndian.Uint32(s.ps.argBuf)
 				pool.Put(s.ps.argBuf)
-				s.ps.argBuf = pool.Get(fujin.Uint32Len)
+				s.ps.argBuf = pool.Get(Uint32Len)
 				if s.ps.fa.autoCommit {
 					s.ps.state = OP_FETCH_MSG_ARG
 					continue
@@ -805,7 +804,7 @@ func (s *Stream) parse(buf []byte) error {
 			}
 		case OP_FETCH_MSG_ID_ARG:
 			s.ps.argBuf = append(s.ps.argBuf, b)
-			if len(s.ps.argBuf) >= fujin.Uint32Len {
+			if len(s.ps.argBuf) >= Uint32Len {
 				s.ps.ma.idLen = binary.BigEndian.Uint32(s.ps.argBuf)
 				pool.Put(s.ps.argBuf)
 				s.ps.argBuf, s.ps.metaBuf = nil, make([]byte, 0, s.ps.ma.idLen)
@@ -818,12 +817,12 @@ func (s *Stream) parse(buf []byte) error {
 		case OP_FETCH_MSG_ID_PAYLOAD:
 			s.ps.metaBuf = append(s.ps.metaBuf, b)
 			if len(s.ps.metaBuf) >= int(s.ps.ma.idLen) {
-				s.ps.argBuf = pool.Get(fujin.Uint32Len)
+				s.ps.argBuf = pool.Get(Uint32Len)
 				s.ps.state = OP_FETCH_MSG_ARG
 			}
 		case OP_FETCH_MSG_ARG:
 			s.ps.argBuf = append(s.ps.argBuf, b)
-			if len(s.ps.argBuf) >= fujin.Uint32Len {
+			if len(s.ps.argBuf) >= Uint32Len {
 				if err := s.parseMsgLenArg(); err != nil {
 					pool.Put(s.ps.argBuf)
 					_ = s.quicStream.Close()
@@ -891,11 +890,11 @@ func (s *Stream) parse(buf []byte) error {
 				}
 			}
 		case OP_FETCH_H:
-			s.ps.ca.cID = pool.Get(fujin.Uint32Len)
+			s.ps.ca.cID = pool.Get(Uint32Len)
 			s.ps.ca.cID = append(s.ps.ca.cID, b)
 			s.ps.state = OP_FETCH_H_CORRELATION_ID_ARG
 		case OP_FETCH_H_CORRELATION_ID_ARG:
-			toCopy := fujin.Uint32Len - len(s.ps.ca.cID)
+			toCopy := Uint32Len - len(s.ps.ca.cID)
 			avail := len(buf) - i
 
 			if avail < toCopy {
@@ -911,20 +910,20 @@ func (s *Stream) parse(buf []byte) error {
 				s.ps.ca.cID = append(s.ps.ca.cID, b)
 			}
 
-			if len(s.ps.ca.cID) >= fujin.Uint32Len {
+			if len(s.ps.ca.cID) >= Uint32Len {
 				s.ps.ca.cIDUint32 = binary.BigEndian.Uint32(s.ps.ca.cID)
 				s.ps.fa.msgs, s.ps.fa.autoCommit, s.ps.fa.err = s.fcm.get(s.ps.ca.cIDUint32)
-				s.ps.argBuf = pool.Get(fujin.Uint32Len)
+				s.ps.argBuf = pool.Get(Uint32Len)
 				s.ps.state = OP_FETCH_H_ERROR_CODE_ARG
 			}
 		case OP_FETCH_H_ERROR_CODE_ARG:
 			switch b {
-			case byte(response.ERR_CODE_NO):
+			case byte(proto.ERR_CODE_NO):
 				pool.Put(s.ps.ca.cID)
 				s.ps.state = OP_FETCH_H_SUBSCRIPTION_ID_ARG
 				continue
-			case byte(response.ERR_CODE_YES):
-				s.ps.argBuf = pool.Get(fujin.Uint32Len)
+			case byte(proto.ERR_CODE_YES):
+				s.ps.argBuf = pool.Get(Uint32Len)
 				s.ps.state = OP_FETCH_H_ERROR_PAYLOAD_ARG
 			default:
 				s.quicStream.Close()
@@ -932,11 +931,11 @@ func (s *Stream) parse(buf []byte) error {
 			}
 		case OP_FETCH_H_SUBSCRIPTION_ID_ARG:
 			s.ps.fa.subID = b
-			s.ps.argBuf = pool.Get(fujin.Uint32Len)
+			s.ps.argBuf = pool.Get(Uint32Len)
 			s.ps.state = OP_FETCH_H_N_ARG
 		case OP_FETCH_H_ERROR_PAYLOAD_ARG:
 			s.ps.argBuf = append(s.ps.argBuf, b)
-			if len(s.ps.argBuf) >= fujin.Uint32Len {
+			if len(s.ps.argBuf) >= Uint32Len {
 				if err := s.parseErrLenArg(); err != nil {
 					pool.Put(s.ps.argBuf)
 					pool.Put(s.ps.ca.cID)
@@ -983,7 +982,7 @@ func (s *Stream) parse(buf []byte) error {
 				}
 			}
 		case OP_FETCH_H_N_ARG:
-			toCopy := fujin.Uint32Len - len(s.ps.argBuf)
+			toCopy := Uint32Len - len(s.ps.argBuf)
 			avail := len(buf) - i
 
 			if avail < toCopy {
@@ -999,15 +998,15 @@ func (s *Stream) parse(buf []byte) error {
 				s.ps.argBuf = append(s.ps.argBuf, b)
 			}
 
-			if len(s.ps.argBuf) >= fujin.Uint32Len {
+			if len(s.ps.argBuf) >= Uint32Len {
 				s.ps.fa.n = binary.BigEndian.Uint32(s.ps.argBuf)
 				pool.Put(s.ps.argBuf)
-				s.ps.argBuf = pool.Get(fujin.Uint32Len)
+				s.ps.argBuf = pool.Get(Uint32Len)
 				s.ps.state = OP_FETCH_H_HEADERS_COUNT_ARG
 			}
 		case OP_FETCH_H_HEADERS_COUNT_ARG:
 			s.ps.argBuf = append(s.ps.argBuf, b)
-			if len(s.ps.argBuf) >= fujin.Uint16Len {
+			if len(s.ps.argBuf) >= Uint16Len {
 				s.ps.fa.headerCount = binary.BigEndian.Uint16(s.ps.argBuf)
 				pool.Put(s.ps.argBuf)
 				s.ps.argBuf = nil
@@ -1016,7 +1015,7 @@ func (s *Stream) parse(buf []byte) error {
 						s.ps.state = OP_FETCH_H_MSG_ARG
 						continue
 					}
-					s.ps.argBuf = pool.Get(fujin.Uint32Len)
+					s.ps.argBuf = pool.Get(Uint32Len)
 					s.ps.state = OP_FETCH_H_MSG_ID_ARG
 				}
 				s.ps.fa.headers = make(map[string]string, s.ps.fa.headerCount/2)
@@ -1025,7 +1024,7 @@ func (s *Stream) parse(buf []byte) error {
 			}
 		case OP_FETCH_H_HEADER_LEN:
 			s.ps.argBuf = append(s.ps.argBuf, b)
-			if len(s.ps.argBuf) >= fujin.Uint32Len {
+			if len(s.ps.argBuf) >= Uint32Len {
 				s.ps.fa.headerLen = binary.BigEndian.Uint32(s.ps.argBuf)
 				pool.Put(s.ps.argBuf)
 				s.ps.argBuf = nil
@@ -1051,13 +1050,13 @@ func (s *Stream) parse(buf []byte) error {
 						s.ps.state = OP_FETCH_H_MSG_ARG
 						continue
 					}
-					s.ps.argBuf = pool.Get(fujin.Uint32Len)
+					s.ps.argBuf = pool.Get(Uint32Len)
 					s.ps.state = OP_FETCH_H_MSG_ID_ARG
 				}
 			}
 		case OP_FETCH_H_MSG_ID_ARG:
 			s.ps.argBuf = append(s.ps.argBuf, b)
-			if len(s.ps.argBuf) >= fujin.Uint32Len {
+			if len(s.ps.argBuf) >= Uint32Len {
 				s.ps.ma.idLen = binary.BigEndian.Uint32(s.ps.argBuf)
 				pool.Put(s.ps.argBuf)
 				s.ps.argBuf, s.ps.metaBuf = nil, make([]byte, 0, s.ps.ma.idLen)
@@ -1070,12 +1069,12 @@ func (s *Stream) parse(buf []byte) error {
 		case OP_FETCH_H_MSG_ID_PAYLOAD:
 			s.ps.metaBuf = append(s.ps.metaBuf, b)
 			if len(s.ps.metaBuf) >= int(s.ps.ma.idLen) {
-				s.ps.argBuf = pool.Get(fujin.Uint32Len)
+				s.ps.argBuf = pool.Get(Uint32Len)
 				s.ps.state = OP_FETCH_H_MSG_ARG
 			}
 		case OP_FETCH_H_MSG_ARG:
 			s.ps.argBuf = append(s.ps.argBuf, b)
-			if len(s.ps.argBuf) >= fujin.Uint32Len {
+			if len(s.ps.argBuf) >= Uint32Len {
 				if err := s.parseMsgLenArg(); err != nil {
 					pool.Put(s.ps.argBuf)
 					_ = s.quicStream.Close()
@@ -1146,11 +1145,11 @@ func (s *Stream) parse(buf []byte) error {
 				}
 			}
 		case OP_SUBSCRIBE, OP_SUBSCRIBE_H:
-			s.ps.ca.cID = pool.Get(fujin.Uint32Len)
+			s.ps.ca.cID = pool.Get(Uint32Len)
 			s.ps.ca.cID = append(s.ps.ca.cID, b)
 			s.ps.state = OP_SUBSCRIBE_CORRELATION_ID_ARG
 		case OP_SUBSCRIBE_CORRELATION_ID_ARG:
-			toCopy := fujin.Uint32Len - len(s.ps.ca.cID)
+			toCopy := Uint32Len - len(s.ps.ca.cID)
 			avail := len(buf) - i
 
 			if avail < toCopy {
@@ -1166,18 +1165,18 @@ func (s *Stream) parse(buf []byte) error {
 				s.ps.ca.cID = append(s.ps.ca.cID, b)
 			}
 
-			if len(s.ps.ca.cID) >= fujin.Uint32Len {
+			if len(s.ps.ca.cID) >= Uint32Len {
 				s.ps.ca.cIDUint32 = binary.BigEndian.Uint32(s.ps.ca.cID)
 				pool.Put(s.ps.ca.cID)
 				s.ps.state = OP_SUBSCRIBE_ERROR_CODE_ARG
 			}
 		case OP_SUBSCRIBE_ERROR_CODE_ARG:
 			switch b {
-			case byte(response.ERR_CODE_NO):
+			case byte(proto.ERR_CODE_NO):
 				s.ps.state = OP_SUBSCRIBE_SUB_ID_ARG
 				continue
-			case byte(response.ERR_CODE_YES):
-				s.ps.argBuf = pool.Get(fujin.Uint32Len)
+			case byte(proto.ERR_CODE_YES):
+				s.ps.argBuf = pool.Get(Uint32Len)
 				s.ps.state = OP_SUBSCRIBE_ERROR_PAYLOAD_ARG
 			default:
 				s.quicStream.Close()
@@ -1185,7 +1184,7 @@ func (s *Stream) parse(buf []byte) error {
 			}
 		case OP_SUBSCRIBE_ERROR_PAYLOAD_ARG:
 			s.ps.argBuf = append(s.ps.argBuf, b)
-			if len(s.ps.argBuf) >= fujin.Uint32Len {
+			if len(s.ps.argBuf) >= Uint32Len {
 				if err := s.parseErrLenArg(); err != nil {
 					pool.Put(s.ps.argBuf)
 					s.quicStream.Close()
@@ -1231,24 +1230,24 @@ func (s *Stream) parse(buf []byte) error {
 			s.sc.Send(s.ps.ca.cIDUint32, SubscribeResponse{SubID: b})
 			s.ps.payloadBuf, s.ps.ca, s.ps.ea, s.ps.state = nil, correlationIDArg{}, errArg{}, OP_START
 		case OP_UNSUBSCRIBE:
-			s.ps.ca.cID = pool.Get(fujin.Uint32Len)
+			s.ps.ca.cID = pool.Get(Uint32Len)
 			s.ps.ca.cID = append(s.ps.ca.cID, b)
 			s.ps.state = OP_UNSUBSCRIBE_CORRELATION_ID_ARG
 		case OP_UNSUBSCRIBE_CORRELATION_ID_ARG:
 			s.ps.ca.cID = append(s.ps.ca.cID, b)
-			if len(s.ps.ca.cID) >= fujin.Uint32Len {
+			if len(s.ps.ca.cID) >= Uint32Len {
 				s.ps.ca.cIDUint32 = binary.BigEndian.Uint32(s.ps.ca.cID)
 				pool.Put(s.ps.ca.cID)
 				s.ps.state = OP_UNSUBSCRIBE_ERROR_CODE_ARG
 			}
 		case OP_UNSUBSCRIBE_ERROR_CODE_ARG:
 			switch b {
-			case byte(response.ERR_CODE_NO):
+			case byte(proto.ERR_CODE_NO):
 				s.cm.Send(s.ps.ca.cIDUint32, nil)
 				s.ps.ca, s.ps.state = correlationIDArg{}, OP_START
 				continue
-			case byte(response.ERR_CODE_YES):
-				s.ps.argBuf = pool.Get(fujin.Uint32Len)
+			case byte(proto.ERR_CODE_YES):
+				s.ps.argBuf = pool.Get(Uint32Len)
 				s.ps.state = OP_UNSUBSCRIBE_ERROR_PAYLOAD_ARG
 			default:
 				s.quicStream.Close()
@@ -1256,7 +1255,7 @@ func (s *Stream) parse(buf []byte) error {
 			}
 		case OP_UNSUBSCRIBE_ERROR_PAYLOAD_ARG:
 			s.ps.argBuf = append(s.ps.argBuf, b)
-			if len(s.ps.argBuf) >= fujin.Uint32Len {
+			if len(s.ps.argBuf) >= Uint32Len {
 				if err := s.parseErrLenArg(); err != nil {
 					pool.Put(s.ps.argBuf)
 					s.quicStream.Close()
@@ -1350,5 +1349,3 @@ func (s *Stream) CheckParseStateAfterOpForTests() error {
 
 	return nil
 }
-
-

@@ -2,9 +2,9 @@ services:
   fujin:
     image: fujin:nsq-${BUILD_TAG}
     build:
-      context: ./..
+      context: ..
       args:
-        GO_BUILD_TAGS: nsq,observability
+        GO_BUILD_TAGS: fujin,grpc,nsq,observability
     container_name: fujin
     ports:
       - "4848:4848/udp"

@@ -6,8 +6,8 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/ValerySidorin/fujin/internal/connectors"
-	"github.com/ValerySidorin/fujin/public/server/config"
+	"github.com/ValerySidorin/fujin/server/internal/connectors"
+	"github.com/ValerySidorin/fujin/server/public/server/config"
 )
 
 // GRPCServerWrapper wraps the gRPC server to implement the GRPCServer interface

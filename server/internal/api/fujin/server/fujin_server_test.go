@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ValerySidorin/fujin/internal/api/fujin/server"
-	"github.com/ValerySidorin/fujin/internal/connectors"
-	"github.com/ValerySidorin/fujin/public/server/config"
+	"github.com/ValerySidorin/fujin/server/internal/api/fujin/server"
+	"github.com/ValerySidorin/fujin/server/internal/connectors"
+	"github.com/ValerySidorin/fujin/server/public/server/config"
 	"github.com/quic-go/quic-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

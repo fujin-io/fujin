@@ -2,9 +2,9 @@ services:
   fujin:
     image: fujin:kafka-${BUILD_TAG}
     build:
-      context: ./..
+      context: ..
       args:
-        GO_BUILD_TAGS: kafka,observability
+        GO_BUILD_TAGS: fujin,grpc,kafka,observability
     container_name: fujin
     ports:
       - "4848:4848/udp"

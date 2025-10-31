@@ -8,8 +8,8 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/ValerySidorin/fujin/internal/api/fujin/proto/request"
-	"github.com/ValerySidorin/fujin/public/server"
+	"github.com/ValerySidorin/fujin/api/fujin/v1/proto"
+	"github.com/ValerySidorin/fujin/server/public/server"
 )
 
 const (
@@ -269,7 +269,7 @@ func benchProduce(b *testing.B, typ, pub, payload string) {
 	p := doDefaultConnect(c)
 
 	cmd := []byte{
-		byte(request.OP_CODE_PRODUCE),
+		byte(proto.OP_CODE_PRODUCE),
 		0, 0, 0, 0,
 	}
 
@@ -295,7 +295,7 @@ func benchProduce(b *testing.B, typ, pub, payload string) {
 	for b.Loop() {
 		bw.Write(cmd)
 	}
-	bw.Write([]byte{byte(request.OP_CODE_DISCONNECT)})
+	bw.Write([]byte{byte(proto.OP_CODE_DISCONNECT)})
 
 	bw.Flush()
 	res := <-bytes

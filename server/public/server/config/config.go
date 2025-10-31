@@ -4,8 +4,8 @@ import (
 	"crypto/tls"
 	"time"
 
-	"github.com/ValerySidorin/fujin/internal/observability"
-	"github.com/ValerySidorin/fujin/public/connectors"
+	"github.com/ValerySidorin/fujin/server/internal/observability"
+	"github.com/ValerySidorin/fujin/server/public/connectors"
 	"github.com/quic-go/quic-go"
 )
 

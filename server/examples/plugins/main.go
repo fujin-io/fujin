@@ -5,20 +5,20 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/ValerySidorin/fujin/public/service"
+	"github.com/ValerySidorin/fujin/server/public/service"
 
 	// Import all connector plugins at once:
-	// _ "github.com/ValerySidorin/fujin/public/connectors/all"
+	// _ "github.com/ValerySidorin/fujin/server/public/connectors/all"
 
 	// Or import specific connector plugins individually:
-	// _ "github.com/ValerySidorin/fujin/public/connectors/impl/kafka"
+	// _ "github.com/ValerySidorin/fujin/server/public/connectors/impl/kafka"
 
 	// Note: For standard plugins, you need to build with the appropriate tags.
 	// Available tags: [kafka nats_core amqp091 amqp10 resp_pubsub redis_streams mqtt nsq]
 	// Example: go build -tags kafka ...
 
 	// Import your custom connector plugin:
-	_ "github.com/ValerySidorin/fujin/examples/plugins/faker"
+	_ "github.com/ValerySidorin/fujin/server/examples/plugins/faker"
 )
 
 // This example demonstrates how to run a Fujin server with custom plugins.
@@ -31,4 +31,3 @@ func main() {
 
 	service.RunCLI(ctx)
 }
-

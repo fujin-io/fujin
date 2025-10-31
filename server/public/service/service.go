@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ValerySidorin/fujin/internal/observability"
-	pconfig "github.com/ValerySidorin/fujin/public/config"
-	"github.com/ValerySidorin/fujin/public/connectors"
-	"github.com/ValerySidorin/fujin/public/server"
-	"github.com/ValerySidorin/fujin/public/server/config"
+	"github.com/ValerySidorin/fujin/server/internal/observability"
+	pconfig "github.com/ValerySidorin/fujin/server/public/config"
+	"github.com/ValerySidorin/fujin/server/public/connectors"
+	"github.com/ValerySidorin/fujin/server/public/server"
+	"github.com/ValerySidorin/fujin/server/public/server/config"
 	"github.com/quic-go/quic-go"
 	"gopkg.in/yaml.v3"
 )

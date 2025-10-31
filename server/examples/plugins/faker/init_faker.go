@@ -3,8 +3,8 @@ package faker
 import (
 	"log/slog"
 
-	"github.com/ValerySidorin/fujin/public/connectors/reader"
-	"github.com/ValerySidorin/fujin/public/connectors/writer"
+	"github.com/ValerySidorin/fujin/server/public/connectors/reader"
+	"github.com/ValerySidorin/fujin/server/public/connectors/writer"
 )
 
 func init() {
@@ -19,4 +19,3 @@ func init() {
 		return NewReader(autoCommit, l)
 	})
 }
-

@@ -2,9 +2,9 @@ services:
   fujin:
     image: fujin:amqp10-${BUILD_TAG}
     build:
-      context: ./..
+      context: ..
       args:
-        GO_BUILD_TAGS: amqp10,observability
+        GO_BUILD_TAGS: fujin,grpc,amqp10,observability
     container_name: fujin
     ports:
       - "4848:4848/udp"

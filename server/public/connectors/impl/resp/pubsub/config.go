@@ -1,8 +1,8 @@
 package pubsub
 
 import (
-	"github.com/ValerySidorin/fujin/public/connectors/cerr"
-	"github.com/ValerySidorin/fujin/public/connectors/impl/resp/config"
+	"github.com/ValerySidorin/fujin/server/public/connectors/cerr"
+	"github.com/ValerySidorin/fujin/server/public/connectors/impl/resp/config"
 )
 
 type ReaderConfig struct {

@@ -2,12 +2,10 @@ package fujin
 
 import (
 	"encoding/binary"
-
-	"github.com/ValerySidorin/fujin/internal/api/fujin"
 )
 
 func (s *Stream) parseErrLenArg() error {
-	s.ps.ea.errLen = binary.BigEndian.Uint32(s.ps.argBuf[0:fujin.Uint32Len])
+	s.ps.ea.errLen = binary.BigEndian.Uint32(s.ps.argBuf[0:Uint32Len])
 	if s.ps.ea.errLen == 0 {
 		return ErrParseProto
 	}
@@ -16,7 +14,7 @@ func (s *Stream) parseErrLenArg() error {
 }
 
 func (s *Stream) parseMsgLenArg() error {
-	s.ps.ma.len = binary.BigEndian.Uint32(s.ps.argBuf[0:fujin.Uint32Len])
+	s.ps.ma.len = binary.BigEndian.Uint32(s.ps.argBuf[0:Uint32Len])
 	if s.ps.ma.len == 0 {
 		return ErrParseProto
 	}

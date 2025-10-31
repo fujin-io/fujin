@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/Azure/go-amqp"
-	"github.com/ValerySidorin/fujin/public/connectors/impl/amqp10"
+	"github.com/ValerySidorin/fujin/server/public/connectors/impl/amqp10"
 	"github.com/stretchr/testify/assert"
 )
 

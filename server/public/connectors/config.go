@@ -1,8 +1,8 @@
 package connectors
 
 import (
-	reader "github.com/ValerySidorin/fujin/public/connectors/reader/config"
-	writer "github.com/ValerySidorin/fujin/public/connectors/writer/config"
+	reader "github.com/ValerySidorin/fujin/server/public/connectors/reader/config"
+	writer "github.com/ValerySidorin/fujin/server/public/connectors/writer/config"
 )
 
 type Config struct {

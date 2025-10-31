@@ -7,9 +7,9 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/ValerySidorin/fujin/public/connectors/reader"
-	"github.com/ValerySidorin/fujin/public/connectors/util"
-	"github.com/ValerySidorin/fujin/public/connectors/writer"
+	"github.com/ValerySidorin/fujin/server/public/connectors/reader"
+	"github.com/ValerySidorin/fujin/server/public/connectors/util"
+	"github.com/ValerySidorin/fujin/server/public/connectors/writer"
 )
 
 func init() {

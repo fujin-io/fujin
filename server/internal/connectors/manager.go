@@ -6,11 +6,11 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/ValerySidorin/fujin/internal/common/pool"
-	"github.com/ValerySidorin/fujin/internal/connectors/observability"
-	"github.com/ValerySidorin/fujin/public/connectors"
-	"github.com/ValerySidorin/fujin/public/connectors/reader"
-	"github.com/ValerySidorin/fujin/public/connectors/writer"
+	"github.com/ValerySidorin/fujin/server/internal/common/pool"
+	"github.com/ValerySidorin/fujin/server/internal/connectors/observability"
+	"github.com/ValerySidorin/fujin/server/public/connectors"
+	"github.com/ValerySidorin/fujin/server/public/connectors/reader"
+	"github.com/ValerySidorin/fujin/server/public/connectors/writer"
 )
 
 var (

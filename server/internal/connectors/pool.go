@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ValerySidorin/fujin/public/connectors/reader"
+	"github.com/ValerySidorin/fujin/server/public/connectors/reader"
 )
 
 type Pool struct {

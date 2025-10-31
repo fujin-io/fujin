@@ -2,9 +2,9 @@ services:
   fujin:
     image: fujin:nats_core-${BUILD_TAG}
     build:
-      context: ./..
+      context: ..
       args:
-        GO_BUILD_TAGS: nats_core,observability
+        GO_BUILD_TAGS: fujin,grpc,nats_core,observability
     container_name: fujin
     ports:
       - "4848:4848/udp"

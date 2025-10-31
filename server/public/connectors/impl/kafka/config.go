@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	pconfig "github.com/ValerySidorin/fujin/public/config"
-	"github.com/ValerySidorin/fujin/public/connectors/cerr"
+	pconfig "github.com/ValerySidorin/fujin/server/public/config"
+	"github.com/ValerySidorin/fujin/server/public/connectors/cerr"
 )
 
 type Balancer string

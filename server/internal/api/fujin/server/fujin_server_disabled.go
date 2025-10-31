@@ -8,8 +8,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/ValerySidorin/fujin/internal/connectors"
-	"github.com/ValerySidorin/fujin/public/server/config"
+	"github.com/ValerySidorin/fujin/server/internal/connectors"
+	"github.com/ValerySidorin/fujin/server/public/server/config"
 )
 
 var ErrFujinNotCompiledIn = fmt.Errorf("fujin protocol is not compiled in")

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ValerySidorin/fujin/public/connectors/reader"
-	"github.com/ValerySidorin/fujin/public/connectors/writer"
+	"github.com/ValerySidorin/fujin/server/public/connectors/reader"
+	"github.com/ValerySidorin/fujin/server/public/connectors/writer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

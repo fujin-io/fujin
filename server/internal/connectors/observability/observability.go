@@ -1,8 +1,8 @@
 package observability
 
 import (
-	"github.com/ValerySidorin/fujin/public/connectors/reader"
-	"github.com/ValerySidorin/fujin/public/connectors/writer"
+	"github.com/ValerySidorin/fujin/server/public/connectors/reader"
+	"github.com/ValerySidorin/fujin/server/public/connectors/writer"
 )
 
 var (

@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/ValerySidorin/fujin/public/connectors/cerr"
+	"github.com/ValerySidorin/fujin/server/public/connectors/cerr"
 )
 
 type Reader struct {
@@ -108,4 +108,3 @@ func (r *Reader) IsAutoCommit() bool {
 }
 
 func (r *Reader) Close() {}
-

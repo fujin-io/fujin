@@ -2,9 +2,9 @@ services:
   fujin:
     image: fujin:mqtt-${BUILD_TAG}
     build:
-      context: ./..
+      context: ..
       args:
-        GO_BUILD_TAGS: mqtt,observability
+        GO_BUILD_TAGS: fujin,grpc,mqtt,observability
     container_name: fujin
     ports:
       - "4848:4848/udp"

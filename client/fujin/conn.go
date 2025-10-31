@@ -9,16 +9,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ValerySidorin/fujin/internal/api/fujin/proto/request"
-	"github.com/ValerySidorin/fujin/internal/api/fujin/proto/response"
-	"github.com/ValerySidorin/fujin/internal/api/fujin/version"
+	v1 "github.com/ValerySidorin/fujin/api/fujin/v1"
+	"github.com/ValerySidorin/fujin/api/fujin/v1/proto"
 	"github.com/quic-go/quic-go"
 )
 
 var (
 	ReadBufferSize = 512
 
-	DISCONNECT_REQ = []byte{byte(request.OP_CODE_DISCONNECT)}
+	DISCONNECT_REQ = []byte{byte(proto.OP_CODE_DISCONNECT)}
 )
 
 type Conn struct {
@@ -34,7 +33,7 @@ type Conn struct {
 func Dial(ctx context.Context, addr string, tlsConf *tls.Config, quicConf *quic.Config, opts ...Option) (*Conn, error) {
 	if tlsConf != nil {
 		tlsConf = tlsConf.Clone()
-		tlsConf.NextProtos = []string{version.Fujin1}
+		tlsConf.NextProtos = []string{v1.Version}
 	}
 	conn, err := quic.DialAddr(ctx, addr, tlsConf, quicConf)
 	if err != nil {
@@ -94,7 +93,7 @@ func handlePing(str *quic.Stream, buf []byte) error {
 
 	_, err := str.Read(buf[:])
 	if err == io.EOF {
-		buf[0] = byte(response.RESP_CODE_PONG)
+		buf[0] = byte(proto.RESP_CODE_PONG)
 		if _, err := str.Write(buf[:]); err != nil {
 			return fmt.Errorf("ping: write pong: %w", err)
 		}

@@ -5,11 +5,11 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/ValerySidorin/fujin/internal/api/fujin/server"
-	grpc_server "github.com/ValerySidorin/fujin/internal/api/grpc/server"
-	"github.com/ValerySidorin/fujin/internal/connectors"
-	obs "github.com/ValerySidorin/fujin/internal/observability"
-	"github.com/ValerySidorin/fujin/public/server/config"
+	"github.com/ValerySidorin/fujin/server/internal/api/fujin/server"
+	grpc_server "github.com/ValerySidorin/fujin/server/internal/api/grpc/server"
+	"github.com/ValerySidorin/fujin/server/internal/connectors"
+	obs "github.com/ValerySidorin/fujin/server/internal/observability"
+	"github.com/ValerySidorin/fujin/server/public/server/config"
 	"golang.org/x/sync/errgroup"
 )
 

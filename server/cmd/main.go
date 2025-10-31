@@ -5,8 +5,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	_ "github.com/ValerySidorin/fujin/public/connectors/all"
-	"github.com/ValerySidorin/fujin/public/service"
+	_ "github.com/ValerySidorin/fujin/server/public/connectors/all"
+	"github.com/ValerySidorin/fujin/server/public/service"
 )
 
 func main() {

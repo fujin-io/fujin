@@ -8,10 +8,10 @@ import (
 
 	// Добавим, если понадобится для перезаписи Endpoint
 
-	redis "github.com/ValerySidorin/fujin/public/connectors/impl/resp"
-	"github.com/ValerySidorin/fujin/public/connectors/reader"
-	"github.com/ValerySidorin/fujin/public/connectors/util"
-	"github.com/ValerySidorin/fujin/public/connectors/writer"
+	redis "github.com/ValerySidorin/fujin/server/public/connectors/impl/resp"
+	"github.com/ValerySidorin/fujin/server/public/connectors/reader"
+	"github.com/ValerySidorin/fujin/server/public/connectors/util"
+	"github.com/ValerySidorin/fujin/server/public/connectors/writer"
 )
 
 func init() {

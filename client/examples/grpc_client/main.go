@@ -33,7 +33,7 @@ func main() {
 	defer conn.Close()
 
 	// Create stream
-	stream, err := conn.Connect("simple-example")
+	stream, err := conn.Connect("")
 	if err != nil {
 		log.Fatalf("Failed to create stream: %v", err)
 	}
