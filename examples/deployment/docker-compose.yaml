@@ -1,20 +1,21 @@
 services:
   fujin:
     build:
-      context: https://github.com/ValerySidorin/fujin.git#v0.0.1-alpha.7
+      context: https://github.com/ValerySidorin/fujin.git#v0.1.0-go.1.24.2-alpha.1
       dockerfile: Dockerfile
       args:
-        GO_BUILD_TAGS: kafka,observability
+        GO_BUILD_TAGS: fujin,grpc,kafka,observability
     container_name: fujin
     ports:
       - "4848:4848/udp"
+      - "4949:4949"
     depends_on:
       - kafka1
       - kafka2
       - kafka3
     volumes:
       - ../assets:/assets
-    command: /assets/config/config.yaml
+    command: /assets/config/config.deployment.example.yaml
     restart: always
   zoo1:
     image: confluentinc/cp-zookeeper:7.9.1

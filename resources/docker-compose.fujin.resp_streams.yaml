@@ -8,6 +8,7 @@ services:
     container_name: fujin
     ports:
       - "4848:4848/udp"
+      - "4949:4949"
     volumes:
       - ./assets:/assets
     command: /assets/config/config-resp_streams.yaml
