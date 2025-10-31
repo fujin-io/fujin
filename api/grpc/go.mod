@@ -1,6 +1,6 @@
 module github.com/ValerySidorin/fujin/api/grpc
 
-go 1.24.2
+go 1.25.3
 
 require (
 	google.golang.org/grpc v1.76.0

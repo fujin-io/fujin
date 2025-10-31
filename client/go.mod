@@ -1,6 +1,6 @@
 module github.com/ValerySidorin/fujin/client
 
-go 1.24.2
+go 1.25.3
 
 replace (
 	github.com/ValerySidorin/fujin/api/fujin => ../api/fujin
