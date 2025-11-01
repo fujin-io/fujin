@@ -2,18 +2,11 @@ module github.com/ValerySidorin/fujin/client
 
 go 1.24.2
 
-replace (
-	github.com/ValerySidorin/fujin/api/fujin => ../api/fujin
-	github.com/ValerySidorin/fujin/api/grpc => ../api/grpc
-	github.com/ValerySidorin/fujin/common/fujin => ../common/fujin
-	github.com/ValerySidorin/fujin/server => ../server
-)
-
 require (
-	github.com/ValerySidorin/fujin/api/fujin v0.0.0-00010101000000-000000000000
-	github.com/ValerySidorin/fujin/api/grpc v0.0.0-00010101000000-000000000000
-	github.com/ValerySidorin/fujin/common/fujin v0.0.0-00010101000000-000000000000
-	github.com/ValerySidorin/fujin/server v0.0.0-00010101000000-000000000000
+	github.com/ValerySidorin/fujin/api/fujin v0.1.1-beta.1
+	github.com/ValerySidorin/fujin/api/grpc v0.1.1-beta.1
+	github.com/ValerySidorin/fujin/common/fujin v0.1.1-beta.1
+	github.com/ValerySidorin/fujin/server v0.1.1-beta.1
 	github.com/nats-io/nats-server/v2 v2.12.1
 	github.com/panjf2000/ants/v2 v2.11.3
 	github.com/quic-go/quic-go v0.55.0
