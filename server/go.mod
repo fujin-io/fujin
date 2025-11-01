@@ -4,9 +4,9 @@ go 1.24.2
 
 require (
 	github.com/Azure/go-amqp v1.5.0
-	github.com/ValerySidorin/fujin/api/fujin v0.1.2-beta.1
-	github.com/ValerySidorin/fujin/api/grpc v0.1.2-beta.1
-	github.com/ValerySidorin/fujin/common/fujin v0.1.2-beta.1
+	github.com/ValerySidorin/fujin/api/fujin v0.2.0-beta.1
+	github.com/ValerySidorin/fujin/api/grpc v0.2.0-beta.1
+	github.com/ValerySidorin/fujin/common/fujin v0.2.0-beta.1
 	github.com/bytedance/sonic v1.14.2
 	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/nats-io/nats-server/v2 v2.12.1
