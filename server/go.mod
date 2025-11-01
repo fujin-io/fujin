@@ -4,9 +4,9 @@ go 1.24.2
 
 require (
 	github.com/Azure/go-amqp v1.5.0
-	github.com/ValerySidorin/fujin/api/fujin v0.1.1-beta.1
-	github.com/ValerySidorin/fujin/api/grpc v0.1.1-beta.1
-	github.com/ValerySidorin/fujin/common/fujin v0.1.1-beta.1
+	github.com/ValerySidorin/fujin/api/fujin v0.1.1-beta.2
+	github.com/ValerySidorin/fujin/api/grpc v0.1.1-beta.2
+	github.com/ValerySidorin/fujin/common/fujin v0.1.1-beta.2
 	github.com/bytedance/sonic v1.14.2
 	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/nats-io/nats-server/v2 v2.12.1
@@ -26,7 +26,6 @@ require (
 	go.opentelemetry.io/otel/trace v1.38.0
 	golang.org/x/sync v0.17.0
 	google.golang.org/grpc v1.76.0
-	google.golang.org/protobuf v1.36.10
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -75,4 +74,5 @@ require (
 	golang.org/x/tools v0.38.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251029180050-ab9386a59fda // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251029180050-ab9386a59fda // indirect
+	google.golang.org/protobuf v1.36.10 // indirect
 )
