@@ -1,11 +1,11 @@
 github.com/Azure/go-amqp v1.5.0 h1:GRiQK1VhrNFbyx5VlmI6BsA1FCp27W5rb9kxOZScnTo=
 github.com/Azure/go-amqp v1.5.0/go.mod h1:vZAogwdrkbyK3Mla8m/CxSc/aKdnTZ4IbPxl51Y5WZE=
-github.com/ValerySidorin/fujin/api/fujin v0.1.1-beta.2 h1:G81b7t6GZi7aawOXItt15UmB4ApeY8QbHSw6kqm3kUs=
-github.com/ValerySidorin/fujin/api/fujin v0.1.1-beta.2/go.mod h1:Kj3pjhCUSfw6Rtzn3HU6BsO9QS+uzY9umQrCSBE0v+Q=
-github.com/ValerySidorin/fujin/api/grpc v0.1.1-beta.2 h1:OCeRLfRZdy6xhY2Asyb5qksLEhixsrDnDgOwtkJmXg4=
-github.com/ValerySidorin/fujin/api/grpc v0.1.1-beta.2/go.mod h1:+5vkQ2BObAAMHgDnXezKLt449DMHhogvhxiR7MU/Cs8=
-github.com/ValerySidorin/fujin/common/fujin v0.1.1-beta.2 h1:3ME4+RGbwjBZXLOhED7yahgbx7qi7CRfPygfsaxSxDA=
-github.com/ValerySidorin/fujin/common/fujin v0.1.1-beta.2/go.mod h1:GT9x+ITw9IMFC6fQ//gstHlgAz1c+7+dxwJkpLj4Pf0=
+github.com/ValerySidorin/fujin/api/fujin v0.1.2-beta.1 h1:4TWdiSPPGruiAHStBsY28aV3LRC8lBrbpQaGCF1wQSw=
+github.com/ValerySidorin/fujin/api/fujin v0.1.2-beta.1/go.mod h1:Kj3pjhCUSfw6Rtzn3HU6BsO9QS+uzY9umQrCSBE0v+Q=
+github.com/ValerySidorin/fujin/api/grpc v0.1.2-beta.1 h1:RJ17xOixpQKGhvCJUTJyrrAOTBpRgoJvyPrl97fKleE=
+github.com/ValerySidorin/fujin/api/grpc v0.1.2-beta.1/go.mod h1:+5vkQ2BObAAMHgDnXezKLt449DMHhogvhxiR7MU/Cs8=
+github.com/ValerySidorin/fujin/common/fujin v0.1.2-beta.1 h1:mz1rONmduLVrXPAyLWOBVu9dgB0Ux9wfRLjPo3nb9Zc=
+github.com/ValerySidorin/fujin/common/fujin v0.1.2-beta.1/go.mod h1:GT9x+ITw9IMFC6fQ//gstHlgAz1c+7+dxwJkpLj4Pf0=
 github.com/ValerySidorin/fujin/server v0.1.1-beta.2 h1:e/+Qymybr5AaMiaD5NiYlft9I1xl+rnk0FaOWpIowgI=
 github.com/ValerySidorin/fujin/server v0.1.1-beta.2/go.mod h1:65s3dKCnwM/kvF6GfU1iIipYnWRMWZHDQqZoZA3nitQ=
 github.com/antithesishq/antithesis-sdk-go v0.5.0 h1:cudCFF83pDDANcXFzkQPUHHedfnnIbUO3JMr9fqwFJs=
