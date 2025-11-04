@@ -15,9 +15,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ValerySidorin/fujin/internal/api/fujin/ferr"
-	"github.com/ValerySidorin/fujin/internal/api/fujin/proto/request"
-	"github.com/ValerySidorin/fujin/internal/api/fujin/proto/response"
+	"github.com/fujin-io/fujin/internal/api/fujin/ferr"
+	"github.com/fujin-io/fujin/internal/api/fujin/proto/request"
+	"github.com/fujin-io/fujin/internal/api/fujin/proto/response"
 	"github.com/quic-go/quic-go"
 )
 

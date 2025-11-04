@@ -36,7 +36,7 @@ all: clean build run
 .PHONY: build
 build:
 	@echo "==> Building ${APP_NAME} for ${DETECTED_OS} (Version: ${VERSION}, Tags: [${GO_BUILD_TAGS}])"
-	@cd server && go build -tags=${GO_BUILD_TAGS} -ldflags "-s -w -X main.Version=${VERSION}" -o ../$(BINARY) ./cmd/...
+	@go build -tags=${GO_BUILD_TAGS} -ldflags "-s -w -X main.Version=${VERSION}" -o ./$(BINARY) ./cmd/...
 	@echo "==> Binary created: $(BINARY)"
 
 .PHONY: clean
@@ -78,7 +78,7 @@ endif
 .PHONY: generate
 generate:
 	@echo "==> Generating gRPC code"
-	@cd api && protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative grpc/v1/fujin.proto
+	@cd public/proto && protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative grpc/v1/fujin.proto
 
 .PHONY: test
 test:

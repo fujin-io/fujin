@@ -15,7 +15,7 @@ Thank you for considering contributing to Fujin! This document provides guidelin
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/ValerySidorin/fujin.git
+git clone https://github.com/fujin-io/fujin.git
 cd fujin
 
 # 2. Build the project
