@@ -2,15 +2,14 @@ ARG GO_VERSION=1.24
 
 FROM golang:${GO_VERSION}-alpine AS builder
 
-ARG GO_BUILD_TAGS=kafka,nats_core,amqp091,amqp10,resp_pubsub,resp_streams,mqtt,nsq
+ARG GO_BUILD_TAGS=fujin,grpc,observability,kafka,nats_core,amqp091,amqp10,resp_pubsub,resp_streams,mqtt,nsq
 
 WORKDIR /app
 
+COPY go.mod go.sum ./
+RUN go mod download && apk add git make
+
 COPY . .
-
-RUN apk add git make
-
-RUN cd server && go mod download
 
 RUN make build GO_BUILD_TAGS=${GO_BUILD_TAGS}
 
