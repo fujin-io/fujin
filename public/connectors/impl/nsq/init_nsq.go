@@ -38,4 +38,6 @@ func init() {
 		}
 		return NewReader(typedConfig, autoCommit, l)
 	})
+	writer.RegisterConfigValueConverter("nsq", convertWriterConfigValue)
+	reader.RegisterConfigValueConverter("nsq", convertReaderConfigValue)
 }

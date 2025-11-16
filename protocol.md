@@ -86,7 +86,7 @@ Configuration overrides allow dynamic modification of connector settings at runt
 | `config_overrides` | Array of key-value pairs for configuration override. | [uint16]string |
 
 ##### Response
-`[1, <error>]` 
+`[16, <error>]` 
 
 ### Examples
 - `[1, 0, 0, 0, 0]` -> `[16, 0]` (INIT with no overrides)

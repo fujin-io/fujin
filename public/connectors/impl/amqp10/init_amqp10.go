@@ -55,4 +55,6 @@ func init() {
 		}
 		return NewReader(typedConfig, autoCommit, l)
 	})
+	writer.RegisterConfigValueConverter("amqp10", convertWriterConfigValue)
+	reader.RegisterConfigValueConverter("amqp10", convertReaderConfigValue)
 }

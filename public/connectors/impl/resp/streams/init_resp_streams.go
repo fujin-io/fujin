@@ -46,4 +46,6 @@ func init() {
 		}
 		return NewReader(typedConfig, autoCommit, l)
 	})
+	writer.RegisterConfigValueConverter("resp_streams", convertWriterConfigValue)
+	reader.RegisterConfigValueConverter("resp_streams", convertReaderConfigValue)
 }

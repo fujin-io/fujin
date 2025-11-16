@@ -44,4 +44,6 @@ func init() {
 		}
 		return NewReader(typedConfig, autoCommit, l)
 	})
+	writer.RegisterConfigValueConverter("nats_core", convertWriterConfigValue)
+	reader.RegisterConfigValueConverter("nats_core", convertReaderConfigValue)
 }
