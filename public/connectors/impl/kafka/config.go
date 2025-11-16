@@ -1,7 +1,6 @@
 package kafka
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -49,13 +48,12 @@ type WriterConfig struct {
 	AllowAutoTopicCreation bool              `yaml:"allow_auto_topic_creation"`
 	MaxBufferedRecords     int               `yaml:"max_buffered_records"`
 	DisableIdempotentWrite bool              `yaml:"disable_idempotent_write"`
+	TransactionalID        string            `yaml:"transactional_id"` // Transactional ID for Kafka transactions
 	PingTimeout            time.Duration     `yaml:"ping_timeout"`
 	TLS                    pconfig.TLSConfig `yaml:"tls"`
 }
 
 func (c *ReaderConfig) Validate() error {
-	fmt.Println(*c)
-
 	if len(c.Brokers) <= 0 {
 		return cerr.ValidationErr("brokers not defined")
 	}

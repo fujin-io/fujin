@@ -11,11 +11,16 @@ import (
 var (
 	writerFactories                = make(map[string]WriterFactoryFunc)
 	writerConfigEndpointParseFuncs = make(map[string]WriterConfigEndpointParseFunc)
+	writerConfigValueConverters    = make(map[string]ConfigValueConverterFunc)
 
 	DefaultConfigEndpointParser = func(conf map[string]any) string {
 		return ""
 	}
 )
+
+// ConfigValueConverterFunc converts and validates a configuration value for a specific setting path
+// Returns the converted value and any validation error
+type ConfigValueConverterFunc func(settingPath string, value string) (any, error)
 
 type Writer interface {
 	Produce(ctx context.Context, msg []byte, callback func(err error))
@@ -28,7 +33,7 @@ type Writer interface {
 	Close() error
 }
 
-type WriterFactoryFunc func(brokerSpecificConfig any, writerID string, l *slog.Logger) (Writer, error)
+type WriterFactoryFunc func(brokerSpecificConfig any, l *slog.Logger) (Writer, error)
 
 type WriterConfigEndpointParseFunc func(conf map[string]any) string
 
@@ -37,13 +42,23 @@ func RegisterWriterFactory(protocol string, factory WriterFactoryFunc, parser Wr
 	writerConfigEndpointParseFuncs[protocol] = parser
 }
 
-func NewWriter(conf config.Config, writerID string, l *slog.Logger) (Writer, error) {
+// RegisterConfigValueConverter registers a value converter for a writer protocol
+func RegisterConfigValueConverter(protocol string, converter ConfigValueConverterFunc) {
+	writerConfigValueConverters[protocol] = converter
+}
+
+// GetConfigValueConverter returns the value converter for a protocol, or nil if not registered
+func GetConfigValueConverter(protocol string) ConfigValueConverterFunc {
+	return writerConfigValueConverters[protocol]
+}
+
+func NewWriter(conf config.Config, l *slog.Logger) (Writer, error) {
 	factory, ok := writerFactories[conf.Protocol]
 	if !ok {
 		return nil, fmt.Errorf("unsupported writer protocol: %s (is it compiled in?)", conf.Protocol)
 	}
 
-	return factory(conf.Settings, writerID, l)
+	return factory(conf.Settings, l)
 }
 
 func ParseEndpoint(conf config.Config) (string, error) {

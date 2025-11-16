@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/fujin-io/fujin/internal/api/fujin/pool"
-	"github.com/fujin-io/fujin/internal/connectors"
 	"github.com/fujin-io/fujin/internal/observability"
+	public_connectors "github.com/fujin-io/fujin/public/connectors"
 	v1 "github.com/fujin-io/fujin/public/proto/fujin/v1"
 	"github.com/fujin-io/fujin/public/server/config"
 	"github.com/quic-go/quic-go"
@@ -27,8 +27,8 @@ var (
 )
 
 type FujinServer struct {
-	conf config.FujinServerConfig
-	cman *connectors.Manager
+	conf       config.FujinServerConfig
+	baseConfig public_connectors.Config
 
 	ready chan struct{}
 	done  chan struct{}
@@ -36,13 +36,13 @@ type FujinServer struct {
 	l *slog.Logger
 }
 
-func NewFujinServer(conf config.FujinServerConfig, cman *connectors.Manager, l *slog.Logger) *FujinServer {
+func NewFujinServer(conf config.FujinServerConfig, baseConfig public_connectors.Config, l *slog.Logger) *FujinServer {
 	return &FujinServer{
-		conf:  conf,
-		cman:  cman,
-		ready: make(chan struct{}),
-		done:  make(chan struct{}),
-		l:     l.With("server", "fujin"),
+		conf:       conf,
+		baseConfig: baseConfig,
+		ready:      make(chan struct{}),
+		done:       make(chan struct{}),
+		l:          l.With("server", "fujin"),
 	}
 }
 
@@ -237,7 +237,7 @@ func (s *FujinServer) ListenAndServe(ctx context.Context) error {
 						out := NewOutbound(str, s.conf.WriteDeadline, s.l)
 						h := newHandler(ctx,
 							s.conf.PingInterval, s.conf.PingTimeout, s.conf.PingStream,
-							s.cman, out, str, s.l)
+							s.baseConfig, out, str, s.l)
 						in := newInbound(str, s.conf.ForceTerminateTimeout, h, s.l)
 						go in.readLoop(ctx)
 						out.WriteLoop()

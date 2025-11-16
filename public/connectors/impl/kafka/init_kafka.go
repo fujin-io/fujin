@@ -14,7 +14,7 @@ import (
 
 func init() {
 	writer.RegisterWriterFactory("kafka",
-		func(rawBrokerConfig any, writerID string, l *slog.Logger) (writer.Writer, error) {
+		func(rawBrokerConfig any, l *slog.Logger) (writer.Writer, error) {
 			var typedConfig WriterConfig
 			if writerConfig, ok := rawBrokerConfig.(WriterConfig); ok {
 				typedConfig = writerConfig
@@ -26,7 +26,7 @@ func init() {
 			if err := typedConfig.Validate(); err != nil {
 				return nil, fmt.Errorf("kafka writer factory: invalid config: %w", err)
 			}
-			return NewWriter(typedConfig, writerID, l)
+			return NewWriter(typedConfig, l)
 		},
 		func(conf map[string]any) string {
 			brokersRaw, ok := conf["brokers"].([]any)
@@ -42,6 +42,7 @@ func init() {
 			return strings.Join(brokersStr, ",")
 		},
 	)
+	writer.RegisterConfigValueConverter("kafka", convertWriterConfigValue)
 
 	reader.RegisterReaderFactory("kafka", func(rawBrokerConfig any, autoCommit bool, l *slog.Logger) (reader.Reader, error) {
 		var typedConfig ReaderConfig
@@ -57,4 +58,5 @@ func init() {
 		}
 		return NewReader(typedConfig, autoCommit, l)
 	})
+	reader.RegisterConfigValueConverter("kafka", convertReaderConfigValue)
 }

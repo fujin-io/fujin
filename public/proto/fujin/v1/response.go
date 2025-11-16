@@ -25,8 +25,8 @@ const (
 	RESP_CODE_ACK         RespCode = 12
 	RESP_CODE_NACK        RespCode = 13
 	RESP_CODE_UNSUBSCRIBE RespCode = 14
-
-	RESP_CODE_DISCONNECT RespCode = 15
+	RESP_CODE_DISCONNECT  RespCode = 15
+	RESP_CODE_INIT        RespCode = 16
 
 	// Client response opcodes
 	RESP_CODE_PONG RespCode = 99

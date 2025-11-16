@@ -13,7 +13,7 @@ import (
 )
 
 func init() {
-	writer.RegisterWriterFactory("resp_pubsub", func(rawBrokerConfig any, writerID string, l *slog.Logger) (writer.Writer, error) {
+	writer.RegisterWriterFactory("resp_pubsub", func(rawBrokerConfig any, l *slog.Logger) (writer.Writer, error) {
 		var typedConfig WriterConfig
 		if writerConfig, ok := rawBrokerConfig.(WriterConfig); ok {
 			typedConfig = writerConfig

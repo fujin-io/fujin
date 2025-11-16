@@ -21,7 +21,7 @@ type Writer struct {
 	wg       sync.WaitGroup
 }
 
-func NewWriter(conf WriterConfig, writerID string, l *slog.Logger) (*Writer, error) {
+func NewWriter(conf WriterConfig, l *slog.Logger) (*Writer, error) {
 	if conf.PingTimeout <= 0 {
 		conf.PingTimeout = 5 * time.Second
 	}
@@ -31,7 +31,7 @@ func NewWriter(conf WriterConfig, writerID string, l *slog.Logger) (*Writer, err
 		return nil, fmt.Errorf("kafka: parse tls: %w", err)
 	}
 
-	c, err := kgo.NewClient(kgoOptsFromWriterConf(conf, writerID, conf.TLS.Config)...)
+	c, err := kgo.NewClient(kgoOptsFromWriterConf(conf, conf.TLS.Config)...)
 	if err != nil {
 		return nil, fmt.Errorf("kafka: new client: %w", err)
 	}

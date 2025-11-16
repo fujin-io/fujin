@@ -8,7 +8,7 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
-func kgoOptsFromWriterConf(conf WriterConfig, writerID string, tlsConfig *tls.Config) []kgo.Opt {
+func kgoOptsFromWriterConf(conf WriterConfig, tlsConfig *tls.Config) []kgo.Opt {
 	opts := []kgo.Opt{
 		kgo.SeedBrokers(conf.Brokers...),
 		kgo.DefaultProduceTopic(conf.Topic),
@@ -19,8 +19,9 @@ func kgoOptsFromWriterConf(conf WriterConfig, writerID string, tlsConfig *tls.Co
 		opts = append(opts, kgo.AllowAutoTopicCreation())
 	}
 
-	if writerID != "" {
-		opts = append(opts, kgo.TransactionalID(writerID))
+	// Use TransactionalID from config if set
+	if conf.TransactionalID != "" {
+		opts = append(opts, kgo.TransactionalID(conf.TransactionalID))
 	}
 
 	if conf.DisableIdempotentWrite {

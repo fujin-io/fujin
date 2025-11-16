@@ -244,13 +244,18 @@ func TestHandler_SubscribeArgs(t *testing.T) {
 	assert.False(t, h.ps.sa.headered)
 }
 
-func TestHandler_ConnectArgs(t *testing.T) {
+func TestHandler_InitArgs(t *testing.T) {
 	h := newTestHandler()
-	h.ps.cna.streamIDLen = 8
-	h.ps.cna.streamID = "stream-1"
+	h.ps.ina.configOverrides = make(map[string]string)
+	h.ps.ina.configOverrides["writer.pub.transactional_id"] = "my-tx-id"
+	h.ps.ina.configOverrides["reader.sub.group"] = "my-group"
+	h.ps.ina.overridesCount = 2
+	h.ps.ina.overridesRead = 2
 
-	assert.Equal(t, uint32(8), h.ps.cna.streamIDLen)
-	assert.Equal(t, "stream-1", h.ps.cna.streamID)
+	assert.Equal(t, uint32(2), h.ps.ina.overridesCount)
+	assert.Equal(t, uint32(2), h.ps.ina.overridesRead)
+	assert.Equal(t, "my-tx-id", h.ps.ina.configOverrides["writer.pub.transactional_id"])
+	assert.Equal(t, "my-group", h.ps.ina.configOverrides["reader.sub.group"])
 }
 
 func TestHandler_FetchArgs(t *testing.T) {
@@ -361,7 +366,7 @@ func TestHandler_StateConstants(t *testing.T) {
 func TestHandler_OpCodeConstants(t *testing.T) {
 	// Test some operation code constants exist
 	assert.Equal(t, 0, OP_START)
-	assert.GreaterOrEqual(t, OP_CONNECT, 0)
+	assert.GreaterOrEqual(t, OP_INIT, 0)
 	assert.GreaterOrEqual(t, OP_PRODUCE, 0)
 	assert.GreaterOrEqual(t, OP_SUBSCRIBE, 0)
 	assert.GreaterOrEqual(t, OP_FETCH, 0)

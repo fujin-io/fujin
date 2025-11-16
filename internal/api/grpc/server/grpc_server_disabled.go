@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/fujin-io/fujin/internal/connectors"
+	"github.com/fujin-io/fujin/public/connectors"
 	"github.com/fujin-io/fujin/public/server/config"
 )
 
@@ -15,21 +15,21 @@ var ErrGRPCNotCompiledIn = fmt.Errorf("grpc is not compiled in")
 
 // GRPCServer stub implementation when gRPC is disabled
 type GRPCServer struct {
-	conf config.GRPCServerConfig
-	l    *slog.Logger
+	enabled bool
+	l       *slog.Logger
 }
 
 // NewGRPCServer creates a stub gRPC server instance
-func NewGRPCServer(conf config.GRPCServerConfig, cman *connectors.Manager, l *slog.Logger) *GRPCServer {
+func NewGRPCServer(conf config.GRPCServerConfig, _ connectors.Config, l *slog.Logger) *GRPCServer {
 	return &GRPCServer{
-		conf: conf,
-		l:    l.With("server", "grpc"),
+		enabled: conf.Enabled,
+		l:       l.With("server", "grpc"),
 	}
 }
 
 // ListenAndServe returns an error indicating gRPC is not compiled in
 func (s *GRPCServer) ListenAndServe(ctx context.Context) error {
-	if s.conf.Enabled {
+	if s.enabled {
 		s.l.Error("gRPC server is enabled but not compiled in - rebuild with 'grpc' build tag")
 		return ErrGRPCNotCompiledIn
 	}
