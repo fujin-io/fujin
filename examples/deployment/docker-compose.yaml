@@ -1,7 +1,7 @@
 services:
   fujin:
     build:
-      context: https://github.com/fujin-io/fujin.git#v0.1.5
+      context: https://github.com/fujin-io/fujin.git#v0.1.6
       dockerfile: Dockerfile
       args:
         GO_BUILD_TAGS: fujin,grpc,kafka,observability
