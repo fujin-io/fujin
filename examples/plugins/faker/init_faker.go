@@ -9,7 +9,7 @@ import (
 
 func init() {
 	writer.RegisterWriterFactory("faker",
-		func(rawBrokerConfig any, writerID string, l *slog.Logger) (writer.Writer, error) {
+		func(rawBrokerConfig any, l *slog.Logger) (writer.Writer, error) {
 			return NewWriter(l)
 		},
 		writer.DefaultConfigEndpointParser,

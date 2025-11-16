@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/fujin-io/fujin/internal/connectors"
+	public_connectors "github.com/fujin-io/fujin/public/connectors"
 	"github.com/fujin-io/fujin/public/server/config"
 )
 
@@ -21,7 +21,7 @@ type FujinServer struct {
 }
 
 // NewFujinServer creates a stub Fujin server instance
-func NewFujinServer(conf config.FujinServerConfig, cman *connectors.Manager, l *slog.Logger) *FujinServer {
+func NewFujinServer(conf config.FujinServerConfig, baseConfig public_connectors.Config, l *slog.Logger) *FujinServer {
 	return &FujinServer{
 		conf: conf,
 		l:    l.With("server", "fujin"),

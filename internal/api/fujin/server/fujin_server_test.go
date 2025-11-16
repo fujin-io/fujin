@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/fujin-io/fujin/internal/api/fujin/server"
-	"github.com/fujin-io/fujin/internal/connectors"
+	public_connectors "github.com/fujin-io/fujin/public/connectors"
 	"github.com/fujin-io/fujin/public/server/config"
 	"github.com/quic-go/quic-go"
 	"github.com/stretchr/testify/assert"
@@ -27,10 +27,10 @@ func TestNewFujinServer(t *testing.T) {
 		WriteDeadline:         10 * time.Second,
 		ForceTerminateTimeout: 15 * time.Second,
 	}
-	cman := &connectors.Manager{}
+	baseConfig := public_connectors.Config{}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	srv := server.NewFujinServer(conf, cman, logger)
+	srv := server.NewFujinServer(conf, baseConfig, logger)
 
 	assert.NotNil(t, srv)
 }
@@ -39,11 +39,10 @@ func TestNewFujinServer_WithNilLogger(t *testing.T) {
 	conf := config.FujinServerConfig{
 		Addr: ":4848",
 	}
-	cman := &connectors.Manager{}
 
 	// This should panic if logger is required
 	assert.NotPanics(t, func() {
-		server.NewFujinServer(conf, cman, slog.Default())
+		server.NewFujinServer(conf, public_connectors.Config{}, slog.Default())
 	})
 }
 
@@ -55,10 +54,10 @@ func TestNewFujinServer_WithTLS(t *testing.T) {
 			MinVersion: tls.VersionTLS12,
 		},
 	}
-	cman := &connectors.Manager{}
+	baseConfig := public_connectors.Config{}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	srv := server.NewFujinServer(conf, cman, logger)
+	srv := server.NewFujinServer(conf, baseConfig, logger)
 
 	assert.NotNil(t, srv)
 }
@@ -71,10 +70,10 @@ func TestNewFujinServer_WithQUICConfig(t *testing.T) {
 			MaxIdleTimeout: 30 * time.Second,
 		},
 	}
-	cman := &connectors.Manager{}
+	baseConfig := public_connectors.Config{}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	srv := server.NewFujinServer(conf, cman, logger)
+	srv := server.NewFujinServer(conf, baseConfig, logger)
 
 	assert.NotNil(t, srv)
 }
@@ -83,10 +82,10 @@ func TestFujinServer_ReadyForConnections_Timeout(t *testing.T) {
 	conf := config.FujinServerConfig{
 		Addr: ":4848",
 	}
-	cman := &connectors.Manager{}
+	baseConfig := public_connectors.Config{}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	srv := server.NewFujinServer(conf, cman, logger)
+	srv := server.NewFujinServer(conf, baseConfig, logger)
 
 	// Should timeout since server is not started
 	ready := srv.ReadyForConnections(10 * time.Millisecond)
@@ -97,10 +96,10 @@ func TestFujinServer_ReadyForConnections_Success(t *testing.T) {
 	conf := config.FujinServerConfig{
 		Addr: ":4848",
 	}
-	cman := &connectors.Manager{}
+	baseConfig := public_connectors.Config{}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	srv := server.NewFujinServer(conf, cman, logger)
+	srv := server.NewFujinServer(conf, baseConfig, logger)
 
 	// Simulate server becoming ready
 	go func() {
@@ -117,10 +116,10 @@ func TestFujinServer_Done(t *testing.T) {
 	conf := config.FujinServerConfig{
 		Addr: ":4848",
 	}
-	cman := &connectors.Manager{}
+	baseConfig := public_connectors.Config{}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	srv := server.NewFujinServer(conf, cman, logger)
+	srv := server.NewFujinServer(conf, baseConfig, logger)
 
 	done := srv.Done()
 	assert.NotNil(t, done, "Done channel should not be nil")
@@ -138,10 +137,10 @@ func TestFujinServer_ListenAndServe_InvalidAddress(t *testing.T) {
 	conf := config.FujinServerConfig{
 		Addr: "invalid address format",
 	}
-	cman := &connectors.Manager{}
+	baseConfig := public_connectors.Config{}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	srv := server.NewFujinServer(conf, cman, logger)
+	srv := server.NewFujinServer(conf, baseConfig, logger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
@@ -168,12 +167,12 @@ func TestFujinServer_ListenAndServe_CancelContext(t *testing.T) {
 		TLS:                   &tls.Config{},
 		QUIC:                  &quic.Config{},
 	}
-	cman := &connectors.Manager{}
+	baseConfig := public_connectors.Config{}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelError, // Reduce noise in tests
 	}))
 
-	srv := server.NewFujinServer(conf, cman, logger)
+	srv := server.NewFujinServer(conf, baseConfig, logger)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -209,7 +208,7 @@ func TestFujinServer_ListenAndServe_CancelContext(t *testing.T) {
 func TestFujinServer_MultipleInstances(t *testing.T) {
 	// Test creating multiple server instances (not starting them)
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	cman := &connectors.Manager{}
+	baseConfig := public_connectors.Config{}
 
 	servers := make([]*server.FujinServer, 3)
 	for i := 0; i < 3; i++ {
@@ -217,7 +216,7 @@ func TestFujinServer_MultipleInstances(t *testing.T) {
 			Addr:         ":4848",
 			PingInterval: 2 * time.Second,
 		}
-		servers[i] = server.NewFujinServer(conf, cman, logger)
+		servers[i] = server.NewFujinServer(conf, baseConfig, logger)
 		assert.NotNil(t, servers[i])
 	}
 
@@ -283,11 +282,11 @@ func TestFujinServer_ConfigurationVariations(t *testing.T) {
 	}
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	cman := &connectors.Manager{}
+	baseConfig := public_connectors.Config{}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			srv := server.NewFujinServer(tt.conf, cman, logger)
+			srv := server.NewFujinServer(tt.conf, baseConfig, logger)
 			assert.NotNil(t, srv)
 			assert.NotNil(t, srv.Done())
 		})
@@ -298,10 +297,10 @@ func TestFujinServer_ReadyForConnections_MultipleWaiters(t *testing.T) {
 	conf := config.FujinServerConfig{
 		Addr: ":4848",
 	}
-	cman := &connectors.Manager{}
+	baseConfig := public_connectors.Config{}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	srv := server.NewFujinServer(conf, cman, logger)
+	srv := server.NewFujinServer(conf, baseConfig, logger)
 
 	// Multiple goroutines waiting for server to be ready
 	results := make(chan bool, 3)

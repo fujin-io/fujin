@@ -48,12 +48,12 @@ func NewServer(conf config.Config, l *slog.Logger) (*Server, error) {
 	s.cman = connectors.NewManager(s.conf.Connectors, s.l)
 
 	if conf.Fujin.Enabled {
-		s.fujinServer = server.NewFujinServer(s.conf.Fujin, s.cman, s.l)
+		s.fujinServer = server.NewFujinServer(s.conf.Fujin, s.conf.Connectors, s.l)
 	}
 
 	// Initialize gRPC server if enabled
 	if conf.GRPC.Enabled {
-		s.grpcServer = grpc_server.NewGRPCServerWrapper(s.conf.GRPC, s.cman, s.l)
+		s.grpcServer = grpc_server.NewGRPCServerWrapper(s.conf.GRPC, s.conf.Connectors, s.l)
 	}
 
 	return s, nil

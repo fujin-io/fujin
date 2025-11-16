@@ -10,16 +10,17 @@ message Header {
   bytes value = 2;
 }
 
-// Connect request - must be sent first to initialize the stream
-message ConnectRequest {
-  uint32 correlation_id = 1;
-  string stream_id = 2;  // Used as transactional ID for Kafka
+// Init request - must be sent first to initialize the stream and configure connectors
+// Config overrides format: "writer.connector_name.setting_path" -> "value"
+// Example: "writer.pub.transactional_id" -> "my-tx-id-12345"
+// Example: "reader.sub.group" -> "my-consumer-group"
+message InitRequest {
+  map<string, string> config_overrides = 1;  // Configuration overrides for connectors
 }
 
-// Connect response
-message ConnectResponse {
-  uint32 correlation_id = 1;
-  string error = 2;
+// Init response
+message InitResponse {
+  string error = 1;
 }
 
 // Produce request
@@ -231,7 +232,7 @@ service FujinService {
 // Union type for all requests
 message FujinRequest {
   oneof request {
-    ConnectRequest connect = 1;
+    InitRequest init = 1;
     ProduceRequest produce = 2;
     SubscribeRequest subscribe = 3;
     UnsubscribeRequest unsubscribe = 4;
@@ -250,7 +251,7 @@ message FujinRequest {
 // Union type for all responses
 message FujinResponse {
   oneof response {
-    ConnectResponse connect = 1;
+    InitResponse init = 1;
     ProduceResponse produce = 2;
     SubscribeResponse subscribe = 3;
     UnsubscribeResponse unsubscribe = 4;

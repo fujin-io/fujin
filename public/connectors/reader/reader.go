@@ -47,10 +47,27 @@ type Reader interface {
 
 type ReaderFactoryFunc func(brokerSpecificConfig any, autoCommit bool, l *slog.Logger) (Reader, error)
 
-var readerFactories = make(map[string]ReaderFactoryFunc)
+// ConfigValueConverterFunc converts and validates a configuration value for a specific setting path
+// Returns the converted value and any validation error
+type ConfigValueConverterFunc func(settingPath string, value string) (any, error)
+
+var (
+	readerFactories             = make(map[string]ReaderFactoryFunc)
+	readerConfigValueConverters = make(map[string]ConfigValueConverterFunc)
+)
 
 func RegisterReaderFactory(protocol string, factory ReaderFactoryFunc) {
 	readerFactories[protocol] = factory
+}
+
+// RegisterConfigValueConverter registers a value converter for a reader protocol
+func RegisterConfigValueConverter(protocol string, converter ConfigValueConverterFunc) {
+	readerConfigValueConverters[protocol] = converter
+}
+
+// GetConfigValueConverter returns the value converter for a protocol, or nil if not registered
+func GetConfigValueConverter(protocol string) ConfigValueConverterFunc {
+	return readerConfigValueConverters[protocol]
 }
 
 func New(conf config.Config, autoCommit bool, l *slog.Logger) (Reader, error) {

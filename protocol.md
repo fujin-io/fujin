@@ -65,31 +65,39 @@ Since the QUIC protocol supports multiplexing, `PING` messages are sent over a d
 ### Examples
 - `[99]` -> `[99]`
 
-## CONNECT
+## INIT
 
 ### Direction
 Client -> Server
 ### Description
-Before producing messages, the client must open a QUIC stream and send a `CONNECT` command to the server. When using Kafka, `stream id` is required for transactions and must not be equal to `[0, 0, 0, 0]`.
+Before producing messages, the client must open a QUIC stream and send an `INIT` command to the server. This command initializes the session and optionally applies configuration overrides to connector settings. The `INIT` command must be sent before any other commands (except `PING`/`PONG`).
+
+Configuration overrides allow dynamic modification of connector settings at runtime. The format is: `{type}.{connector_name}.{setting_path}` where:
+- `type` is either `writer` or `reader`
+- `connector_name` is the name of the connector (e.g., `pub`, `sub`)
+- `setting_path` is the path to the setting (e.g., `transactional_id`, `linger`, `group`)
+
 ### Syntax
 ##### Request
- `[1, <stream id>]`  
+ `[1, <config_overrides>]`  
  where:
- | name       | description                                                                             | type   |
-| ----------- | --------------------------------------------------------------------------------------- | ------ |
-| `stream id` | A client provided stream identifier used for transactional message production in Kafka. | uint32 |
+ | name              | description                                          | type           |
+| ------------------ | ---------------------------------------------------- | -------------- |
+| `config_overrides` | Array of key-value pairs for configuration override. | [uint16]string |
+
 ##### Response
-`-`
+`[1, <error>]` 
+
 ### Examples
-- `[1, 0, 0, 0, 0]` -> `-`
-- `[1, 0, 0, 0, 1]` -> `-`
+- `[1, 0, 0, 0, 0]` -> `[16, 0]` (INIT with no overrides)
+- `[1, 0, 0, 0, 1, 0, 0, 0, 25, 119, 114, 105, 116, 101, 114, 46, 112, 117, 98, 46, 116, 114, 97, 110, 115, 97, 99, 116, 105, 111, 110, 97, 108, 95, 105, 100, 0, 0, 0, 15, 109, 121, 45, 116, 120, 45, 105, 100, 45, 49, 50, 51, 52, 53]` -> `[16, 0]` (INIT with one override: `writer.pub.transactional_id` = `my-tx-id-12345`)
 
 ## PRODUCE
 
 ### Direction
 Client -> Server
 ### Description
-Sends a message to the specified topic. This must be sent in the same QUIC stream where the `CONNECT` command was previously issued.
+Sends a message to the specified topic. This must be sent in the same QUIC stream where the `INIT` command was previously issued.
 ### Syntax
 ##### Request
 `[2, <correlation id>, <topic>, <message>]`  
@@ -114,7 +122,7 @@ where:
 ### Direction
 Client -> Server
 ### Description
-Sends a message to the specified topic. This must be sent in the same QUIC stream where the `CONNECT` command was previously issued.
+Sends a message to the specified topic. This must be sent in the same QUIC stream where the `INIT` command was previously issued.
 ### Syntax
 ##### Request
 `[3, <correlation id>, <topic>, <headers>, <message>]`  
@@ -123,7 +131,7 @@ where:
 | ---------------- | ------------------------------------------------------------------------- | ------------------------- |
 | `correlation id` | Correlation ID used to match the client request with the server response. | uint32                    |
 | `topic`          | The target topic for the message.                                         | string                    |
-| `headers`        | Optional headers for the message.                                         | array (uint16) of strings |
+| `headers`        | Optional headers for the message.                                         | [uint16]string            |
 | `message`        | The message content.                                                      | [uint32]byte              |
 ##### Response
 `[4, <correlation id>, <error>]`  
@@ -141,7 +149,7 @@ where:
 Client -> Server
 
 ### Description
-Begins transaction. Must be send in a QUIC stream, where `CONNECT` command was sent previously. `stream id` arg is required on `CONNECT` when Kafka is used.
+Begins transaction. Must be sent in a QUIC stream where `INIT` command was sent previously. For Kafka transactions, `transactional_id` should be configured via `INIT` command's config overrides (e.g., `writer.pub.transactional_id`).
 
 ### Syntax
 ##### Request
@@ -166,7 +174,7 @@ where:
 Client -> Server
 
 ### Description
-Commits transaction. Must be send in a QUIC stream, where `CONNECT` command was sent previously. `stream id` arg is required on `CONNECT` when Kafka is used.
+Commits transaction. Must be sent in a QUIC stream where `INIT` command was sent previously.
 
 ### Syntax
 ##### Request
@@ -191,7 +199,7 @@ where:
 Client -> Server
 
 ### Description
-Rolls back transaction. Must be send in a QUIC stream, where `CONNECT` command was sent previously. `stream id` arg is required on `CONNECT` when Kafka is used.
+Rolls back transaction. Must be sent in a QUIC stream where `INIT` command was sent previously.
 
 ### Syntax
 ##### Request

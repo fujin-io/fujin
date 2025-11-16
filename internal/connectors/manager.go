@@ -22,7 +22,7 @@ type Manager struct {
 	conf connectors.Config
 
 	readers map[string]reader.Reader
-	wpoolms map[string]map[string]*pool.Pool // a map of writer pools grouped by topic and writer ID
+	wpools  map[string]*pool.Pool // a map of writer pools grouped by writer name
 
 	pmu sync.RWMutex
 
@@ -34,7 +34,7 @@ func NewManager(conf connectors.Config, l *slog.Logger) *Manager {
 		conf: conf,
 
 		readers: make(map[string]reader.Reader, len(conf.Readers)),
-		wpoolms: make(map[string]map[string]*pool.Pool, len(conf.Writers)),
+		wpools:  make(map[string]*pool.Pool, len(conf.Writers)),
 
 		l: l,
 	}
@@ -57,91 +57,65 @@ func (m *Manager) GetReader(name string, autoCommit bool) (reader.Reader, error)
 	return r, nil
 }
 
-func (m *Manager) GetWriter(name, writerID string) (writer.Writer, error) {
+func (m *Manager) GetWriter(name string) (writer.Writer, error) {
 	m.pmu.RLock()
+	p, ok := m.wpools[name]
+	m.pmu.RUnlock()
 
-	wpoolm, ok := m.wpoolms[name]
 	if !ok {
-		m.pmu.RUnlock()
 		m.pmu.Lock()
 		defer m.pmu.Unlock()
+
+		// Double-check after acquiring write lock
+		if p, ok = m.wpools[name]; ok {
+			w, err := p.Get()
+			if err != nil {
+				return nil, fmt.Errorf("get writer: %w", err)
+			}
+			return w.(writer.Writer), nil
+		}
 
 		conf, ok := m.conf.Writers[name]
 		if !ok {
 			return nil, ErrWriterNotFound
 		}
 
-		wpoolm = make(map[string]*pool.Pool, 1)
-		pool := pool.NewPool(func() (any, error) {
-			w, err := writer.NewWriter(conf, writerID, m.l)
+		p = pool.NewPool(func() (any, error) {
+			w, err := writer.NewWriter(conf, m.l)
 			if err != nil {
 				return nil, err
 			}
 			w = observability.OtelWriterWrapper(observability.MetricsWriterWrapper(w, name), name)
 			return w, nil
 		})
-		wpoolm[writerID] = pool
-		m.wpoolms[name] = wpoolm
-
-		w, err := pool.Get()
-		if err != nil {
-			return nil, fmt.Errorf("get writer: %w", err)
-		}
-
-		return w.(writer.Writer), nil
+		m.wpools[name] = p
 	}
 
-	p, ok := wpoolm[writerID]
-	if !ok {
-		m.pmu.RUnlock()
-		m.pmu.Lock()
-		defer m.pmu.Unlock()
-
-		conf, ok := m.conf.Writers[name]
-		if !ok {
-			return nil, ErrWriterNotFound
-		}
-
-		wpoolm = make(map[string]*pool.Pool, 1)
-		pool := pool.NewPool(func() (any, error) {
-			w, err := writer.NewWriter(conf, writerID, m.l)
-			if err != nil {
-				return nil, err
-			}
-			w = observability.OtelWriterWrapper(observability.MetricsWriterWrapper(w, name), name)
-			return w, nil
-		})
-		wpoolm[writerID] = pool
-		m.wpoolms[name] = wpoolm
-
-		w, err := pool.Get()
-		if err != nil {
-			return nil, fmt.Errorf("get writer: %w", err)
-		}
-
-		return w.(writer.Writer), nil
-	}
 	w, err := p.Get()
 	if err != nil {
 		return nil, fmt.Errorf("get writer: %w", err)
 	}
-	m.pmu.RUnlock()
 
 	return w.(writer.Writer), nil
 }
 
-func (m *Manager) PutWriter(w writer.Writer, name, writerID string) {
-	m.pmu.Lock()
-	defer m.pmu.Unlock()
+func (m *Manager) PutWriter(w writer.Writer, name string) {
+	m.pmu.RLock()
+	p, ok := m.wpools[name]
+	m.pmu.RUnlock()
 
-	m.wpoolms[name][writerID].Put(w)
+	if !ok {
+		// Pool doesn't exist, just close the writer
+		w.Close()
+		return
+	}
+
+	p.Put(w)
 }
 
 func (m *Manager) Close() {
-	for _, wpoolm := range m.wpoolms {
-		for _, p := range wpoolm {
-			p.Close()
-		}
+	for _, p := range m.wpools {
+		p.Close()
 	}
 }
 
