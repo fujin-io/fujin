@@ -41,4 +41,6 @@ func init() {
 		}
 		return NewReader(typedConfig, autoCommit, l)
 	})
+	writer.RegisterConfigValueConverter("mqtt", convertWriterConfigValue)
+	reader.RegisterConfigValueConverter("mqtt", convertReaderConfigValue)
 }

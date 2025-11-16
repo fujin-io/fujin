@@ -44,4 +44,6 @@ func init() {
 		}
 		return NewReader(typedConfig, autoCommit, l)
 	})
+	writer.RegisterConfigValueConverter("resp_pubsub", convertWriterConfigValue)
+	reader.RegisterConfigValueConverter("resp_pubsub", convertReaderConfigValue)
 }
