@@ -3,7 +3,7 @@ package server
 import (
 	"testing"
 
-	"github.com/fujin-io/fujin/internal/api/fujin/proto/response"
+	"github.com/fujin-io/fujin/internal/api/fujin/v1/proto/response"
 	"github.com/stretchr/testify/assert"
 )
 

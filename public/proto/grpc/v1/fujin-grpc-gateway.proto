@@ -1,0 +1,274 @@
+syntax = "proto3";
+
+package fujin.v1;
+
+option go_package = "github.com/fujin-io/fujin/api/grpc/v1;v1";
+
+import "google/api/annotations.proto";
+
+// Header
+message Header {
+  bytes key = 1;
+  bytes value = 2;
+}
+
+// Init request - must be sent first to initialize the stream and configure connectors
+// Config overrides format: "writer.connector_name.setting_path" -> "value"
+// Example: "writer.pub.transactional_id" -> "my-tx-id-12345"
+// Example: "reader.sub.group" -> "my-consumer-group"
+message InitRequest {
+  map<string, string> config_overrides = 1;  // Configuration overrides for connectors
+}
+
+// Init response
+message InitResponse {
+  string error = 1;
+}
+
+// Produce request
+message ProduceRequest {
+  uint32 correlation_id = 1;
+  string topic = 2;
+  bytes message = 3;
+}
+
+// Produce response
+message ProduceResponse {
+  uint32 correlation_id = 1;
+  string error = 2;
+}
+
+// HProduceRequest - produce with headers
+message HProduceRequest {
+  uint32 correlation_id = 1;
+  string topic = 2;
+  repeated Header headers = 3;
+  bytes message = 4;
+}
+
+// HProduceResponse
+message HProduceResponse {
+  uint32 correlation_id = 1;
+  string error = 2;
+}
+
+// BeginTxRequest - begin transaction
+message BeginTxRequest {
+  uint32 correlation_id = 1;
+}
+
+// BeginTxResponse
+message BeginTxResponse {
+  uint32 correlation_id = 1;
+  string error = 2;
+}
+
+// CommitTxRequest - commit transaction
+message CommitTxRequest {
+  uint32 correlation_id = 1;
+}
+
+// CommitTxResponse
+message CommitTxResponse {
+  uint32 correlation_id = 1;
+  string error = 2;
+}
+
+// RollbackTxRequest - rollback transaction
+message RollbackTxRequest {
+  uint32 correlation_id = 1;
+}
+
+// RollbackTxResponse
+message RollbackTxResponse {
+  uint32 correlation_id = 1;
+  string error = 2;
+}
+
+// Subscribe request
+message SubscribeRequest {
+  uint32 correlation_id = 1;
+  string topic = 2;
+  bool auto_commit = 3;
+}
+
+// Subscribe response
+message SubscribeResponse {
+  uint32 correlation_id = 1;
+  string error = 2;
+  uint32 subscription_id = 3;  // Limited to 0-255 (byte) to match native protocol, but protobuf requires uint32
+}
+
+// HSubscribe request - subscribe with headers support
+message HSubscribeRequest {
+  uint32 correlation_id = 1;
+  string topic = 2;
+  bool auto_commit = 3;
+}
+
+// HSubscribe response
+message HSubscribeResponse {
+  uint32 correlation_id = 1;
+  string error = 2;
+  uint32 subscription_id = 3;  // Limited to 0-255 (byte) to match native protocol, but protobuf requires uint32
+}
+
+// Unsubscribe request
+message UnsubscribeRequest {
+  uint32 correlation_id = 1;
+  uint32 subscription_id = 2;
+}
+
+// Unsubscribe response
+message UnsubscribeResponse {
+  uint32 correlation_id = 1;
+  string error = 2;
+}
+
+// Message delivery
+message Message {
+  uint32 subscription_id = 1;
+  bytes message_id = 2;
+  bytes payload = 3;
+}
+
+// HMessage - message delivery with headers
+message HMessage {
+  uint32 subscription_id = 1;
+  bytes message_id = 2;
+  bytes payload = 3;
+  repeated Header headers = 4;
+}
+
+// FetchRequest - request a batch of messages (pull-based)
+message FetchRequest {
+  uint32 correlation_id = 1;
+  string topic = 2;
+  bool auto_commit = 3;
+  uint32 batch_size = 4;  // Number of messages to fetch
+}
+
+// FetchResponse - response with a batch of messages
+message FetchResponse {
+  uint32 correlation_id = 1;
+  string error = 2;
+  uint32 subscription_id = 3;  // Subscription ID for ack/nack (reused across fetches)
+  repeated FetchMessage messages = 4;
+}
+
+// FetchMessage - message returned by Fetch
+message FetchMessage {
+  bytes message_id = 1;
+  bytes payload = 2;
+}
+
+// HFetchRequest - request a batch of messages with headers (pull-based)
+message HFetchRequest {
+  uint32 correlation_id = 1;
+  string topic = 2;
+  bool auto_commit = 3;
+  uint32 batch_size = 4;  // Number of messages to fetch
+}
+
+// HFetchResponse - response with a batch of messages with headers
+message HFetchResponse {
+  uint32 correlation_id = 1;
+  string error = 2;
+  uint32 subscription_id = 3;  // Subscription ID for ack/nack (reused across fetches)
+  repeated HFetchMessage messages = 4;
+}
+
+// HFetchMessage - message with headers returned by HFetch
+message HFetchMessage {
+  bytes message_id = 1;
+  bytes payload = 2;
+  repeated Header headers = 3;
+}
+
+// Ack request
+message AckRequest {
+  uint32 correlation_id = 1;
+  repeated bytes message_ids = 2;
+  uint32 subscription_id = 3;
+}
+
+// Ack response with per-message results
+message AckResponse {
+  uint32 correlation_id = 1;
+  string error = 2;  // General error
+  repeated AckMessageResult results = 3;  // Per-message results
+}
+
+// Ack result for individual message
+message AckMessageResult {
+  bytes message_id = 1;
+  string error = 2;  // Error for this specific message (empty if success)
+}
+
+// Nack request
+message NackRequest {
+  uint32 correlation_id = 1;
+  repeated bytes message_ids = 2;
+  uint32 subscription_id = 3;
+}
+
+// Nack response with per-message results
+message NackResponse {
+  uint32 correlation_id = 1;
+  string error = 2;  // General error
+  repeated NackMessageResult results = 3;  // Per-message results
+}
+
+// Nack result for individual message
+message NackMessageResult {
+  bytes message_id = 1;
+  string error = 2;
+}
+
+// Bidirectional streaming service for async request-response
+service FujinService {
+  // Bidirectional stream for all operations
+  rpc Stream(stream FujinRequest) returns (stream FujinResponse) {
+    option (google.api.http) = {post: "/stream", body: "*"};
+  }
+}
+
+// Union type for all requests
+message FujinRequest {
+  oneof request {
+    InitRequest init = 1;
+    ProduceRequest produce = 2;
+    SubscribeRequest subscribe = 3;
+    UnsubscribeRequest unsubscribe = 4;
+    AckRequest ack = 5;
+    NackRequest nack = 6;
+    HProduceRequest hproduce = 7;
+    HSubscribeRequest hsubscribe = 8;
+    FetchRequest fetch = 9;
+    HFetchRequest hfetch = 10;
+    BeginTxRequest begin_tx = 11;
+    CommitTxRequest commit_tx = 12;
+    RollbackTxRequest rollback_tx = 13;
+  }
+}
+
+// Union type for all responses
+message FujinResponse {
+  oneof response {
+    InitResponse init = 1;
+    ProduceResponse produce = 2;
+    SubscribeResponse subscribe = 3;
+    UnsubscribeResponse unsubscribe = 4;
+    Message message = 5;
+    AckResponse ack = 6;
+    NackResponse nack = 7;
+    HProduceResponse hproduce = 8;
+    HMessage hmessage = 9;
+    HSubscribeResponse hsubscribe = 10;
+    FetchResponse fetch = 11;
+    HFetchResponse hfetch = 12;
+    BeginTxResponse begin_tx = 13;
+    CommitTxResponse commit_tx = 14;
+    RollbackTxResponse rollback_tx = 15;
+  }
+}

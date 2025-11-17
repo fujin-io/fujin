@@ -1,7 +1,7 @@
 package server
 
 import (
-	"github.com/fujin-io/fujin/internal/api/fujin/proto/response"
+	"github.com/fujin-io/fujin/internal/api/fujin/v1/proto/response"
 )
 
 func ProduceResponseSuccess(buf []byte, cID []byte) []byte {

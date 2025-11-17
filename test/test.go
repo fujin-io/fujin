@@ -15,9 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fujin-io/fujin/internal/api/fujin/proto/request"
-	"github.com/fujin-io/fujin/internal/api/fujin/proto/response"
-	"github.com/fujin-io/fujin/internal/api/fujin/version"
+	"github.com/fujin-io/fujin/internal/api/fujin/v1/proto/request"
+	"github.com/fujin-io/fujin/internal/api/fujin/v1/proto/response"
+	"github.com/fujin-io/fujin/internal/api/fujin/v1/version"
 	"github.com/fujin-io/fujin/public/connectors"
 	"github.com/fujin-io/fujin/public/connectors/impl/amqp091"
 	"github.com/fujin-io/fujin/public/connectors/impl/amqp10"

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fujin-io/fujin/internal/api/fujin/server"
+	"github.com/fujin-io/fujin/internal/api/fujin/v1/server"
 	public_connectors "github.com/fujin-io/fujin/public/connectors"
 	"github.com/fujin-io/fujin/public/server/config"
 	"github.com/quic-go/quic-go"
