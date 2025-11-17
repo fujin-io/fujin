@@ -13,7 +13,7 @@ import (
 	"unsafe"
 
 	"github.com/fujin-io/fujin/internal/api/fujin/pool"
-	"github.com/fujin-io/fujin/internal/api/fujin/proto/response/server"
+	"github.com/fujin-io/fujin/internal/api/fujin/v1/proto/response/server"
 	pool2 "github.com/fujin-io/fujin/internal/common/pool"
 	"github.com/fujin-io/fujin/internal/connectors"
 	public_connectors "github.com/fujin-io/fujin/public/connectors"

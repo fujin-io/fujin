@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/fujin-io/fujin/internal/api/fujin/server"
-	grpc_server "github.com/fujin-io/fujin/internal/api/grpc/server"
+	"github.com/fujin-io/fujin/internal/api/fujin/v1/server"
+	grpc_server "github.com/fujin-io/fujin/internal/api/grpc/v1/server"
 	"github.com/fujin-io/fujin/internal/connectors"
 	obs "github.com/fujin-io/fujin/internal/observability"
 	"github.com/fujin-io/fujin/public/server/config"
