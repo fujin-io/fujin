@@ -3,6 +3,7 @@
 package server
 
 import (
+	"fmt"
 	"log/slog"
 	"net"
 	"sync"
@@ -124,6 +125,8 @@ func (o *Outbound) flushOutbound() bool {
 			wv = wv[:MaxVectorSize]
 		}
 		consumed := len(wv)
+
+		fmt.Println("writing to stream", wv)
 
 		_ = o.str.SetWriteDeadline(start.Add(o.wdl))
 		wn, err = wv.WriteTo(o.str)

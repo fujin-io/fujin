@@ -312,7 +312,6 @@ func (h *handler) handle(buf []byte) error {
 			case STREAM_STATE_INIT:
 				switch b {
 				case byte(v1.OP_CODE_INIT):
-					fmt.Println("OP_INIT 1", b)
 					h.ps.state = OP_INIT_CONFIG_OVERRIDES_COUNT
 					h.ps.argBuf = pool.Get(v1.Uint16Len)
 				case byte(v1.OP_CODE_SUBSCRIBE):
@@ -1960,14 +1959,14 @@ func (h *handler) handleInit(configOverrides map[string]string) error {
 	if len(configOverrides) > 0 {
 		modifiedConfigForOverride, err := connectors.ApplyOverrides(h.baseConfig, configOverrides)
 		if err != nil {
-			h.l.Error("apply config overrides", "err", err)
 			h.out.EnqueueProtoMulti([]byte{byte(v1.RESP_CODE_INIT)}, errProtoBuf(err))
 			return nil
 		} else {
 			modifiedConfig = modifiedConfigForOverride
-			h.out.EnqueueProto([]byte{byte(v1.RESP_CODE_INIT), v1.ERR_CODE_NO})
 		}
 	}
+
+	h.out.EnqueueProto([]byte{byte(v1.RESP_CODE_INIT), v1.ERR_CODE_NO})
 
 	// Create a new Manager with the modified configuration
 	h.cman = connectors.NewManager(modifiedConfig, h.l)
@@ -1998,6 +1997,7 @@ func (h *handler) handleInit(configOverrides map[string]string) error {
 		if h.cman != nil {
 			h.cman.Close()
 		}
+		h.out.EnqueueProto(v1.DISCONNECT_RESP)
 	}
 
 	return nil
