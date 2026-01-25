@@ -13,7 +13,7 @@ import (
 
 	"github.com/fujin-io/fujin/internal/observability"
 	pconfig "github.com/fujin-io/fujin/public/config"
-	"github.com/fujin-io/fujin/public/connectors"
+	v2 "github.com/fujin-io/fujin/public/connectors/v2"
 	"github.com/fujin-io/fujin/public/server"
 	"github.com/fujin-io/fujin/public/server/config"
 	"github.com/quic-go/quic-go"
@@ -27,7 +27,7 @@ var (
 type Config struct {
 	Fujin         FujinConfig          `yaml:"fujin"`
 	GRPC          GRPCConfig           `yaml:"grpc"`
-	Connectors    connectors.Config    `yaml:"connectors"`
+	Connectors    v2.ConnectorsConfig  `yaml:"connectors"`
 	Observability observability.Config `yaml:"observability"`
 }
 
@@ -95,9 +95,10 @@ func (c *Config) parse() (config.Config, error) {
 		return config.Config{}, fmt.Errorf("parse grpc server config: %w", err)
 	}
 
-	if err := c.Connectors.Validate(); err != nil {
-		return config.Config{}, fmt.Errorf("validate connectors config: %w", err)
-	}
+	// TODO: Validate connectors config
+	// if err := c.Connectors.Validate(); err != nil {
+	// 	return config.Config{}, fmt.Errorf("validate connectors config: %w", err)
+	// }
 
 	return config.Config{
 		Fujin:         fujinConf,

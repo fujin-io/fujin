@@ -5,14 +5,14 @@ import (
 	"time"
 
 	"github.com/fujin-io/fujin/internal/observability"
-	"github.com/fujin-io/fujin/public/connectors"
+	v2 "github.com/fujin-io/fujin/public/connectors/v2"
 	"github.com/quic-go/quic-go"
 )
 
 type Config struct {
 	Fujin         FujinServerConfig
 	GRPC          GRPCServerConfig
-	Connectors    connectors.Config
+	Connectors    v2.ConnectorsConfig
 	Observability observability.Config
 }
 

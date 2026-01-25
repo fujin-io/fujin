@@ -1,5 +1,3 @@
-//go:build fujin
-
 package server
 
 import (
@@ -16,10 +14,9 @@ import (
 	"github.com/fujin-io/fujin/internal/api/fujin/v1/proto/response/server"
 	pool2 "github.com/fujin-io/fujin/internal/common/pool"
 	"github.com/fujin-io/fujin/internal/connectors"
-	public_connectors "github.com/fujin-io/fujin/public/connectors"
 	"github.com/fujin-io/fujin/public/connectors/reader"
 	internal_reader "github.com/fujin-io/fujin/public/connectors/reader"
-	"github.com/fujin-io/fujin/public/connectors/writer"
+	v2 "github.com/fujin-io/fujin/public/connectors/v2"
 	v1 "github.com/fujin-io/fujin/public/proto/fujin/v1"
 	"github.com/quic-go/quic-go"
 )
@@ -28,6 +25,8 @@ const (
 	OP_START int = iota
 
 	OP_INIT
+	OP_INIT_CONNECTOR_NAME_LEN
+	OP_INIT_CONNECTOR_NAME_PAYLOAD
 	OP_INIT_CONFIG_OVERRIDES_COUNT
 	OP_INIT_CONFIG_OVERRIDE_KEY_LEN
 	OP_INIT_CONFIG_OVERRIDE_KEY
@@ -188,13 +187,15 @@ type subscribeArgs struct {
 }
 
 type initArgs struct {
-	configOverrides map[string]string
-	currentKey      string
-	currentValue    string
-	keyLen          uint32
-	valueLen        uint32
-	overridesCount  uint16
-	overridesRead   uint16
+	configOverrides    map[string]string
+	connectorNameLen   uint32
+	connectorNameValue string
+	currentKey         string
+	currentValue       string
+	keyLen             uint32
+	valueLen           uint32
+	overridesCount     uint16
+	overridesRead      uint16
 }
 
 type fetchArgs struct {
@@ -219,11 +220,12 @@ type headerArgs struct {
 }
 
 type handler struct {
-	ctx        context.Context
-	out        *Outbound
-	str        *quic.Stream
-	baseConfig public_connectors.Config
-	cman       *connectors.Manager // Created during INIT
+	ctx             context.Context
+	out             *Outbound
+	str             *quic.Stream
+	baseConfig      v2.ConnectorsConfig
+	connectorConfig v2.ConnectorConfig
+	cman            *connectors.ManagerV2 // Created during INIT
 
 	ps           *parseState
 	sessionState sessionState
@@ -234,24 +236,23 @@ type handler struct {
 	pingStream   bool
 
 	// producer
-	nonTxSessionWriters  map[string]writer.Writer
-	currentTxWriter      writer.Writer
+	nonTxSessionWriters  map[string]v2.WriteCloser
+	currentTxWriter      v2.WriteCloser
 	currentTxWriterTopic string
 	connected            bool // Whether INIT has been called
 
 	// subscriber
 	subIDPool   *pool2.BytePool
-	subscribers map[byte]internal_reader.Reader
+	subscribers map[byte]v2.ReadCloser
 	unsubFuncs  map[byte]func()
 	sMu         sync.Mutex
 
-	cpool                       *connectors.Pool
 	fetchReaders                map[string]byte // topic -> subscription_id mapping for fetch implicit subscriptions
 	fetchMsgHandlers            map[string]map[bool]func(message []byte, topic string, args ...any)
 	fetchMsgWithHeadersHandlers map[string]map[bool]func(message []byte, topic string, hs [][]byte, args ...any)
 	fhMu                        sync.RWMutex
 
-	acker internal_reader.Reader
+	acker v2.ReadCloser
 
 	disconnect func()
 
@@ -265,7 +266,7 @@ type handler struct {
 func newHandler(
 	ctx context.Context,
 	pingInterval time.Duration, pingTimeout time.Duration, pingStream bool,
-	baseConfig public_connectors.Config,
+	baseConfig v2.ConnectorsConfig,
 	out *Outbound, str *quic.Stream, l *slog.Logger,
 ) *handler {
 	h := &handler{
@@ -275,7 +276,7 @@ func newHandler(
 		pingInterval:                pingInterval,
 		pingTimeout:                 pingTimeout,
 		subIDPool:                   pool2.NewBytePool(),
-		subscribers:                 make(map[byte]internal_reader.Reader),
+		subscribers:                 make(map[byte]v2.ReadCloser),
 		unsubFuncs:                  make(map[byte]func()),
 		fetchReaders:                make(map[string]byte),
 		fetchMsgHandlers:            make(map[string]map[bool]func(message []byte, topic string, args ...any)),
@@ -312,8 +313,8 @@ func (h *handler) handle(buf []byte) error {
 			case STREAM_STATE_INIT:
 				switch b {
 				case byte(v1.OP_CODE_INIT):
-					h.ps.state = OP_INIT_CONFIG_OVERRIDES_COUNT
-					h.ps.argBuf = pool.Get(v1.Uint16Len)
+					h.ps.state = OP_INIT_CONNECTOR_NAME_LEN
+					h.ps.argBuf = pool.Get(v1.Uint32Len)
 				case byte(v1.OP_CODE_SUBSCRIBE):
 					h.ps.state = OP_SUBSCRIBE
 				case byte(v1.RESP_CODE_PONG):
@@ -1138,16 +1139,7 @@ func (h *handler) handle(buf []byte) error {
 				}
 
 				if len(h.ps.payloadBuf) >= int(h.ps.pma.size) {
-					if h.currentTxWriter != nil {
-						if !h.cman.WriterMatchEndpoint(h.currentTxWriter, h.ps.pa.topic) {
-							h.l.Error("writer can not be reused in tx")
-							h.enqueueWriteErrResponse(ErrWriterCanNotBeReusedInTx)
-							pool.Put(h.ps.ca.cID)
-							pool.Put(h.ps.payloadBuf)
-							h.ps.ca.cID, h.ps.payloadBuf, h.ps.pa, h.ps.state = nil, nil, produceArgs{}, OP_START
-							continue
-						}
-					} else {
+					if h.currentTxWriter == nil {
 						var err error // 1 byte (resp op code) + 4 bytes (request id) + 1 byte (success/failure)
 						currentTxWriter, err := h.cman.GetWriter(h.ps.pa.topic)
 						if err != nil {
@@ -1180,16 +1172,7 @@ func (h *handler) handle(buf []byte) error {
 				h.ps.payloadBuf = append(h.ps.payloadBuf, b)
 
 				if len(h.ps.payloadBuf) >= int(h.ps.pma.size) {
-					if h.currentTxWriter != nil {
-						if !h.cman.WriterMatchEndpoint(h.currentTxWriter, h.ps.pa.topic) {
-							h.l.Error("writer can not be reused in tx1")
-							h.enqueueWriteErrResponse(ErrWriterCanNotBeReusedInTx)
-							pool.Put(h.ps.ca.cID)
-							pool.Put(h.ps.payloadBuf)
-							h.ps.ca.cID, h.ps.payloadBuf, h.ps.pa, h.ps.state = nil, nil, produceArgs{}, OP_START
-							continue
-						}
-					} else {
+					if h.currentTxWriter == nil {
 						var err error // 1 byte (resp op code) + 4 bytes (request id) + 1 byte (success/failure)
 						currentTxWriter, err := h.cman.GetWriter(h.ps.pa.topic)
 						if err != nil {
@@ -1383,16 +1366,7 @@ func (h *handler) handle(buf []byte) error {
 				}
 
 				if len(h.ps.payloadBuf) >= int(h.ps.pma.size) {
-					if h.currentTxWriter != nil {
-						if !h.cman.WriterMatchEndpoint(h.currentTxWriter, h.ps.pa.topic) {
-							h.l.Error("writer can not be reused in tx")
-							h.enqueueWriteErrResponse(ErrWriterCanNotBeReusedInTx)
-							pool.Put(h.ps.ca.cID)
-							pool.Put(h.ps.payloadBuf)
-							h.ps.ca.cID, h.ps.payloadBuf, h.ps.pa, h.ps.state = nil, nil, produceArgs{}, OP_START
-							continue
-						}
-					} else {
+					if h.currentTxWriter == nil {
 						var err error // 1 byte (resp op code) + 4 bytes (request id) + 1 byte (success/failure)
 						currentTxWriter, err := h.cman.GetWriter(h.ps.pa.topic)
 						if err != nil {
@@ -1425,16 +1399,7 @@ func (h *handler) handle(buf []byte) error {
 				h.ps.payloadBuf = append(h.ps.payloadBuf, b)
 
 				if len(h.ps.payloadBuf) >= int(h.ps.pma.size) {
-					if h.currentTxWriter != nil {
-						if !h.cman.WriterMatchEndpoint(h.currentTxWriter, h.ps.pa.topic) {
-							h.l.Error("writer can not be reused in tx1")
-							h.enqueueWriteErrResponse(ErrWriterCanNotBeReusedInTx)
-							pool.Put(h.ps.ca.cID)
-							pool.Put(h.ps.payloadBuf)
-							h.ps.ca.cID, h.ps.payloadBuf, h.ps.pa, h.ps.state = nil, nil, produceArgs{}, OP_START
-							continue
-						}
-					} else {
+					if h.currentTxWriter == nil {
 						var err error // 1 byte (resp op code) + 4 bytes (request id) + 1 byte (success/failure)
 						currentTxWriter, err := h.cman.GetWriter(h.ps.pa.topic)
 						if err != nil {
@@ -1687,6 +1652,38 @@ func (h *handler) handle(buf []byte) error {
 				h.ps.ca.cID = pool.Get(v1.Uint32Len)
 				h.ps.ca.cID = append(h.ps.ca.cID, b)
 			}
+		case OP_INIT_CONNECTOR_NAME_LEN:
+			h.ps.argBuf = append(h.ps.argBuf, b)
+			if len(h.ps.argBuf) >= v1.Uint32Len {
+				h.ps.ina.connectorNameLen = binary.BigEndian.Uint32(h.ps.argBuf[:v1.Uint32Len])
+				pool.Put(h.ps.argBuf)
+				if h.ps.ina.connectorNameLen == 0 {
+					return ErrParseProto
+				}
+				h.ps.argBuf = pool.Get(int(h.ps.ina.connectorNameLen))
+				h.ps.state = OP_INIT_CONNECTOR_NAME_PAYLOAD
+			}
+		case OP_INIT_CONNECTOR_NAME_PAYLOAD:
+			toCopy := int(h.ps.ina.connectorNameLen) - len(h.ps.argBuf)
+			avail := len(buf) - i
+			if avail < toCopy {
+				toCopy = avail
+			}
+			if toCopy > 0 {
+				start := len(h.ps.argBuf)
+				h.ps.argBuf = h.ps.argBuf[:start+toCopy]
+				copy(h.ps.argBuf[start:], buf[i:i+toCopy])
+				i = (i + toCopy) - 1
+			} else {
+				h.ps.argBuf = append(h.ps.argBuf, b)
+			}
+			if len(h.ps.argBuf) >= int(h.ps.ina.connectorNameLen) {
+				h.ps.ina.connectorNameValue = string(h.ps.argBuf)
+				pool.Put(h.ps.argBuf)
+				h.connectorConfig = h.baseConfig[h.ps.ina.connectorNameValue]
+				h.ps.state = OP_INIT_CONFIG_OVERRIDES_COUNT
+				h.ps.argBuf = pool.Get(v1.Uint16Len)
+			}
 		case OP_INIT_CONFIG_OVERRIDES_COUNT:
 			// Parse config_overrides count (uint16)
 			h.ps.argBuf = append(h.ps.argBuf, b)
@@ -1736,7 +1733,6 @@ func (h *handler) handle(buf []byte) error {
 			if len(h.ps.argBuf) >= int(h.ps.ina.keyLen) {
 				h.ps.ina.currentKey = string(h.ps.argBuf)
 				pool.Put(h.ps.argBuf)
-				h.ps.argBuf = nil
 				h.ps.state = OP_INIT_CONFIG_OVERRIDE_VALUE_LEN
 				h.ps.argBuf = pool.Get(v1.Uint32Len)
 			}
@@ -1745,7 +1741,6 @@ func (h *handler) handle(buf []byte) error {
 			if len(h.ps.argBuf) >= v1.Uint32Len {
 				h.ps.ina.valueLen = binary.BigEndian.Uint32(h.ps.argBuf[:v1.Uint32Len])
 				pool.Put(h.ps.argBuf)
-				h.ps.argBuf = nil
 				h.ps.argBuf = pool.Get(int(h.ps.ina.valueLen))
 				h.ps.state = OP_INIT_CONFIG_OVERRIDE_VALUE
 			}
@@ -1955,9 +1950,9 @@ func (h *handler) handleInit(configOverrides map[string]string) error {
 	}
 
 	// Apply config overrides if provided
-	modifiedConfig := h.baseConfig
+	modifiedConfig := h.connectorConfig
 	if len(configOverrides) > 0 {
-		modifiedConfigForOverride, err := connectors.ApplyOverrides(h.baseConfig, configOverrides)
+		modifiedConfigForOverride, err := connectors.ApplyOverrides(h.connectorConfig, configOverrides)
 		if err != nil {
 			h.out.EnqueueProtoMulti([]byte{byte(v1.RESP_CODE_INIT)}, errProtoBuf(err))
 			return nil
@@ -1969,9 +1964,8 @@ func (h *handler) handleInit(configOverrides map[string]string) error {
 	h.out.EnqueueProto([]byte{byte(v1.RESP_CODE_INIT), v1.ERR_CODE_NO})
 
 	// Create a new Manager with the modified configuration
-	h.cman = connectors.NewManager(modifiedConfig, h.l)
-	h.cpool = connectors.NewPool(h.cman)
-	h.nonTxSessionWriters = make(map[string]writer.Writer)
+	h.cman = connectors.NewManagerV2(modifiedConfig, h.l)
+	h.nonTxSessionWriters = make(map[string]v2.WriteCloser)
 	h.connected = true
 	h.sessionState = STREAM_STATE_CONNECTED
 
@@ -1985,9 +1979,6 @@ func (h *handler) handleInit(configOverrides map[string]string) error {
 			_ = h.currentTxWriter.RollbackTx(h.ctx)
 			h.cman.PutWriter(h.currentTxWriter, h.currentTxWriterTopic)
 			h.currentTxWriter = nil
-		}
-		if h.cpool != nil {
-			h.cpool.Close()
 		}
 		h.sMu.Lock()
 		for _, unsub := range h.unsubFuncs {
@@ -2017,7 +2008,7 @@ func (h *handler) writePing() {
 	}
 }
 
-func (h *handler) subscribe(ctx context.Context, subID byte, r internal_reader.Reader) {
+func (h *handler) subscribe(ctx context.Context, subID byte, r v2.ReadCloser) {
 	msgHandler := h.subEnqueueMsgFunc(h.out, subID, r)
 	for {
 		select {
@@ -2033,7 +2024,7 @@ func (h *handler) subscribe(ctx context.Context, subID byte, r internal_reader.R
 	}
 }
 
-func (h *handler) hsubscribe(ctx context.Context, subID byte, r internal_reader.Reader) {
+func (h *handler) hsubscribe(ctx context.Context, subID byte, r v2.ReadCloser) {
 	msgHandler := h.subEnqueueMsgFuncWithHeaders(h.out, subID, r)
 	for {
 		select {
@@ -2176,7 +2167,7 @@ func (h *handler) fetch(topic string, autoCommit bool, n uint32) {
 	header = append(header, subID)
 
 	go func(headered bool, subscriptionID byte) {
-		fetcher, err := h.cpool.GetReader(topic, autoCommit)
+		fetcher, err := h.cman.GetReader(topic, autoCommit)
 		if err != nil {
 			header[5] = v1.ERR_CODE_YES
 			h.out.EnqueueProtoMulti(header, errProtoBuf(err))
@@ -2508,7 +2499,7 @@ func enqueueUnsubscribeSuccess(out *Outbound, cID []byte) {
 }
 
 func (h *handler) subEnqueueMsgFunc(
-	out *Outbound, subID byte, r internal_reader.Reader,
+	out *Outbound, subID byte, r v2.ReadCloser,
 ) func(message []byte, topic string, args ...any) {
 	staticArgsLen := r.MsgIDStaticArgsLen()
 	constBufLen := staticArgsLen + 6 // cmd(1) + subID(1) + msgLen(4)
@@ -2544,7 +2535,7 @@ func (h *handler) subEnqueueMsgFunc(
 }
 
 func (h *handler) subEnqueueMsgFuncWithHeaders(
-	out *Outbound, subID byte, r internal_reader.Reader,
+	out *Outbound, subID byte, r v2.ReadCloser,
 ) func(message []byte, topic string, hs [][]byte, args ...any) {
 	staticArgsLen := r.MsgIDStaticArgsLen()
 	constBufLen := staticArgsLen + 8 // cmd(1) + subID(1) + headersLen(2) + msgLen(4)
@@ -2600,7 +2591,7 @@ func (h *handler) subEnqueueMsgFuncWithHeaders(
 }
 
 func (h *handler) fetchEnqueueMsgFunc(
-	out *Outbound, r internal_reader.Reader, topic string, autoCommit bool,
+	out *Outbound, r v2.ReadCloser, topic string, autoCommit bool,
 ) func(message []byte, topic string, args ...any) {
 	staticArgsLen := r.MsgIDStaticArgsLen()
 	constBufLen := staticArgsLen + 4 // msgLen(4)
@@ -2650,7 +2641,7 @@ func (h *handler) fetchEnqueueMsgFunc(
 }
 
 func (h *handler) fetchEnqueueMsgFuncWithHeaders(
-	out *Outbound, r internal_reader.Reader, topic string, autoCommit bool,
+	out *Outbound, r v2.ReadCloser, topic string, autoCommit bool,
 ) func(message []byte, topic string, hs [][]byte, args ...any) {
 	staticArgsLen := r.MsgIDStaticArgsLen()
 	constBufLen := staticArgsLen + 6 // headersLen(2) + msgLen(4)

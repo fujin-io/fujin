@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/fujin-io/fujin/public/connectors"
+	v2 "github.com/fujin-io/fujin/public/connectors/v2"
 	"github.com/fujin-io/fujin/public/server/config"
 )
 
@@ -20,7 +20,7 @@ type GRPCServer struct {
 }
 
 // NewGRPCServer creates a stub gRPC server instance
-func NewGRPCServer(conf config.GRPCServerConfig, _ connectors.Config, l *slog.Logger) *GRPCServer {
+func NewGRPCServer(conf config.GRPCServerConfig, _ v2.ConnectorsConfig, l *slog.Logger) *GRPCServer {
 	return &GRPCServer{
 		enabled: conf.Enabled,
 		l:       l.With("server", "grpc"),

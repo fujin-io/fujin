@@ -1,5 +1,3 @@
-//go:build fujin
-
 package server_test
 
 import (

@@ -15,7 +15,7 @@ import (
 
 	"github.com/fujin-io/fujin/internal/api/fujin/pool"
 	"github.com/fujin-io/fujin/internal/observability"
-	public_connectors "github.com/fujin-io/fujin/public/connectors"
+	v2 "github.com/fujin-io/fujin/public/connectors/v2"
 	v1 "github.com/fujin-io/fujin/public/proto/fujin/v1"
 	"github.com/fujin-io/fujin/public/server/config"
 	"github.com/quic-go/quic-go"
@@ -28,7 +28,7 @@ var (
 
 type FujinServer struct {
 	conf       config.FujinServerConfig
-	baseConfig public_connectors.Config
+	baseConfig v2.ConnectorsConfig
 
 	ready chan struct{}
 	done  chan struct{}
@@ -36,7 +36,7 @@ type FujinServer struct {
 	l *slog.Logger
 }
 
-func NewFujinServer(conf config.FujinServerConfig, baseConfig public_connectors.Config, l *slog.Logger) *FujinServer {
+func NewFujinServer(conf config.FujinServerConfig, baseConfig v2.ConnectorsConfig, l *slog.Logger) *FujinServer {
 	return &FujinServer{
 		conf:       conf,
 		baseConfig: baseConfig,

@@ -11,9 +11,7 @@ import (
 	"sync"
 
 	"github.com/fujin-io/fujin/internal/connectors"
-	public_connectors "github.com/fujin-io/fujin/public/connectors"
-	internal_reader "github.com/fujin-io/fujin/public/connectors/reader"
-	"github.com/fujin-io/fujin/public/connectors/writer"
+	v2 "github.com/fujin-io/fujin/public/connectors/v2"
 	pb "github.com/fujin-io/fujin/public/proto/grpc/v1"
 	"github.com/fujin-io/fujin/public/server/config"
 	"google.golang.org/grpc"
@@ -25,19 +23,19 @@ import (
 type GRPCServer struct {
 	pb.UnimplementedFujinServiceServer
 
-	conf       config.GRPCServerConfig
-	baseConfig public_connectors.Config
-	l          *slog.Logger
+	conf             config.GRPCServerConfig
+	connectorsConfig v2.ConnectorsConfig
+	l                *slog.Logger
 
 	grpcServer *grpc.Server
 }
 
 // NewGRPCServer creates a new gRPC server instance
-func NewGRPCServer(conf config.GRPCServerConfig, baseConfig public_connectors.Config, l *slog.Logger) *GRPCServer {
+func NewGRPCServer(conf config.GRPCServerConfig, connectorsConfig v2.ConnectorsConfig, l *slog.Logger) *GRPCServer {
 	return &GRPCServer{
-		conf:       conf,
-		baseConfig: baseConfig,
-		l:          l.With("server", "grpc"),
+		conf:             conf,
+		connectorsConfig: connectorsConfig,
+		l:                l.With("server", "grpc"),
 	}
 }
 
@@ -142,16 +140,16 @@ func (s *GRPCServer) Stream(stream pb.FujinService_StreamServer) error {
 	ctx := stream.Context()
 
 	session := &streamSession{
-		stream:       stream,
-		baseConfig:   s.baseConfig,
-		cman:         nil, // Will be created during Init
-		l:            s.l,
-		ctx:          ctx,
-		writers:      make(map[string]writer.Writer),
-		readers:      make(map[byte]*readerState),
-		fetchReaders: make(map[string]byte),
-		nextSubID:    0,
-		connected:    false,
+		stream:           stream,
+		connectorsConfig: s.connectorsConfig,
+		cman:             nil, // Will be created during Init
+		l:                s.l,
+		ctx:              ctx,
+		writers:          make(map[string]v2.WriteCloser),
+		readers:          make(map[byte]*readerState),
+		fetchReaders:     make(map[string]byte),
+		nextSubID:        0,
+		connected:        false,
 	}
 
 	errCh := make(chan error, 2)
@@ -175,15 +173,15 @@ func (s *GRPCServer) Stream(stream pb.FujinService_StreamServer) error {
 
 // streamSession represents a single bidirectional stream session
 type streamSession struct {
-	stream     pb.FujinService_StreamServer
-	baseConfig public_connectors.Config
-	cman       *connectors.Manager // Created during Init with overrides applied
-	l          *slog.Logger
-	ctx        context.Context
+	stream           pb.FujinService_StreamServer
+	connectorsConfig v2.ConnectorsConfig
+	cman             *connectors.ManagerV2 // Created during Init with overrides applied
+	l                *slog.Logger
+	ctx              context.Context
 
 	mu           sync.RWMutex
 	sendMu       sync.Mutex
-	writers      map[string]writer.Writer
+	writers      map[string]v2.WriteCloser
 	readers      map[byte]*readerState
 	fetchReaders map[string]byte // topic -> subscription_id mapping for fetch implicit subscriptions
 	nextSubID    byte
@@ -191,12 +189,12 @@ type streamSession struct {
 
 	// Transaction state
 	inTx                 bool
-	currentTxWriter      writer.Writer
+	currentTxWriter      v2.WriteCloser
 	currentTxWriterTopic string // Original topic used to get the writer (for PutWriter)
 }
 
 type readerState struct {
-	reader      internal_reader.Reader
+	reader      v2.ReadCloser
 	topic       string
 	autoCommit  bool
 	withHeaders bool
@@ -267,12 +265,22 @@ func (s *streamSession) handleInit(req *pb.InitRequest) error {
 		})
 	}
 
+	connectorConfig, ok := s.connectorsConfig[req.Connector]
+	if !ok {
+		return s.sendResponse(&pb.FujinResponse{
+			Response: &pb.FujinResponse_Init{
+				Init: &pb.InitResponse{
+					Error: "connector not found",
+				},
+			},
+		})
+	}
 	// Apply config overrides if provided
-	modifiedConfig := s.baseConfig
+	modifiedConfig := connectorConfig
 	if len(req.ConfigOverrides) > 0 {
 		// ApplyOverrides works with public/connectors.Config
 		// The function is in internal/connectors but uses public/connectors.Config
-		modifiedConfigForOverride, err := connectors.ApplyOverrides(s.baseConfig, req.ConfigOverrides)
+		modifiedConfigForOverride, err := connectors.ApplyOverrides(connectorConfig, req.ConfigOverrides)
 		if err != nil {
 			s.l.Error("apply config overrides", "err", err)
 			return s.sendResponse(&pb.FujinResponse{
@@ -287,7 +295,7 @@ func (s *streamSession) handleInit(req *pb.InitRequest) error {
 	}
 
 	// Create a new Manager with the modified configuration
-	s.cman = connectors.NewManager(modifiedConfig, s.l)
+	s.cman = connectors.NewManagerV2(modifiedConfig, s.l)
 	s.connected = true
 
 	return s.sendResponse(&pb.FujinResponse{
@@ -344,24 +352,11 @@ func (s *streamSession) handleProduce(req *pb.ProduceRequest) error {
 			}
 			s.currentTxWriter = w
 			s.currentTxWriterTopic = req.Topic
-		} else {
-			// Check if the new topic has the same endpoint as current transactional writer
-			if !s.cman.WriterMatchEndpoint(s.currentTxWriter, req.Topic) {
-				s.mu.Unlock()
-				return s.sendResponse(&pb.FujinResponse{
-					Response: &pb.FujinResponse_Produce{
-						Produce: &pb.ProduceResponse{
-							CorrelationId: req.CorrelationId,
-							Error:         "transaction cannot span different broker endpoints",
-						},
-					},
-				})
-			}
 		}
 	}
 	s.mu.Unlock()
 
-	var w writer.Writer
+	var w v2.WriteCloser
 	var err error
 	if inTx {
 		s.mu.RLock()
@@ -452,24 +447,11 @@ func (s *streamSession) handleHProduce(req *pb.HProduceRequest) error {
 			}
 			s.currentTxWriter = w
 			s.currentTxWriterTopic = req.Topic
-		} else {
-			// Check if the new topic has the same endpoint as current transactional writer
-			if !s.cman.WriterMatchEndpoint(s.currentTxWriter, req.Topic) {
-				s.mu.Unlock()
-				return s.sendResponse(&pb.FujinResponse{
-					Response: &pb.FujinResponse_Hproduce{
-						Hproduce: &pb.HProduceResponse{
-							CorrelationId: req.CorrelationId,
-							Error:         "transaction cannot span different broker endpoints",
-						},
-					},
-				})
-			}
 		}
 	}
 	s.mu.Unlock()
 
-	var w writer.Writer
+	var w v2.WriteCloser
 	var err error
 	if inTx {
 		s.mu.RLock()
@@ -553,7 +535,7 @@ func (s *streamSession) handleBeginTx(req *pb.BeginTxRequest) error {
 		w.Flush(s.ctx)
 		s.cman.PutWriter(w, topic)
 	}
-	s.writers = make(map[string]writer.Writer)
+	s.writers = make(map[string]v2.WriteCloser)
 
 	s.inTx = true
 
@@ -773,6 +755,7 @@ func (s *streamSession) handleHSubscribe(req *pb.HSubscribeRequest) error {
 
 	r, err := s.cman.GetReader(req.Topic, req.AutoCommit)
 	if err != nil {
+		fmt.Println(err.Error())
 		return s.sendResponse(&pb.FujinResponse{
 			Response: &pb.FujinResponse_Hsubscribe{
 				Hsubscribe: &pb.HSubscribeResponse{
@@ -1370,7 +1353,7 @@ func (s *streamSession) handleNack(req *pb.NackRequest) error {
 }
 
 // getWriter retrieves or creates a writer for the given topic
-func (s *streamSession) getWriter(topic string) (writer.Writer, error) {
+func (s *streamSession) getWriter(topic string) (v2.WriteCloser, error) {
 	s.mu.RLock()
 	if w, exists := s.writers[topic]; exists {
 		s.mu.RUnlock()
@@ -1411,7 +1394,7 @@ func (s *streamSession) cleanup() {
 			s.cman.PutWriter(w, topic)
 		}
 	}
-	s.writers = make(map[string]writer.Writer)
+	s.writers = make(map[string]v2.WriteCloser)
 
 	// Cancel all readers
 	for _, state := range s.readers {

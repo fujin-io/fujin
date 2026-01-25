@@ -14,16 +14,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/fujin-io/fujin/public/connectors"
 	"github.com/fujin-io/fujin/public/server"
 	"github.com/fujin-io/fujin/public/server/config"
 	nats_server "github.com/nats-io/nats-server/v2/server"
 
-	reader_config "github.com/fujin-io/fujin/public/connectors/reader/config"
-	writer_config "github.com/fujin-io/fujin/public/connectors/writer/config"
-
 	_ "github.com/fujin-io/fujin/public/connectors/impl/nats/core"
-	nats_core "github.com/fujin-io/fujin/public/connectors/impl/nats/core"
 )
 
 var DefaultFujinServerTestConfig = config.FujinServerConfig{
@@ -38,26 +33,26 @@ var DefaultTestConfigWithNats = config.Config{
 		Enabled: true,
 		Addr:    ":4849",
 	},
-	Connectors: connectors.Config{
-		Readers: map[string]reader_config.Config{
-			"sub": {
-				Protocol: "nats_core",
-				Settings: nats_core.ReaderConfig{
-					URL:     "nats://localhost:4222",
-					Subject: "my_subject",
-				},
-			},
-		},
-		Writers: map[string]writer_config.Config{
-			"pub": {
-				Protocol: "nats_core",
-				Settings: nats_core.WriterConfig{
-					URL:     "nats://localhost:4222",
-					Subject: "my_subject",
-				},
-			},
-		},
-	},
+	// Connectors: connectors.Config{
+	// 	Readers: map[string]reader_config.Config{
+	// 		"sub": {
+	// 			Protocol: "nats_core",
+	// 			Settings: nats_core.ReaderConfig{
+	// 				URL:     "nats://localhost:4222",
+	// 				Subject: "my_subject",
+	// 			},
+	// 		},
+	// 	},
+	// 	Writers: map[string]writer_config.Config{
+	// 		"pub": {
+	// 			Protocol: "nats_core",
+	// 			Settings: nats_core.WriterConfig{
+	// 				URL:     "nats://localhost:4222",
+	// 				Subject: "my_subject",
+	// 			},
+	// 		},
+	// 	},
+	// },
 }
 
 // This example demonstrates how to embed the Fujin server into your Go application.

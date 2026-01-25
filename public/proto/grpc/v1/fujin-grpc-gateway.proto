@@ -17,7 +17,8 @@ message Header {
 // Example: "writer.pub.transactional_id" -> "my-tx-id-12345"
 // Example: "reader.sub.group" -> "my-consumer-group"
 message InitRequest {
-  map<string, string> config_overrides = 1;  // Configuration overrides for connectors
+  string connector = 1; // Connector name
+  map<string, string> config_overrides = 2;  // Configuration overrides for connectors
 }
 
 // Init response

@@ -9,43 +9,30 @@ grpc:
 connectors:
   kafka:
     protocol: kafka
-    overridable: [transactional_id, linger, max_buffered_records, disable_idempotent_write, ping_timeout, tls]
     settings:
-      # common settings
-      brokers: [kafka1:19092, kafka2:19093, kafka3:19094]
-      allow_auto_topic_creation: true
-      tls:
-        enabled: true
-        server_cert_pem_path: ./examples/assets/certs/fujin.io.pem
-        server_key_pem_path: ./examples/assets/certs/fujin.io-key.pem
-      # writer settings
-      produce_topic: my_pub_topic
-      linger: 10ms # batching delay
-      transactional_id: fujin
-      disable_idempotent_write: false
-      max_buffered_records: 10000 # maximum buffered records
-      ping_timeout: 5s # ping timeout
-      # reader settings
-      consume_topic: my_sub_topic
-      group: fujin
-      max_poll_records: 10000 # maximum poll records
-      auto_commit_interval: 5s # auto commit interval
-      auto_commit_marks: false # auto commit marks
-      block_rebalance_on_poll: false # block rebalance on poll
-      balancers: [cooperative_sticky] # balancers
-      fetch_isolation_level: read_uncommited # fetch isolation level
-  # writers:
-  #   pub:
-  #     protocol: kafka
-  #     settings:
-  #       brokers: [kafka1:19092, kafka2:19093, kafka3:19094]
-  #       topic: my_pub_topic
-  #       allow_auto_topic_creation: true
-  # readers:
-  #   sub:
-  #     protocol: kafka
-  #     settings:
-  #       brokers: [kafka1:19092, kafka2:19093, kafka3:19094]
-  #       topic: my_pub_topic
-  #       group: fujin
-  #       allow_auto_topic_creation: true
+      common:
+        # broker settings
+        brokers: [kafka1:19092, kafka2:19093, kafka3:19094]
+        tls:
+          enabled: true
+          server_cert_pem_path: ./examples/assets/certs/fujin.io.pem
+          server_key_pem_path: ./examples/assets/certs/fujin.io-key.pem
+      clients:
+        client1:
+          # writer settings
+          allow_auto_topic_creation: true
+          produce_topic: my_pub_topic
+          linger: 10ms # batching delay
+          transactional_id: fujin
+          disable_idempotent_write: false
+          max_buffered_records: 10000 # maximum buffered records
+          ping_timeout: 5s # ping timeout
+          # reader settings
+          consume_topic: my_sub_topic
+          group: fujin
+          max_poll_records: 10000 # maximum poll records
+          auto_commit_interval: 5s # auto commit interval
+          auto_commit_marks: false # auto commit marks
+          block_rebalance_on_poll: false # block rebalance on poll
+          balancers: [cooperative_sticky] # balancers
+          fetch_isolation_level: read_uncommited # fetch isolation level

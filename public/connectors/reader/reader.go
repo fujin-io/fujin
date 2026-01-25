@@ -60,7 +60,7 @@ func RegisterReaderFactory(protocol string, factory ReaderFactoryFunc) {
 	readerFactories[protocol] = factory
 }
 
-// RegisterConfigValueConverter registers a value converter for a reader protocol
+// RegisterConfigValueConverter registers a value converter for a protocol
 func RegisterConfigValueConverter(protocol string, converter ConfigValueConverterFunc) {
 	readerConfigValueConverters[protocol] = converter
 }
