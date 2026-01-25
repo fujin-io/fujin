@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	v2 "github.com/fujin-io/fujin/public/connectors/v2"
+	"github.com/fujin-io/fujin/public/plugins/connector"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -168,7 +168,7 @@ func TestHandler_Close(t *testing.T) {
 
 func TestHandler_FlushWriters_NoWriters(t *testing.T) {
 	h := newTestHandler()
-	h.nonTxSessionWriters = make(map[string]v2.WriteCloser)
+	h.nonTxSessionWriters = make(map[string]connector.WriteCloser)
 
 	err := h.flushWriters()
 
@@ -297,7 +297,7 @@ func TestHandler_HeaderArgs(t *testing.T) {
 
 func TestHandler_Subscribers(t *testing.T) {
 	h := newTestHandler()
-	h.subscribers = make(map[byte]v2.ReadCloser)
+	h.subscribers = make(map[byte]connector.ReadCloser)
 	h.unsubFuncs = make(map[byte]func())
 
 	assert.NotNil(t, h.subscribers)

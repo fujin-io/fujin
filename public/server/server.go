@@ -7,7 +7,6 @@ import (
 
 	"github.com/fujin-io/fujin/internal/api/fujin/v1/server"
 	grpc_server "github.com/fujin-io/fujin/internal/api/grpc/v1/server"
-	obs "github.com/fujin-io/fujin/internal/observability"
 	"github.com/fujin-io/fujin/public/server/config"
 	"golang.org/x/sync/errgroup"
 )
@@ -56,15 +55,6 @@ func NewServer(conf config.Config, l *slog.Logger) (*Server, error) {
 }
 
 func (s *Server) ListenAndServe(ctx context.Context) error {
-	shutdown, _ := obs.Init(ctx, s.conf.Observability, s.l)
-	if shutdown != nil {
-		defer func() {
-			stopCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-			defer cancel()
-			_ = shutdown(stopCtx)
-		}()
-	}
-
 	eg, eCtx := errgroup.WithContext(ctx)
 
 	if s.fujinServer != nil {

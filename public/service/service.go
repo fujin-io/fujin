@@ -8,14 +8,16 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
-	"github.com/fujin-io/fujin/internal/observability"
 	pconfig "github.com/fujin-io/fujin/public/config"
-	v2 "github.com/fujin-io/fujin/public/connectors/v2"
+	"github.com/fujin-io/fujin/public/plugins/connector"
+	connectorconfig "github.com/fujin-io/fujin/public/plugins/connector/config"
+	"github.com/fujin-io/fujin/public/plugins/decorator"
 	"github.com/fujin-io/fujin/public/server"
-	"github.com/fujin-io/fujin/public/server/config"
+	serverconfig "github.com/fujin-io/fujin/public/server/config"
 	"github.com/quic-go/quic-go"
 	"gopkg.in/yaml.v3"
 )
@@ -25,10 +27,9 @@ var (
 )
 
 type Config struct {
-	Fujin         FujinConfig          `yaml:"fujin"`
-	GRPC          GRPCConfig           `yaml:"grpc"`
-	Connectors    v2.ConnectorsConfig  `yaml:"connectors"`
-	Observability observability.Config `yaml:"observability"`
+	Fujin      FujinConfig                      `yaml:"fujin"`
+	GRPC       GRPCConfig                       `yaml:"grpc"`
+	Connectors connectorconfig.ConnectorsConfig `yaml:"connectors"`
 }
 
 type FujinConfig struct {
@@ -42,6 +43,7 @@ type FujinConfig struct {
 	PingMaxRetries        int               `yaml:"ping_max_retries"`
 	TLS                   pconfig.TLSConfig `yaml:"tls"`
 	QUIC                  QUICConfig        `yaml:"quic"`
+	ObservabilityEnabled  bool              `yaml:"observability_enabled"`
 }
 
 type GRPCConfig struct {
@@ -56,6 +58,7 @@ type GRPCConfig struct {
 	ServerKeepAlive       ServerKeepAliveConfig `yaml:"server_keepalive"`
 	ClientKeepAlive       ClientKeepAliveConfig `yaml:"client_keepalive"`
 	TLS                   pconfig.TLSConfig     `yaml:"tls"`
+	ObservabilityEnabled  bool                  `yaml:"observability_enabled"`
 }
 
 type ServerKeepAliveConfig struct {
@@ -78,53 +81,52 @@ type QUICConfig struct {
 	MaxIdleTimeout       time.Duration `yaml:"max_idle_timeout"`
 }
 
-func (c *Config) parse() (config.Config, error) {
+func (c *Config) parse() (serverconfig.Config, error) {
 	var (
-		fujinConf config.FujinServerConfig
-		grpcConf  config.GRPCServerConfig
+		fujinConf serverconfig.FujinServerConfig
+		grpcConf  serverconfig.GRPCServerConfig
 		err       error
 	)
 
 	fujinConf, err = c.parseFujinServerConfig()
 	if err != nil {
-		return config.Config{}, fmt.Errorf("parse fujin server config: %w", err)
+		return serverconfig.Config{}, fmt.Errorf("parse fujin server config: %w", err)
 	}
 
 	grpcConf, err = c.parseGRPCConfig()
 	if err != nil {
-		return config.Config{}, fmt.Errorf("parse grpc server config: %w", err)
+		return serverconfig.Config{}, fmt.Errorf("parse grpc server config: %w", err)
 	}
 
 	// TODO: Validate connectors config
 	// if err := c.Connectors.Validate(); err != nil {
-	// 	return config.Config{}, fmt.Errorf("validate connectors config: %w", err)
+	// 	return serverconfig.Config{}, fmt.Errorf("validate connectors config: %w", err)
 	// }
 
-	return config.Config{
-		Fujin:         fujinConf,
-		GRPC:          grpcConf,
-		Connectors:    c.Connectors,
-		Observability: c.Observability,
+	return serverconfig.Config{
+		Fujin:      fujinConf,
+		GRPC:       grpcConf,
+		Connectors: c.Connectors,
 	}, nil
 }
 
-func (c *Config) parseFujinServerConfig() (config.FujinServerConfig, error) {
+func (c *Config) parseFujinServerConfig() (serverconfig.FujinServerConfig, error) {
 	if c == nil {
-		return config.FujinServerConfig{}, ErrNilConfig
+		return serverconfig.FujinServerConfig{}, ErrNilConfig
 	}
 
 	if !c.Fujin.Enabled {
-		return config.FujinServerConfig{
+		return serverconfig.FujinServerConfig{
 			Enabled: c.Fujin.Enabled,
 		}, nil
 	}
 
 	err := c.Fujin.TLS.Parse()
 	if err != nil {
-		return config.FujinServerConfig{}, fmt.Errorf("parse tls conf: %w", err)
+		return serverconfig.FujinServerConfig{}, fmt.Errorf("parse tls conf: %w", err)
 	}
 
-	return config.FujinServerConfig{
+	return serverconfig.FujinServerConfig{
 		Enabled:               c.Fujin.Enabled,
 		Addr:                  c.Fujin.Addr,
 		WriteDeadline:         c.Fujin.WriteDeadline,
@@ -135,26 +137,27 @@ func (c *Config) parseFujinServerConfig() (config.FujinServerConfig, error) {
 		PingMaxRetries:        c.Fujin.PingMaxRetries,
 		TLS:                   c.Fujin.TLS.Config,
 		QUIC:                  c.Fujin.QUIC.parse(),
+		ObservabilityEnabled:  c.Fujin.ObservabilityEnabled,
 	}, nil
 }
 
-func (c *Config) parseGRPCConfig() (config.GRPCServerConfig, error) {
+func (c *Config) parseGRPCConfig() (serverconfig.GRPCServerConfig, error) {
 	if c == nil {
-		return config.GRPCServerConfig{}, ErrNilConfig
+		return serverconfig.GRPCServerConfig{}, ErrNilConfig
 	}
 
 	if !c.GRPC.Enabled {
-		return config.GRPCServerConfig{
+		return serverconfig.GRPCServerConfig{
 			Enabled: c.GRPC.Enabled,
 		}, nil
 	}
 
 	err := c.GRPC.TLS.Parse()
 	if err != nil {
-		return config.GRPCServerConfig{}, fmt.Errorf("parse tls conf: %w", err)
+		return serverconfig.GRPCServerConfig{}, fmt.Errorf("parse tls conf: %w", err)
 	}
 
-	return config.GRPCServerConfig{
+	return serverconfig.GRPCServerConfig{
 		Enabled:               c.GRPC.Enabled,
 		Addr:                  c.GRPC.Addr,
 		ConnectionTimeout:     c.GRPC.ConnectionTimeout,
@@ -166,11 +169,12 @@ func (c *Config) parseGRPCConfig() (config.GRPCServerConfig, error) {
 		ServerKeepAlive:       c.GRPC.ServerKeepAlive.parse(),
 		ClientKeepAlive:       c.GRPC.ClientKeepAlive.parse(),
 		TLS:                   c.GRPC.TLS.Config,
+		ObservabilityEnabled:  c.GRPC.ObservabilityEnabled,
 	}, nil
 }
 
-func (c *ServerKeepAliveConfig) parse() config.ServerKeepAliveConfig {
-	return config.ServerKeepAliveConfig{
+func (c *ServerKeepAliveConfig) parse() serverconfig.ServerKeepAliveConfig {
+	return serverconfig.ServerKeepAliveConfig{
 		Time:                  c.Time,
 		Timeout:               c.Timeout,
 		MaxConnectionIdle:     c.MaxConnectionIdle,
@@ -179,8 +183,8 @@ func (c *ServerKeepAliveConfig) parse() config.ServerKeepAliveConfig {
 	}
 }
 
-func (c *ClientKeepAliveConfig) parse() config.ClientKeepAliveConfig {
-	return config.ClientKeepAliveConfig{
+func (c *ClientKeepAliveConfig) parse() serverconfig.ClientKeepAliveConfig {
+	return serverconfig.ClientKeepAliveConfig{
 		MinTime:             c.MinTime,
 		PermitWithoutStream: c.PermitWithoutStream,
 	}
@@ -222,6 +226,8 @@ func RunCLI(ctx context.Context) {
 	logLevel := os.Getenv("FUJIN_LOG_LEVEL")
 	logType := os.Getenv("FUJIN_LOG_TYPE")
 	logger := configureLogger(logLevel, logType)
+
+	logRegisteredPlugins(logger)
 
 	s, err := server.NewServer(serverConf, logger)
 	if err != nil {
@@ -290,4 +296,25 @@ func loadConfig(filePath string, cfg *Config) error {
 	}
 
 	return fmt.Errorf("failed to find config in: %v", paths)
+}
+
+// logRegisteredPlugins logs all registered connectors and decorators
+func logRegisteredPlugins(l *slog.Logger) {
+	connectors := connector.List()
+	decorators := decorator.List()
+
+	sort.Strings(connectors)
+	sort.Strings(decorators)
+
+	if len(connectors) > 0 {
+		l.Info("registered connectors", "list", strings.Join(connectors, ", "))
+	} else {
+		l.Warn("no connectors registered")
+	}
+
+	if len(decorators) > 0 {
+		l.Info("registered decorators", "list", strings.Join(decorators, ", "))
+	} else {
+		l.Warn("no decorators registered")
+	}
 }

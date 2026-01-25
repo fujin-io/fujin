@@ -4,16 +4,14 @@ import (
 	"crypto/tls"
 	"time"
 
-	"github.com/fujin-io/fujin/internal/observability"
-	v2 "github.com/fujin-io/fujin/public/connectors/v2"
+	"github.com/fujin-io/fujin/public/plugins/connector/config"
 	"github.com/quic-go/quic-go"
 )
 
 type Config struct {
-	Fujin         FujinServerConfig
-	GRPC          GRPCServerConfig
-	Connectors    v2.ConnectorsConfig
-	Observability observability.Config
+	Fujin      FujinServerConfig
+	GRPC       GRPCServerConfig
+	Connectors config.ConnectorsConfig
 }
 
 type FujinServerConfig struct {
@@ -27,6 +25,7 @@ type FujinServerConfig struct {
 	ForceTerminateTimeout time.Duration
 	TLS                   *tls.Config
 	QUIC                  *quic.Config
+	ObservabilityEnabled  bool
 }
 
 type GRPCServerConfig struct {
@@ -45,8 +44,9 @@ type GRPCServerConfig struct {
 	InitialConnWindowSize int32 // Initial window size for connection-level flow control
 
 	// KeepAlive settings
-	ServerKeepAlive ServerKeepAliveConfig
-	ClientKeepAlive ClientKeepAliveConfig
+	ServerKeepAlive      ServerKeepAliveConfig
+	ClientKeepAlive      ClientKeepAliveConfig
+	ObservabilityEnabled bool
 }
 
 type ServerKeepAliveConfig struct {
@@ -89,12 +89,5 @@ func (c *Config) SetDefaults() {
 
 	if c.GRPC.Addr == "" {
 		c.GRPC.Addr = ":4849"
-	}
-
-	if c.Observability.Metrics.Path == "" {
-		c.Observability.Metrics.Path = "/metrics"
-	}
-	if c.Observability.Metrics.Addr == "" {
-		c.Observability.Metrics.Addr = ":9090"
 	}
 }

@@ -11,9 +11,10 @@ import (
 	"sync"
 
 	"github.com/fujin-io/fujin/internal/connectors"
-	v2 "github.com/fujin-io/fujin/public/connectors/v2"
+	"github.com/fujin-io/fujin/public/plugins/connector"
+	connectorconfig "github.com/fujin-io/fujin/public/plugins/connector/config"
 	pb "github.com/fujin-io/fujin/public/proto/grpc/v1"
-	"github.com/fujin-io/fujin/public/server/config"
+	serverconfig "github.com/fujin-io/fujin/public/server/config"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
@@ -23,15 +24,15 @@ import (
 type GRPCServer struct {
 	pb.UnimplementedFujinServiceServer
 
-	conf             config.GRPCServerConfig
-	connectorsConfig v2.ConnectorsConfig
+	conf             serverconfig.GRPCServerConfig
+	connectorsConfig connectorconfig.ConnectorsConfig
 	l                *slog.Logger
 
 	grpcServer *grpc.Server
 }
 
 // NewGRPCServer creates a new gRPC server instance
-func NewGRPCServer(conf config.GRPCServerConfig, connectorsConfig v2.ConnectorsConfig, l *slog.Logger) *GRPCServer {
+func NewGRPCServer(conf serverconfig.GRPCServerConfig, connectorsConfig connectorconfig.ConnectorsConfig, l *slog.Logger) *GRPCServer {
 	return &GRPCServer{
 		conf:             conf,
 		connectorsConfig: connectorsConfig,
@@ -145,7 +146,7 @@ func (s *GRPCServer) Stream(stream pb.FujinService_StreamServer) error {
 		cman:             nil, // Will be created during Init
 		l:                s.l,
 		ctx:              ctx,
-		writers:          make(map[string]v2.WriteCloser),
+		writers:          make(map[string]connector.WriteCloser),
 		readers:          make(map[byte]*readerState),
 		fetchReaders:     make(map[string]byte),
 		nextSubID:        0,
@@ -174,14 +175,14 @@ func (s *GRPCServer) Stream(stream pb.FujinService_StreamServer) error {
 // streamSession represents a single bidirectional stream session
 type streamSession struct {
 	stream           pb.FujinService_StreamServer
-	connectorsConfig v2.ConnectorsConfig
+	connectorsConfig connectorconfig.ConnectorsConfig
 	cman             *connectors.ManagerV2 // Created during Init with overrides applied
 	l                *slog.Logger
 	ctx              context.Context
 
 	mu           sync.RWMutex
 	sendMu       sync.Mutex
-	writers      map[string]v2.WriteCloser
+	writers      map[string]connector.WriteCloser
 	readers      map[byte]*readerState
 	fetchReaders map[string]byte // topic -> subscription_id mapping for fetch implicit subscriptions
 	nextSubID    byte
@@ -189,12 +190,12 @@ type streamSession struct {
 
 	// Transaction state
 	inTx                 bool
-	currentTxWriter      v2.WriteCloser
+	currentTxWriter      connector.WriteCloser
 	currentTxWriterTopic string // Original topic used to get the writer (for PutWriter)
 }
 
 type readerState struct {
-	reader      v2.ReadCloser
+	reader      connector.ReadCloser
 	topic       string
 	autoCommit  bool
 	withHeaders bool
@@ -295,7 +296,7 @@ func (s *streamSession) handleInit(req *pb.InitRequest) error {
 	}
 
 	// Create a new Manager with the modified configuration
-	s.cman = connectors.NewManagerV2(modifiedConfig, s.l)
+	s.cman = connectors.NewManagerV2(modifiedConfig, req.Connector, s.l)
 	s.connected = true
 
 	return s.sendResponse(&pb.FujinResponse{
@@ -356,7 +357,7 @@ func (s *streamSession) handleProduce(req *pb.ProduceRequest) error {
 	}
 	s.mu.Unlock()
 
-	var w v2.WriteCloser
+	var w connector.WriteCloser
 	var err error
 	if inTx {
 		s.mu.RLock()
@@ -451,7 +452,7 @@ func (s *streamSession) handleHProduce(req *pb.HProduceRequest) error {
 	}
 	s.mu.Unlock()
 
-	var w v2.WriteCloser
+	var w connector.WriteCloser
 	var err error
 	if inTx {
 		s.mu.RLock()
@@ -535,7 +536,7 @@ func (s *streamSession) handleBeginTx(req *pb.BeginTxRequest) error {
 		w.Flush(s.ctx)
 		s.cman.PutWriter(w, topic)
 	}
-	s.writers = make(map[string]v2.WriteCloser)
+	s.writers = make(map[string]connector.WriteCloser)
 
 	s.inTx = true
 
@@ -1353,7 +1354,7 @@ func (s *streamSession) handleNack(req *pb.NackRequest) error {
 }
 
 // getWriter retrieves or creates a writer for the given topic
-func (s *streamSession) getWriter(topic string) (v2.WriteCloser, error) {
+func (s *streamSession) getWriter(topic string) (connector.WriteCloser, error) {
 	s.mu.RLock()
 	if w, exists := s.writers[topic]; exists {
 		s.mu.RUnlock()
@@ -1394,7 +1395,7 @@ func (s *streamSession) cleanup() {
 			s.cman.PutWriter(w, topic)
 		}
 	}
-	s.writers = make(map[string]v2.WriteCloser)
+	s.writers = make(map[string]connector.WriteCloser)
 
 	// Cancel all readers
 	for _, state := range s.readers {

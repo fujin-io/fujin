@@ -5,7 +5,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	_ "github.com/fujin-io/fujin/public/connectors/all"
+	_ "github.com/fujin-io/fujin/public/plugins/connector/all"
+	_ "github.com/fujin-io/fujin/public/plugins/decorator/all"
 	"github.com/fujin-io/fujin/public/service"
 )
 

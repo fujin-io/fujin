@@ -6,8 +6,8 @@ import (
 	"context"
 	"log/slog"
 
-	v2 "github.com/fujin-io/fujin/public/connectors/v2"
-	"github.com/fujin-io/fujin/public/server/config"
+	connectorconfig "github.com/fujin-io/fujin/public/plugins/connector/config"
+	serverconfig "github.com/fujin-io/fujin/public/server/config"
 )
 
 // GRPCServerWrapper wraps the gRPC server to implement the GRPCServer interface
@@ -17,7 +17,7 @@ type GRPCServerWrapper struct {
 }
 
 // NewGRPCServerWrapper creates a new gRPC server wrapper (stub version)
-func NewGRPCServerWrapper(conf config.GRPCServerConfig, baseConfig v2.ConnectorsConfig, l *slog.Logger) *GRPCServerWrapper {
+func NewGRPCServerWrapper(conf serverconfig.GRPCServerConfig, baseConfig connectorconfig.ConnectorsConfig, l *slog.Logger) *GRPCServerWrapper {
 	return &GRPCServerWrapper{
 		server: NewGRPCServer(conf, baseConfig, l),
 	}

@@ -14,10 +14,9 @@ import (
 	"time"
 
 	"github.com/fujin-io/fujin/internal/api/fujin/pool"
-	"github.com/fujin-io/fujin/internal/observability"
-	v2 "github.com/fujin-io/fujin/public/connectors/v2"
+	connectorconfig "github.com/fujin-io/fujin/public/plugins/connector/config"
 	v1 "github.com/fujin-io/fujin/public/proto/fujin/v1"
-	"github.com/fujin-io/fujin/public/server/config"
+	serverconfig "github.com/fujin-io/fujin/public/server/config"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/metrics"
 )
@@ -27,8 +26,8 @@ var (
 )
 
 type FujinServer struct {
-	conf       config.FujinServerConfig
-	baseConfig v2.ConnectorsConfig
+	conf       serverconfig.FujinServerConfig
+	baseConfig connectorconfig.ConnectorsConfig
 
 	ready chan struct{}
 	done  chan struct{}
@@ -36,7 +35,7 @@ type FujinServer struct {
 	l *slog.Logger
 }
 
-func NewFujinServer(conf config.FujinServerConfig, baseConfig v2.ConnectorsConfig, l *slog.Logger) *FujinServer {
+func NewFujinServer(conf serverconfig.FujinServerConfig, baseConfig connectorconfig.ConnectorsConfig, l *slog.Logger) *FujinServer {
 	return &FujinServer{
 		conf:       conf,
 		baseConfig: baseConfig,
@@ -60,7 +59,7 @@ func (s *FujinServer) ListenAndServe(ctx context.Context) error {
 		Conn: conn,
 	}
 
-	if observability.MetricsEnabled() {
+	if s.conf.ObservabilityEnabled {
 		tr.Tracer = metrics.NewTracer()
 		s.conf.QUIC.Tracer = metrics.DefaultConnectionTracer
 	}

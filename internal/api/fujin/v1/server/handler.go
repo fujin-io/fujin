@@ -16,7 +16,8 @@ import (
 	"github.com/fujin-io/fujin/internal/connectors"
 	"github.com/fujin-io/fujin/public/connectors/reader"
 	internal_reader "github.com/fujin-io/fujin/public/connectors/reader"
-	v2 "github.com/fujin-io/fujin/public/connectors/v2"
+	"github.com/fujin-io/fujin/public/plugins/connector"
+	"github.com/fujin-io/fujin/public/plugins/connector/config"
 	v1 "github.com/fujin-io/fujin/public/proto/fujin/v1"
 	"github.com/quic-go/quic-go"
 )
@@ -223,8 +224,8 @@ type handler struct {
 	ctx             context.Context
 	out             *Outbound
 	str             *quic.Stream
-	baseConfig      v2.ConnectorsConfig
-	connectorConfig v2.ConnectorConfig
+	baseConfig      config.ConnectorsConfig
+	connectorConfig config.ConnectorConfig
 	cman            *connectors.ManagerV2 // Created during INIT
 
 	ps           *parseState
@@ -236,14 +237,14 @@ type handler struct {
 	pingStream   bool
 
 	// producer
-	nonTxSessionWriters  map[string]v2.WriteCloser
-	currentTxWriter      v2.WriteCloser
+	nonTxSessionWriters  map[string]connector.WriteCloser
+	currentTxWriter      connector.WriteCloser
 	currentTxWriterTopic string
 	connected            bool // Whether INIT has been called
 
 	// subscriber
 	subIDPool   *pool2.BytePool
-	subscribers map[byte]v2.ReadCloser
+	subscribers map[byte]connector.ReadCloser
 	unsubFuncs  map[byte]func()
 	sMu         sync.Mutex
 
@@ -252,7 +253,7 @@ type handler struct {
 	fetchMsgWithHeadersHandlers map[string]map[bool]func(message []byte, topic string, hs [][]byte, args ...any)
 	fhMu                        sync.RWMutex
 
-	acker v2.ReadCloser
+	acker connector.ReadCloser
 
 	disconnect func()
 
@@ -266,7 +267,7 @@ type handler struct {
 func newHandler(
 	ctx context.Context,
 	pingInterval time.Duration, pingTimeout time.Duration, pingStream bool,
-	baseConfig v2.ConnectorsConfig,
+	baseConfig config.ConnectorsConfig,
 	out *Outbound, str *quic.Stream, l *slog.Logger,
 ) *handler {
 	h := &handler{
@@ -276,7 +277,7 @@ func newHandler(
 		pingInterval:                pingInterval,
 		pingTimeout:                 pingTimeout,
 		subIDPool:                   pool2.NewBytePool(),
-		subscribers:                 make(map[byte]v2.ReadCloser),
+		subscribers:                 make(map[byte]connector.ReadCloser),
 		unsubFuncs:                  make(map[byte]func()),
 		fetchReaders:                make(map[string]byte),
 		fetchMsgHandlers:            make(map[string]map[bool]func(message []byte, topic string, args ...any)),
@@ -1964,8 +1965,8 @@ func (h *handler) handleInit(configOverrides map[string]string) error {
 	h.out.EnqueueProto([]byte{byte(v1.RESP_CODE_INIT), v1.ERR_CODE_NO})
 
 	// Create a new Manager with the modified configuration
-	h.cman = connectors.NewManagerV2(modifiedConfig, h.l)
-	h.nonTxSessionWriters = make(map[string]v2.WriteCloser)
+	h.cman = connectors.NewManagerV2(modifiedConfig, h.ps.ina.connectorNameValue, h.l)
+	h.nonTxSessionWriters = make(map[string]connector.WriteCloser)
 	h.connected = true
 	h.sessionState = STREAM_STATE_CONNECTED
 
@@ -2008,7 +2009,7 @@ func (h *handler) writePing() {
 	}
 }
 
-func (h *handler) subscribe(ctx context.Context, subID byte, r v2.ReadCloser) {
+func (h *handler) subscribe(ctx context.Context, subID byte, r connector.ReadCloser) {
 	msgHandler := h.subEnqueueMsgFunc(h.out, subID, r)
 	for {
 		select {
@@ -2024,7 +2025,7 @@ func (h *handler) subscribe(ctx context.Context, subID byte, r v2.ReadCloser) {
 	}
 }
 
-func (h *handler) hsubscribe(ctx context.Context, subID byte, r v2.ReadCloser) {
+func (h *handler) hsubscribe(ctx context.Context, subID byte, r connector.ReadCloser) {
 	msgHandler := h.subEnqueueMsgFuncWithHeaders(h.out, subID, r)
 	for {
 		select {
@@ -2499,7 +2500,7 @@ func enqueueUnsubscribeSuccess(out *Outbound, cID []byte) {
 }
 
 func (h *handler) subEnqueueMsgFunc(
-	out *Outbound, subID byte, r v2.ReadCloser,
+	out *Outbound, subID byte, r connector.ReadCloser,
 ) func(message []byte, topic string, args ...any) {
 	staticArgsLen := r.MsgIDStaticArgsLen()
 	constBufLen := staticArgsLen + 6 // cmd(1) + subID(1) + msgLen(4)
@@ -2535,7 +2536,7 @@ func (h *handler) subEnqueueMsgFunc(
 }
 
 func (h *handler) subEnqueueMsgFuncWithHeaders(
-	out *Outbound, subID byte, r v2.ReadCloser,
+	out *Outbound, subID byte, r connector.ReadCloser,
 ) func(message []byte, topic string, hs [][]byte, args ...any) {
 	staticArgsLen := r.MsgIDStaticArgsLen()
 	constBufLen := staticArgsLen + 8 // cmd(1) + subID(1) + headersLen(2) + msgLen(4)
@@ -2591,7 +2592,7 @@ func (h *handler) subEnqueueMsgFuncWithHeaders(
 }
 
 func (h *handler) fetchEnqueueMsgFunc(
-	out *Outbound, r v2.ReadCloser, topic string, autoCommit bool,
+	out *Outbound, r connector.ReadCloser, topic string, autoCommit bool,
 ) func(message []byte, topic string, args ...any) {
 	staticArgsLen := r.MsgIDStaticArgsLen()
 	constBufLen := staticArgsLen + 4 // msgLen(4)
@@ -2641,7 +2642,7 @@ func (h *handler) fetchEnqueueMsgFunc(
 }
 
 func (h *handler) fetchEnqueueMsgFuncWithHeaders(
-	out *Outbound, r v2.ReadCloser, topic string, autoCommit bool,
+	out *Outbound, r connector.ReadCloser, topic string, autoCommit bool,
 ) func(message []byte, topic string, hs [][]byte, args ...any) {
 	staticArgsLen := r.MsgIDStaticArgsLen()
 	constBufLen := staticArgsLen + 6 // headersLen(2) + msgLen(4)

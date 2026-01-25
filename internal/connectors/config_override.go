@@ -6,54 +6,115 @@ import (
 	"strings"
 	"time"
 
-	v2 "github.com/fujin-io/fujin/public/connectors/v2"
-	writer_pkg "github.com/fujin-io/fujin/public/connectors/writer"
+	"github.com/fujin-io/fujin/public/plugins/connector"
+	"github.com/fujin-io/fujin/public/plugins/connector/config"
 	"gopkg.in/yaml.v3"
 )
 
 // DeepCopyConfig creates a deep copy of the connectors configuration
-func DeepCopyConfig(original v2.ConnectorConfig) (v2.ConnectorConfig, error) {
+func DeepCopyConfig(original config.ConnectorConfig) (config.ConnectorConfig, error) {
 	// Use YAML marshaling/unmarshaling for deep copy
 	// This works because all config types have YAML tags
 	data, err := yaml.Marshal(original)
 	if err != nil {
-		return v2.ConnectorConfig{}, fmt.Errorf("marshal config for deep copy: %w", err)
+		return config.ConnectorConfig{}, fmt.Errorf("marshal config for deep copy: %w", err)
 	}
 
-	var copy v2.ConnectorConfig
+	var copy config.ConnectorConfig
 	if err := yaml.Unmarshal(data, &copy); err != nil {
-		return v2.ConnectorConfig{}, fmt.Errorf("unmarshal config for deep copy: %w", err)
+		return config.ConnectorConfig{}, fmt.Errorf("unmarshal config for deep copy: %w", err)
 	}
 
 	return copy, nil
 }
 
-// ApplyOverrides applies configuration overrides to a base configuration
-// Overrides format: "{type}.{setting_path}" -> "value"
-// Example: "settings.client1.transactional_id" -> "my-tx-id-12345"
-// Example: "settings.client2.group" -> "my-consumer-group"
-func ApplyOverrides(baseConfig v2.ConnectorConfig, overrides map[string]string) (v2.ConnectorConfig, error) {
+// ApplyOverrides applies configuration overrides to a base configuration.
+// Overrides format: "{setting_path}" -> "value"
+//
+// Examples:
+//   - "clients.writer1.topic" -> "my-topic"
+//   - "clients.reader1.group" -> "my-group"
+//   - "common.servers" -> "host1:9092,host2:9092"
+//
+// Paths are validated against the Overridable whitelist in the config.
+// Wildcard (*) is supported in whitelist patterns:
+//   - "clients.*.topic" matches "clients.writer1.topic", "clients.reader1.topic", etc.
+//   - "common.*" matches any field under common
+//   - "*" (alone) allows ALL overrides (use with caution)
+func ApplyOverrides(baseConfig config.ConnectorConfig, overrides map[string]string) (config.ConnectorConfig, error) {
 	// Create a deep copy to avoid modifying the original
-	config, err := DeepCopyConfig(baseConfig)
+	cfg, err := DeepCopyConfig(baseConfig)
 	if err != nil {
-		return v2.ConnectorConfig{}, fmt.Errorf("deep copy config: %w", err)
+		return config.ConnectorConfig{}, fmt.Errorf("deep copy config: %w", err)
 	}
 
 	// Process each override
 	for path, value := range overrides {
-		if err != nil {
-			return v2.ConnectorConfig{}, fmt.Errorf("parse config path '%s': %w", path, err)
+		// Validate path against whitelist
+		if err := ValidateOverridePath(path, cfg.Overridable); err != nil {
+			return config.ConnectorConfig{}, err
 		}
 
-		overridenSettings, err := applySetting(config.Protocol, config.Settings, path, value)
+		overridenSettings, err := applySetting(cfg.Protocol, cfg.Settings, path, value)
 		if err != nil {
-			return v2.ConnectorConfig{}, fmt.Errorf("apply setting '%s': %w", path, err)
+			return config.ConnectorConfig{}, fmt.Errorf("apply setting '%s': %w", path, err)
 		}
 
-		config.Settings = overridenSettings
+		cfg.Settings = overridenSettings
 	}
 
-	return config, nil
+	return cfg, nil
+}
+
+// ValidateOverridePath checks if the given path is allowed by the whitelist.
+// Returns nil if allowed, error if not.
+// If whitelist is empty, no overrides are allowed.
+// Special case: if whitelist contains "*", all overrides are allowed.
+func ValidateOverridePath(path string, whitelist []string) error {
+	if len(whitelist) == 0 {
+		return fmt.Errorf("override path %q is not allowed: no overridable paths configured", path)
+	}
+
+	for _, pattern := range whitelist {
+		// Special case: "*" allows all overrides
+		if pattern == "*" {
+			return nil
+		}
+		if matchOverridePath(path, pattern) {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("override path %q is not allowed", path)
+}
+
+// matchOverridePath checks if a path matches a pattern with wildcard support.
+// Wildcard (*) matches exactly one path segment.
+//
+// Examples:
+//   - matchOverridePath("a.b.c", "a.*.c") -> true
+//   - matchOverridePath("a.b.c", "a.b.c") -> true
+//   - matchOverridePath("a.b.c", "a.x.c") -> false
+//   - matchOverridePath("a.b", "a.*") -> true
+func matchOverridePath(path, pattern string) bool {
+	pathParts := strings.Split(path, ".")
+	patternParts := strings.Split(pattern, ".")
+
+	if len(pathParts) != len(patternParts) {
+		return false
+	}
+
+	for i := range patternParts {
+		if patternParts[i] == "*" {
+			// Wildcard matches any single segment
+			continue
+		}
+		if patternParts[i] != pathParts[i] {
+			return false
+		}
+	}
+
+	return true
 }
 
 func applySetting(protocol string, settings any, settingPath, value string) (any, error) {
@@ -65,7 +126,7 @@ func applySetting(protocol string, settings any, settingPath, value string) (any
 
 	// Try to use protocol-specific converter if available
 	var convertedValue any
-	converter := writer_pkg.GetConfigValueConverter(protocol)
+	converter := connector.GetConfigValueConverter(protocol)
 	if converter != nil {
 		converted, err := converter(settingPath, value)
 		if err != nil {

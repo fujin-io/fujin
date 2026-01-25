@@ -4,11 +4,11 @@ import (
 	"testing"
 	"time"
 
-	v2 "github.com/fujin-io/fujin/public/connectors/v2"
+	"github.com/fujin-io/fujin/public/plugins/connector/config"
 )
 
 func TestDeepCopyConfig(t *testing.T) {
-	original := v2.ConnectorConfig{
+	original := config.ConnectorConfig{
 		Protocol: "test",
 		Settings: map[string]any{
 			"nested": map[string]any{
@@ -34,8 +34,9 @@ func TestDeepCopyConfig(t *testing.T) {
 }
 
 func TestApplyOverrides_Generic(t *testing.T) {
-	originalConfig := v2.ConnectorConfig{
-		Protocol: "test",
+	originalConfig := config.ConnectorConfig{
+		Protocol:    "test",
+		Overridable: []string{"key"}, // Allow override
 		Settings: map[string]any{
 			"key": "value",
 		},
@@ -58,8 +59,9 @@ func TestApplyOverrides_Generic(t *testing.T) {
 }
 
 func TestApplyOverrides_NestedPath(t *testing.T) {
-	originalConfig := v2.ConnectorConfig{
-		Protocol: "test",
+	originalConfig := config.ConnectorConfig{
+		Protocol:    "test",
+		Overridable: []string{"nested.key", "nested.key2"}, // Allow specific nested paths
 		Settings: map[string]any{
 			"nested": map[string]any{
 				"key":  "value",
@@ -85,7 +87,157 @@ func TestApplyOverrides_NestedPath(t *testing.T) {
 	if settings["key2"] != "value" {
 		t.Errorf("ApplyOverrides() nested.key = %v, want value", settings["key2"])
 	}
+}
 
+func TestValidateOverridePath(t *testing.T) {
+	tests := []struct {
+		name      string
+		path      string
+		whitelist []string
+		wantErr   bool
+	}{
+		{
+			name:      "exact match",
+			path:      "clients.client1.topic",
+			whitelist: []string{"clients.client1.topic"},
+			wantErr:   false,
+		},
+		{
+			name:      "wildcard match",
+			path:      "clients.client1.topic",
+			whitelist: []string{"clients.*.topic"},
+			wantErr:   false,
+		},
+		{
+			name:      "wildcard match different client",
+			path:      "clients.client2.topic",
+			whitelist: []string{"clients.*.topic"},
+			wantErr:   false,
+		},
+		{
+			name:      "wildcard at end",
+			path:      "common.servers",
+			whitelist: []string{"common.*"},
+			wantErr:   false,
+		},
+		{
+			name:      "not in whitelist",
+			path:      "common.servers",
+			whitelist: []string{"clients.*.topic"},
+			wantErr:   true,
+		},
+		{
+			name:      "empty whitelist",
+			path:      "clients.client1.topic",
+			whitelist: []string{},
+			wantErr:   true,
+		},
+		{
+			name:      "nil whitelist",
+			path:      "clients.client1.topic",
+			whitelist: nil,
+			wantErr:   true,
+		},
+		{
+			name:      "allow all with *",
+			path:      "clients.client1.topic",
+			whitelist: []string{"*"},
+			wantErr:   false,
+		},
+		{
+			name:      "allow all with * - any path",
+			path:      "common.servers",
+			whitelist: []string{"*"},
+			wantErr:   false,
+		},
+		{
+			name:      "allow all with * - deeply nested",
+			path:      "some.very.deep.nested.path",
+			whitelist: []string{"*"},
+			wantErr:   false,
+		},
+		{
+			name:      "path length mismatch - shorter",
+			path:      "clients.client1",
+			whitelist: []string{"clients.*.topic"},
+			wantErr:   true,
+		},
+		{
+			name:      "path length mismatch - longer",
+			path:      "clients.client1.topic.extra",
+			whitelist: []string{"clients.*.topic"},
+			wantErr:   true,
+		},
+		{
+			name:      "multiple patterns - first matches",
+			path:      "clients.client1.topic",
+			whitelist: []string{"clients.*.topic", "common.*"},
+			wantErr:   false,
+		},
+		{
+			name:      "multiple patterns - second matches",
+			path:      "common.servers",
+			whitelist: []string{"clients.*.topic", "common.*"},
+			wantErr:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateOverridePath(tt.path, tt.whitelist)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateOverridePath() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestMatchOverridePath(t *testing.T) {
+	tests := []struct {
+		name    string
+		path    string
+		pattern string
+		want    bool
+	}{
+		{"exact match", "a.b.c", "a.b.c", true},
+		{"wildcard in middle", "a.x.c", "a.*.c", true},
+		{"wildcard at end", "a.b.x", "a.b.*", true},
+		{"wildcard at start", "x.b.c", "*.b.c", true},
+		{"multiple wildcards", "a.x.y", "a.*.*", true},
+		{"no match - different segment", "a.b.c", "a.b.d", false},
+		{"no match - different length", "a.b", "a.b.c", false},
+		{"no match - longer path", "a.b.c.d", "a.b.c", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := matchOverridePath(tt.path, tt.pattern); got != tt.want {
+				t.Errorf("matchOverridePath(%q, %q) = %v, want %v", tt.path, tt.pattern, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestApplyOverrides_NotAllowed(t *testing.T) {
+	originalConfig := config.ConnectorConfig{
+		Protocol:    "test",
+		Overridable: []string{"clients.*.topic"}, // Only allow topic
+		Settings: map[string]any{
+			"common": map[string]any{
+				"servers": []string{"host1:1234"},
+			},
+		},
+	}
+
+	// Try to override servers (not allowed)
+	overrides := map[string]string{
+		"common.servers": "host2:1234",
+	}
+
+	_, err := ApplyOverrides(originalConfig, overrides)
+	if err == nil {
+		t.Error("ApplyOverrides() should return error for non-allowed path")
+	}
 }
 
 func TestSetNestedValueWithValue(t *testing.T) {
@@ -100,15 +252,15 @@ func TestSetNestedValueWithValue(t *testing.T) {
 	}
 
 	// Test nested setting
-	if err := setNestedValueWithValue(m, "conn.addr", "localhost:9092"); err != nil {
+	if err := setNestedValueWithValue(m, "conn.addr", "localhost:1234"); err != nil {
 		t.Fatalf("setNestedValueWithValue() error = %v", err)
 	}
 	conn, ok := m["conn"].(map[string]any)
 	if !ok {
 		t.Fatalf("setNestedValueWithValue() conn is not a map")
 	}
-	if conn["addr"] != "localhost:9092" {
-		t.Errorf("setNestedValueWithValue() conn.addr = %v, want localhost:9092", conn["addr"])
+	if conn["addr"] != "localhost:1234" {
+		t.Errorf("setNestedValueWithValue() conn.addr = %v, want localhost:1234", conn["addr"])
 	}
 
 	// Test deeply nested

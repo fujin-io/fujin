@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"github.com/fujin-io/fujin/internal/common/pool"
-	"github.com/fujin-io/fujin/internal/connectors/observability"
 	"github.com/fujin-io/fujin/public/connectors"
 	"github.com/fujin-io/fujin/public/connectors/reader"
 	"github.com/fujin-io/fujin/public/connectors/writer"
@@ -53,7 +52,7 @@ func (m *Manager) GetReader(name string, autoCommit bool) (reader.Reader, error)
 		return nil, fmt.Errorf("new reader: %w", err)
 	}
 
-	r = observability.OtelReaderWrapper(observability.MetricsReaderWrapper(r, name), name)
+	// Observability is handled by decorators in v2 connectors
 	return r, nil
 }
 
@@ -85,7 +84,7 @@ func (m *Manager) GetWriter(name string) (writer.Writer, error) {
 			if err != nil {
 				return nil, err
 			}
-			w = observability.OtelWriterWrapper(observability.MetricsWriterWrapper(w, name), name)
+			// Observability is handled by decorators in v2 connectors
 			return w, nil
 		})
 		m.wpools[name] = p
