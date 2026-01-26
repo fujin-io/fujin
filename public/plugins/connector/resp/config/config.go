@@ -5,23 +5,23 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fujin-io/fujin/public/connectors/cerr"
 	"github.com/fujin-io/fujin/public/server/config/tls"
+	"github.com/fujin-io/fujin/public/util"
 )
 
 // RedisConfig contains common Redis connection settings
 type RedisConfig struct {
-	InitAddress  []string              `yaml:"init_address"`
-	Username     string                `yaml:"username"`
-	Password     string                `yaml:"password"`
-	DisableCache bool                  `yaml:"disable_cache"`
-	TLS          *tls.ClientTLSConfig  `yaml:"tls,omitempty"`
+	InitAddress  []string             `yaml:"init_address"`
+	Username     string               `yaml:"username"`
+	Password     string               `yaml:"password"`
+	DisableCache bool                 `yaml:"disable_cache"`
+	TLS          *tls.ClientTLSConfig `yaml:"tls,omitempty"`
 }
 
 // Validate validates the Redis configuration
 func (c RedisConfig) Validate() error {
 	if len(c.InitAddress) == 0 {
-		return cerr.ValidationErr("init_address is required")
+		return util.ValidationErr("init_address is required")
 	}
 
 	if c.TLS != nil {
@@ -55,10 +55,10 @@ type WriterBatchConfig struct {
 // ValidateBatch validates batch configuration
 func (c WriterBatchConfig) ValidateBatch() error {
 	if c.BatchSize <= 0 {
-		return cerr.ValidationErr("batch_size must be greater than 0")
+		return util.ValidationErr("batch_size must be greater than 0")
 	}
 	if c.Linger <= 0 {
-		return cerr.ValidationErr("linger must be greater than 0")
+		return util.ValidationErr("linger must be greater than 0")
 	}
 	return nil
 }
@@ -72,4 +72,3 @@ func (c *WriterBatchConfig) ApplyBatchDefaults() {
 		c.Linger = 10 * time.Millisecond
 	}
 }
-

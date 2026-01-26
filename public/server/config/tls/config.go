@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/fujin-io/fujin/public/connectors/cerr"
+	"github.com/fujin-io/fujin/public/util"
 )
 
 type ClientTLSConfig struct {
@@ -19,16 +19,16 @@ type ClientTLSConfig struct {
 
 func (c *ClientTLSConfig) Validate() error {
 	if c.ServerCertPath == "" {
-		return cerr.ValidationErr("server cert path not provided")
+		return util.ValidationErr("server cert path not provided")
 	}
 
 	if c.ClientCertPath != "" || c.ClientKeyPath != "" {
 		if c.ClientCertPath == "" {
-			return cerr.ValidationErr("client cert path not provided")
+			return util.ValidationErr("client cert path not provided")
 		}
 
 		if c.ClientKeyPath == "" {
-			return cerr.ValidationErr("client key path not provided")
+			return util.ValidationErr("client key path not provided")
 		}
 
 		c.Mutual = true

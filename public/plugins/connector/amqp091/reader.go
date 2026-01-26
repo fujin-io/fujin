@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/fujin-io/fujin/public/connectors/cerr"
+	"github.com/fujin-io/fujin/public/util"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -290,7 +290,7 @@ func (r *Reader) Fetch(
 	fetchHandler func(n uint32, err error),
 	msgHandler func(message []byte, topic string, args ...any),
 ) {
-	fetchHandler(0, cerr.ErrNotSupported)
+	fetchHandler(0, util.ErrNotSupported)
 }
 
 func (r *Reader) HFetch(
@@ -298,7 +298,7 @@ func (r *Reader) HFetch(
 	fetchHandler func(n uint32, err error),
 	msgHandler func(message []byte, topic string, hs [][]byte, args ...any),
 ) {
-	fetchHandler(0, cerr.ErrNotSupported)
+	fetchHandler(0, util.ErrNotSupported)
 }
 
 func (r *Reader) Ack(
@@ -365,4 +365,3 @@ func (r *Reader) checkConnAndReconnectIfNeeded() error {
 
 	return nil
 }
-

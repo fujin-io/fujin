@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/fujin-io/fujin/public/connectors/cerr"
 	"github.com/fujin-io/fujin/public/plugins/connector"
+	"github.com/fujin-io/fujin/public/util"
 	"github.com/nsqio/go-nsq"
 	"github.com/panjf2000/ants/v2"
 )
@@ -88,15 +88,15 @@ func (w *Writer) Flush(ctx context.Context) error {
 }
 
 func (w *Writer) BeginTx(ctx context.Context) error {
-	return cerr.ErrNotSupported
+	return util.ErrNotSupported
 }
 
 func (w *Writer) CommitTx(ctx context.Context) error {
-	return cerr.ErrNotSupported
+	return util.ErrNotSupported
 }
 
 func (w *Writer) RollbackTx(ctx context.Context) error {
-	return cerr.ErrNotSupported
+	return util.ErrNotSupported
 }
 
 func (w *Writer) Close() error {
@@ -113,4 +113,3 @@ func (w *Writer) Close() error {
 	}
 	return nil
 }
-

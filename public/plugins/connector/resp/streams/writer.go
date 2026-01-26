@@ -11,8 +11,8 @@ import (
 	"github.com/bytedance/sonic"
 	"github.com/redis/rueidis"
 
-	"github.com/fujin-io/fujin/public/connectors/cerr"
 	"github.com/fujin-io/fujin/public/plugins/connector"
+	"github.com/fujin-io/fujin/public/util"
 )
 
 type Writer struct {
@@ -168,15 +168,15 @@ func (w *Writer) Flush(_ context.Context) error {
 }
 
 func (w *Writer) BeginTx(_ context.Context) error {
-	return cerr.ErrNotSupported
+	return util.ErrNotSupported
 }
 
 func (w *Writer) CommitTx(_ context.Context) error {
-	return cerr.ErrNotSupported
+	return util.ErrNotSupported
 }
 
 func (w *Writer) RollbackTx(_ context.Context) error {
-	return cerr.ErrNotSupported
+	return util.ErrNotSupported
 }
 
 func (w *Writer) Close() error {

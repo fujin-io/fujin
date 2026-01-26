@@ -12,8 +12,8 @@ import (
 
 	"github.com/eclipse/paho.golang/autopaho"
 	"github.com/eclipse/paho.golang/paho"
-	"github.com/fujin-io/fujin/public/connectors/cerr"
 	"github.com/fujin-io/fujin/public/plugins/connector"
+	"github.com/fujin-io/fujin/public/util"
 )
 
 var ErrMsgNotFound = errors.New("msg not found")
@@ -238,7 +238,7 @@ func (r *Reader) Fetch(
 	fetchHandler func(n uint32, err error),
 	msgHandler func(message []byte, topic string, args ...any),
 ) {
-	fetchHandler(0, cerr.ErrNotSupported)
+	fetchHandler(0, util.ErrNotSupported)
 }
 
 func (r *Reader) HFetch(
@@ -246,7 +246,7 @@ func (r *Reader) HFetch(
 	fetchHandler func(n uint32, err error),
 	msgHandler func(message []byte, topic string, hs [][]byte, args ...any),
 ) {
-	fetchHandler(0, cerr.ErrNotSupported)
+	fetchHandler(0, util.ErrNotSupported)
 }
 
 func (r *Reader) Ack(

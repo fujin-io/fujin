@@ -8,8 +8,8 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/fujin-io/fujin/public/connectors/cerr"
 	"github.com/fujin-io/fujin/public/plugins/connector"
+	"github.com/fujin-io/fujin/public/util"
 	"github.com/redis/rueidis"
 )
 
@@ -146,15 +146,15 @@ func (w *Writer) Flush(_ context.Context) error {
 }
 
 func (w *Writer) BeginTx(_ context.Context) error {
-	return cerr.ErrNotSupported
+	return util.ErrNotSupported
 }
 
 func (w *Writer) CommitTx(_ context.Context) error {
-	return cerr.ErrNotSupported
+	return util.ErrNotSupported
 }
 
 func (w *Writer) RollbackTx(_ context.Context) error {
-	return cerr.ErrNotSupported
+	return util.ErrNotSupported
 }
 
 func (w *Writer) Close() error {
@@ -163,4 +163,3 @@ func (w *Writer) Close() error {
 	w.client.Close()
 	return nil
 }
-

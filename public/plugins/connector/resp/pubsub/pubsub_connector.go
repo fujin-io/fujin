@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/fujin-io/fujin/public/connectors/util"
 	"github.com/fujin-io/fujin/public/plugins/connector"
+	"github.com/fujin-io/fujin/public/util"
 )
 
 // pubsubConnector implements connector.Connector interface for Redis PubSub
@@ -84,4 +84,3 @@ func (p *pubsubConnector) NewWriter(config any, name string, l *slog.Logger) (co
 func (p *pubsubConnector) GetConfigValueConverter() connector.ConfigValueConverterFunc {
 	return convertConfigValue
 }
-

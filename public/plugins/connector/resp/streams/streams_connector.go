@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/fujin-io/fujin/public/connectors/util"
 	"github.com/fujin-io/fujin/public/plugins/connector"
+	"github.com/fujin-io/fujin/public/util"
 )
 
 // streamsConnector implements connector.Connector interface for Redis Streams.

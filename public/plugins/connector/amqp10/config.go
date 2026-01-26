@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/Azure/go-amqp"
-	"github.com/fujin-io/fujin/public/connectors/cerr"
+	"github.com/fujin-io/fujin/public/util"
 )
 
 type ConnConfig struct {
@@ -70,14 +70,14 @@ type CommonSettings struct {
 type ClientSpecificSettings struct {
 	// Connection settings
 	Conn ConnConfig `yaml:"conn"`
-	
+
 	// Session settings
 	Session SessionConfig `yaml:"session"`
-	
+
 	// Writer-specific settings (optional, only for writers)
 	Sender *SenderConfig `yaml:"sender,omitempty"`
 	Send   *SendConfig   `yaml:"send,omitempty"`
-	
+
 	// Reader-specific settings (optional, only for readers)
 	Receiver *ReceiverConfig `yaml:"receiver,omitempty"`
 }
@@ -103,31 +103,31 @@ func NewConnectorConfig(common CommonSettings, client ClientSpecificSettings) Co
 
 func (c *Config) Validate() error {
 	if len(c.Clients) == 0 {
-		return cerr.ValidationErr("at least one client must be defined")
+		return util.ValidationErr("at least one client must be defined")
 	}
 
 	for name, client := range c.Clients {
 		if client.Conn.Addr == "" {
-			return cerr.ValidationErr(fmt.Sprintf("client %q: addr is not defined", name))
+			return util.ValidationErr(fmt.Sprintf("client %q: addr is not defined", name))
 		}
-		
+
 		// Validate writer config
 		if client.Sender != nil {
 			if client.Sender.Target == "" {
-				return cerr.ValidationErr(fmt.Sprintf("client %q: sender.target is not defined", name))
+				return util.ValidationErr(fmt.Sprintf("client %q: sender.target is not defined", name))
 			}
 		}
-		
+
 		// Validate reader config
 		if client.Receiver != nil {
 			if client.Receiver.Source == "" {
-				return cerr.ValidationErr(fmt.Sprintf("client %q: receiver.source is not defined", name))
+				return util.ValidationErr(fmt.Sprintf("client %q: receiver.source is not defined", name))
 			}
 		}
-		
+
 		// Client must have either sender (writer) or receiver (reader)
 		if client.Sender == nil && client.Receiver == nil {
-			return cerr.ValidationErr(fmt.Sprintf("client %q: must have either sender (writer) or receiver (reader) configured", name))
+			return util.ValidationErr(fmt.Sprintf("client %q: must have either sender (writer) or receiver (reader) configured", name))
 		}
 	}
 
@@ -137,4 +137,3 @@ func (c *Config) Validate() error {
 func (c *ConnectorConfig) Endpoint() string {
 	return c.Conn.Addr
 }
-

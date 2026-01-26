@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/fujin-io/fujin/public/connectors/cerr"
+	"github.com/fujin-io/fujin/public/util"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -20,35 +20,35 @@ type ConnConfig struct {
 }
 
 type ExchangeConfig struct {
-	Name       string        `yaml:"name"`
-	Kind       string        `yaml:"kind"`
-	Durable    bool          `yaml:"durable"`
-	AutoDelete bool          `yaml:"auto_delete"`
-	Internal   bool          `yaml:"internal"`
-	NoWait     bool          `yaml:"no_wait"`
+	Name       string     `yaml:"name"`
+	Kind       string     `yaml:"kind"`
+	Durable    bool       `yaml:"durable"`
+	AutoDelete bool       `yaml:"auto_delete"`
+	Internal   bool       `yaml:"internal"`
+	NoWait     bool       `yaml:"no_wait"`
 	Args       amqp.Table `yaml:"args"`
 }
 
 type QueueConfig struct {
-	Name       string        `yaml:"name"`
-	Durable    bool          `yaml:"durable"`
-	AutoDelete bool          `yaml:"auto_delete"`
-	Exclusive  bool          `yaml:"exclusive"`
-	NoWait     bool          `yaml:"no_wait"`
+	Name       string     `yaml:"name"`
+	Durable    bool       `yaml:"durable"`
+	AutoDelete bool       `yaml:"auto_delete"`
+	Exclusive  bool       `yaml:"exclusive"`
+	NoWait     bool       `yaml:"no_wait"`
 	Args       amqp.Table `yaml:"args"`
 }
 
 type QueueBindConfig struct {
-	RoutingKey string        `yaml:"routing_key"`
-	NoWait     bool          `yaml:"no_wait"`
+	RoutingKey string     `yaml:"routing_key"`
+	NoWait     bool       `yaml:"no_wait"`
 	Args       amqp.Table `yaml:"args"`
 }
 
 type ConsumeConfig struct {
-	Consumer  string        `yaml:"consumer"`
-	Exclusive bool          `yaml:"exclusive"`
-	NoLocal   bool          `yaml:"no_local"`
-	NoWait    bool          `yaml:"no_wait"`
+	Consumer  string     `yaml:"consumer"`
+	Exclusive bool       `yaml:"exclusive"`
+	NoLocal   bool       `yaml:"no_local"`
+	NoWait    bool       `yaml:"no_wait"`
 	Args      amqp.Table `yaml:"args"`
 }
 
@@ -84,23 +84,23 @@ type CommonSettings struct {
 type ClientSpecificSettings struct {
 	// Connection settings
 	Conn ConnConfig `yaml:"conn"`
-	
+
 	// Exchange settings (required for both reader and writer)
 	Exchange ExchangeConfig `yaml:"exchange"`
-	
+
 	// Queue settings (required for both reader and writer)
 	Queue QueueConfig `yaml:"queue"`
-	
+
 	// Queue bind settings (required for both reader and writer)
 	QueueBind QueueBindConfig `yaml:"queue_bind"`
-	
+
 	// Writer-specific settings (optional, only for writers)
 	Publish *PublishConfig `yaml:"publish,omitempty"`
-	
+
 	// Reader-specific settings (optional, only for readers)
 	Consume *ConsumeConfig `yaml:"consume,omitempty"`
 	Ack     *AckConfig     `yaml:"ack,omitempty"`
-	Nack    *NackConfig     `yaml:"nack,omitempty"`
+	Nack    *NackConfig    `yaml:"nack,omitempty"`
 }
 
 // Config is the top-level configuration structure
@@ -124,29 +124,29 @@ func NewConnectorConfig(common CommonSettings, client ClientSpecificSettings) Co
 
 func (c *Config) Validate() error {
 	if len(c.Clients) == 0 {
-		return cerr.ValidationErr("at least one client must be defined")
+		return util.ValidationErr("at least one client must be defined")
 	}
 
 	for name, client := range c.Clients {
 		if client.Conn.URL == "" {
-			return cerr.ValidationErr(fmt.Sprintf("client %q: url is not defined", name))
+			return util.ValidationErr(fmt.Sprintf("client %q: url is not defined", name))
 		}
-		
+
 		if client.Exchange.Name == "" {
-			return cerr.ValidationErr(fmt.Sprintf("client %q: exchange.name is not defined", name))
+			return util.ValidationErr(fmt.Sprintf("client %q: exchange.name is not defined", name))
 		}
-		
+
 		if client.Exchange.Kind == "" {
-			return cerr.ValidationErr(fmt.Sprintf("client %q: exchange.kind is not defined", name))
+			return util.ValidationErr(fmt.Sprintf("client %q: exchange.kind is not defined", name))
 		}
-		
+
 		if client.Queue.Name == "" {
-			return cerr.ValidationErr(fmt.Sprintf("client %q: queue.name is not defined", name))
+			return util.ValidationErr(fmt.Sprintf("client %q: queue.name is not defined", name))
 		}
-		
+
 		// Client must have either publish (writer) or consume (reader)
 		if client.Publish == nil && client.Consume == nil {
-			return cerr.ValidationErr(fmt.Sprintf("client %q: must have either publish (writer) or consume (reader) configured", name))
+			return util.ValidationErr(fmt.Sprintf("client %q: must have either publish (writer) or consume (reader) configured", name))
 		}
 	}
 
@@ -156,4 +156,3 @@ func (c *Config) Validate() error {
 func (c *ConnectorConfig) Endpoint() string {
 	return c.Conn.URL
 }
-

@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"unsafe"
 
-	"github.com/fujin-io/fujin/public/connectors/cerr"
 	"github.com/fujin-io/fujin/public/plugins/connector"
+	"github.com/fujin-io/fujin/public/util"
 	"github.com/nats-io/nats.go"
 )
 
@@ -84,7 +84,7 @@ func (r *Reader) Fetch(
 	fetchHandler func(n uint32, err error),
 	msgHandler func(message []byte, topic string, args ...any),
 ) {
-	fetchHandler(0, cerr.ErrNotSupported)
+	fetchHandler(0, util.ErrNotSupported)
 }
 
 func (r *Reader) HFetch(
@@ -92,7 +92,7 @@ func (r *Reader) HFetch(
 	fetchHandler func(n uint32, err error),
 	msgHandler func(message []byte, topic string, hs [][]byte, args ...any),
 ) {
-	fetchHandler(0, cerr.ErrNotSupported)
+	fetchHandler(0, util.ErrNotSupported)
 }
 
 func (r *Reader) Ack(
@@ -101,7 +101,7 @@ func (r *Reader) Ack(
 	ackMsgHandler func([]byte, error),
 ) {
 	// NATS Core doesn't support acknowledgments (at-most-once delivery)
-	ackHandler(cerr.ErrNotSupported)
+	ackHandler(util.ErrNotSupported)
 }
 
 func (r *Reader) Nack(
@@ -110,7 +110,7 @@ func (r *Reader) Nack(
 	nackMsgHandler func([]byte, error),
 ) {
 	// NATS Core doesn't support acknowledgments (at-most-once delivery)
-	nackHandler(cerr.ErrNotSupported)
+	nackHandler(util.ErrNotSupported)
 }
 
 func (r *Reader) EncodeMsgID(buf []byte, topic string, args ...any) []byte {
@@ -156,4 +156,3 @@ func joinBytes(elems [][]byte, sep byte) []byte {
 
 	return out
 }
-

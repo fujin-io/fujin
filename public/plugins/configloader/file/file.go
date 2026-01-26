@@ -8,8 +8,8 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/fujin-io/fujin/public/connectors/util"
 	"github.com/fujin-io/fujin/public/plugins/configloader"
+	"github.com/fujin-io/fujin/public/util"
 	"gopkg.in/yaml.v3"
 )
 
@@ -69,4 +69,3 @@ func (f *fileLoader) Load(ctx context.Context, cfg any) error {
 
 	return fmt.Errorf("file config loader: failed to find config in paths: %v", f.config.Paths)
 }
-

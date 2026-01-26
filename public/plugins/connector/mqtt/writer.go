@@ -9,8 +9,8 @@ import (
 
 	"github.com/eclipse/paho.golang/autopaho"
 	"github.com/eclipse/paho.golang/paho"
-	"github.com/fujin-io/fujin/public/connectors/cerr"
 	"github.com/fujin-io/fujin/public/plugins/connector"
+	"github.com/fujin-io/fujin/public/util"
 	"github.com/panjf2000/ants/v2"
 )
 
@@ -35,11 +35,11 @@ func NewWriter(conf ConnectorConfig, l *slog.Logger) (connector.WriteCloser, err
 	}
 
 	cliCfg := autopaho.ClientConfig{
-		ServerUrls:            []*url.URL{serverURL},
-		KeepAlive:             conf.KeepAlive,
+		ServerUrls:                    []*url.URL{serverURL},
+		KeepAlive:                     conf.KeepAlive,
 		CleanStartOnInitialConnection: conf.CleanStart,
-		SessionExpiryInterval: conf.SessionExpiry,
-		ConnectTimeout:        conf.ConnectTimeout,
+		SessionExpiryInterval:         conf.SessionExpiry,
+		ConnectTimeout:                conf.ConnectTimeout,
 		OnConnectionUp: func(cm *autopaho.ConnectionManager, connAck *paho.Connack) {
 			l.Info("mqtt writer connection up", "session_present", connAck.SessionPresent)
 		},
@@ -139,15 +139,15 @@ func (w *Writer) Flush(ctx context.Context) error {
 }
 
 func (w *Writer) BeginTx(ctx context.Context) error {
-	return cerr.ErrNotSupported
+	return util.ErrNotSupported
 }
 
 func (w *Writer) CommitTx(ctx context.Context) error {
-	return cerr.ErrNotSupported
+	return util.ErrNotSupported
 }
 
 func (w *Writer) RollbackTx(ctx context.Context) error {
-	return cerr.ErrNotSupported
+	return util.ErrNotSupported
 }
 
 func (w *Writer) Close() error {

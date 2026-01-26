@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/fujin-io/fujin/public/connectors/util"
 	"github.com/fujin-io/fujin/public/plugins/connector"
+	"github.com/fujin-io/fujin/public/util"
 )
 
 // natsConnector implements connector.Connector interface for NATS Core
@@ -72,4 +72,3 @@ func (n *natsConnector) NewWriter(config any, name string, l *slog.Logger) (conn
 func (n *natsConnector) GetConfigValueConverter() connector.ConfigValueConverterFunc {
 	return convertConfigValue
 }
-

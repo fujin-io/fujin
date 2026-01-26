@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/fujin-io/fujin/public/connectors/util"
 	"github.com/fujin-io/fujin/public/plugins/connector"
+	"github.com/fujin-io/fujin/public/util"
 )
 
 // nsqConnector implements connector.Connector interface for NSQ
@@ -84,4 +84,3 @@ func (n *nsqConnector) NewWriter(config any, name string, l *slog.Logger) (conne
 func (n *nsqConnector) GetConfigValueConverter() connector.ConfigValueConverterFunc {
 	return convertConfigValue
 }
-

@@ -8,7 +8,7 @@ import (
 	"unsafe"
 
 	"github.com/Azure/go-amqp"
-	"github.com/fujin-io/fujin/public/connectors/cerr"
+	"github.com/fujin-io/fujin/public/util"
 )
 
 type Reader struct {
@@ -172,7 +172,7 @@ func (r *Reader) Fetch(
 	fetchHandler func(n uint32, err error),
 	msgHandler func(message []byte, topic string, args ...any),
 ) {
-	fetchHandler(0, cerr.ErrNotSupported)
+	fetchHandler(0, util.ErrNotSupported)
 }
 
 func (r *Reader) HFetch(
@@ -180,7 +180,7 @@ func (r *Reader) HFetch(
 	fetchHandler func(n uint32, err error),
 	msgHandler func(message []byte, topic string, hs [][]byte, args ...any),
 ) {
-	fetchHandler(0, cerr.ErrNotSupported)
+	fetchHandler(0, util.ErrNotSupported)
 }
 
 func (r *Reader) Ack(

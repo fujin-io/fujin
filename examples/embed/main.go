@@ -17,8 +17,7 @@ import (
 	"github.com/fujin-io/fujin/public/server"
 	"github.com/fujin-io/fujin/public/server/config"
 	nats_server "github.com/nats-io/nats-server/v2/server"
-
-	_ "github.com/fujin-io/fujin/public/connectors/impl/nats/core"
+	// TODO: import plugin
 )
 
 var DefaultFujinServerTestConfig = config.FujinServerConfig{

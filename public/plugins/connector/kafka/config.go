@@ -4,7 +4,7 @@ import (
 	"time"
 
 	pconfig "github.com/fujin-io/fujin/public/config"
-	"github.com/fujin-io/fujin/public/connectors/cerr"
+	"github.com/fujin-io/fujin/public/util"
 )
 
 type Balancer string
@@ -69,12 +69,12 @@ func NewConnectorConfig(common CommonSettings, client ClientSpecificSettings) Co
 
 func (c *Config) Validate() error {
 	if len(c.Common.Brokers) <= 0 {
-		return cerr.ValidationErr("brokers not defined")
+		return util.ValidationErr("brokers not defined")
 	}
 
 	for _, c := range c.Clients {
 		if len(c.ConsumeTopics) <= 0 && c.ProduceTopic == "" {
-			return cerr.ValidationErr("consume topic or produce topic must be defined")
+			return util.ValidationErr("consume topic or produce topic must be defined")
 		}
 	}
 

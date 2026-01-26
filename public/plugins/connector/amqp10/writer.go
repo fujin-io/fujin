@@ -6,7 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/Azure/go-amqp"
-	"github.com/fujin-io/fujin/public/connectors/cerr"
+	"github.com/fujin-io/fujin/public/util"
 )
 
 type Writer struct {
@@ -23,7 +23,7 @@ func NewWriter(conf ConnectorConfig, l *slog.Logger) (*Writer, error) {
 	if conf.Sender == nil {
 		return nil, fmt.Errorf("amqp10: sender config is required")
 	}
-	
+
 	// Initialize Send config with defaults if not provided
 	if conf.Send == nil {
 		conf.Send = &SendConfig{
@@ -116,15 +116,15 @@ func (w *Writer) Flush(ctx context.Context) error {
 }
 
 func (w *Writer) BeginTx(ctx context.Context) error {
-	return cerr.ErrNotSupported
+	return util.ErrNotSupported
 }
 
 func (w *Writer) CommitTx(ctx context.Context) error {
-	return cerr.ErrNotSupported
+	return util.ErrNotSupported
 }
 
 func (w *Writer) RollbackTx(ctx context.Context) error {
-	return cerr.ErrNotSupported
+	return util.ErrNotSupported
 }
 
 func (w *Writer) Endpoint() string {
@@ -147,4 +147,3 @@ func (w *Writer) Close() error {
 	}
 	return nil
 }
-

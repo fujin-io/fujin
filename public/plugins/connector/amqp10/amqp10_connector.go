@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/fujin-io/fujin/public/connectors/util"
 	"github.com/fujin-io/fujin/public/plugins/connector"
+	"github.com/fujin-io/fujin/public/util"
 )
 
 // amqp10Connector implements connector.Connector interface
@@ -80,4 +80,3 @@ func (a *amqp10Connector) NewWriter(config any, name string, l *slog.Logger) (co
 func (a *amqp10Connector) GetConfigValueConverter() connector.ConfigValueConverterFunc {
 	return convertConfigValue
 }
-

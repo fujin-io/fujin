@@ -14,8 +14,6 @@ import (
 	"github.com/fujin-io/fujin/internal/api/fujin/v1/proto/response/server"
 	pool2 "github.com/fujin-io/fujin/internal/common/pool"
 	"github.com/fujin-io/fujin/internal/connectors"
-	"github.com/fujin-io/fujin/public/connectors/reader"
-	internal_reader "github.com/fujin-io/fujin/public/connectors/reader"
 	"github.com/fujin-io/fujin/public/plugins/connector"
 	"github.com/fujin-io/fujin/public/plugins/connector/config"
 	v1 "github.com/fujin-io/fujin/public/proto/fujin/v1"
@@ -2709,56 +2707,6 @@ func (h *handler) fetchEnqueueMsgFuncWithHeaders(
 
 	mhm[autoCommit] = mh
 	return mh
-}
-
-func (h *handler) enqueueMsgFunc(
-	out *Outbound, r internal_reader.Reader, readerType reader.ReaderType, msgConstsLen int,
-) func(message []byte, topic string, args ...any) {
-	staticArgsLen := r.MsgIDStaticArgsLen()
-
-	if readerType == reader.Subscriber {
-		if r.IsAutoCommit() {
-			return func(message []byte, topic string, args ...any) {
-				buf := pool.Get(len(message) + msgConstsLen)
-				buf = append(buf, byte(v1.RESP_CODE_MSG))
-				buf = binary.BigEndian.AppendUint32(buf, uint32(len(message)))
-				buf = append(buf, message...)
-				out.EnqueueProto(buf)
-				pool.Put(buf)
-			}
-		}
-
-		return func(message []byte, topic string, args ...any) {
-			buf := pool.Get(len(message) + len(topic) + msgConstsLen)
-			buf = append(buf, byte(v1.RESP_CODE_MSG))
-			buf = binary.BigEndian.AppendUint32(buf, uint32(len(topic)+staticArgsLen))
-			buf = r.EncodeMsgID(buf, topic, args...)
-			buf = binary.BigEndian.AppendUint32(buf, uint32(len(message)))
-			buf = append(buf, message...)
-			out.EnqueueProto(buf)
-			pool.Put(buf)
-		}
-	}
-
-	if r.IsAutoCommit() {
-		return func(message []byte, topic string, args ...any) {
-			buf := pool.Get(len(message) + msgConstsLen)
-			buf = binary.BigEndian.AppendUint32(buf, uint32(len(message)))
-			buf = append(buf, message...)
-			out.QueueOutboundNoLock(buf)
-			pool.Put(buf)
-		}
-	}
-
-	return func(message []byte, topic string, args ...any) {
-		buf := pool.Get(len(message) + len(topic) + msgConstsLen)
-		buf = binary.BigEndian.AppendUint32(buf, uint32(len(topic)+staticArgsLen))
-		buf = r.EncodeMsgID(buf, topic, args...)
-		buf = binary.BigEndian.AppendUint32(buf, uint32(len(message)))
-		buf = append(buf, message...)
-		out.QueueOutboundNoLock(buf)
-		pool.Put(buf)
-	}
 }
 
 func enqueueSubscribeErr(out *Outbound, cID []byte, respCode v1.RespCode, errCode v1.ErrCode, err error) {
