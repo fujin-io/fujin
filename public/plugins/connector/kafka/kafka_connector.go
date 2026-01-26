@@ -16,6 +16,14 @@ type kafkaConnector struct {
 
 // NewKafkaConnector creates a new Kafka connector instance
 func NewKafkaConnector(config any, l *slog.Logger) (connector.Connector, error) {
+	// Allow nil config for getting converter only
+	if config == nil {
+		return &kafkaConnector{
+			config: Config{},
+			l:      l,
+		}, nil
+	}
+
 	var typedConfig Config
 	if parsedConfig, ok := config.(Config); ok {
 		typedConfig = parsedConfig
@@ -64,4 +72,3 @@ func (k *kafkaConnector) NewWriter(config any, name string, l *slog.Logger) (con
 func (k *kafkaConnector) GetConfigValueConverter() connector.ConfigValueConverterFunc {
 	return convertConfigValue
 }
-

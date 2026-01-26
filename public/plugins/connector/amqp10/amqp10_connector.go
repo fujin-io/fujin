@@ -16,6 +16,14 @@ type amqp10Connector struct {
 
 // NewAMQP10Connector creates a new AMQP10 connector instance
 func NewAMQP10Connector(config any, l *slog.Logger) (connector.Connector, error) {
+	// Allow nil config for getting converter only
+	if config == nil {
+		return &amqp10Connector{
+			config: Config{},
+			l:      l,
+		}, nil
+	}
+
 	var typedConfig Config
 	if parsedConfig, ok := config.(Config); ok {
 		typedConfig = parsedConfig

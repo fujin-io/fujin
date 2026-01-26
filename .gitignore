@@ -37,3 +37,4 @@ config.dev.yaml
 ## test files and dirs
 # sandbox
 TEST_COVERAGE_PLAN.md
+PLUGIN_ROADMAP.md

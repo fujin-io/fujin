@@ -11,5 +11,15 @@ import (
 	_ "github.com/fujin-io/fujin/public/plugins/connector/amqp091"
 	// Kafka connector plugin
 	_ "github.com/fujin-io/fujin/public/plugins/connector/kafka"
+	// MQTT connector plugin
+	_ "github.com/fujin-io/fujin/public/plugins/connector/mqtt"
+	// NATS Core connector plugin
+	_ "github.com/fujin-io/fujin/public/plugins/connector/nats/core"
+	// NSQ connector plugin
+	_ "github.com/fujin-io/fujin/public/plugins/connector/nsq"
+	// Redis PubSub connector plugin
+	_ "github.com/fujin-io/fujin/public/plugins/connector/resp/pubsub"
+	// Redis Streams connector plugin
+	_ "github.com/fujin-io/fujin/public/plugins/connector/resp/streams"
 )
 
