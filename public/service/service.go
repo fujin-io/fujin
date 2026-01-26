@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"log/slog"
 	"os"
@@ -13,6 +12,8 @@ import (
 	"time"
 
 	pconfig "github.com/fujin-io/fujin/public/config"
+	"github.com/fujin-io/fujin/public/plugins/configloader"
+	_ "github.com/fujin-io/fujin/public/plugins/configloader/all"
 	"github.com/fujin-io/fujin/public/plugins/connector"
 	connectorconfig "github.com/fujin-io/fujin/public/plugins/connector/config"
 	"github.com/fujin-io/fujin/public/plugins/decorator"
@@ -207,15 +208,28 @@ var (
 func RunCLI(ctx context.Context) {
 	log.Printf("version: %s", Version)
 
-	if len(os.Args) > 2 {
-		log.Fatal("invalid args")
-	}
-	confPath := ""
-	if len(os.Args) == 2 {
-		confPath = os.Args[1]
+	// Parse command line arguments
+	// Support: ./fujin --bootstrap=bootstrap.yaml
+	var bootstrapPath string
+
+	// Simple argument parsing (can be enhanced with flag package later)
+	for i := 1; i < len(os.Args); i++ {
+		arg := os.Args[i]
+		if strings.HasPrefix(arg, "--bootstrap=") {
+			bootstrapPath = strings.TrimPrefix(arg, "--bootstrap=")
+		} else if strings.HasPrefix(arg, "--") {
+			log.Fatalf("unknown flag: %s", arg)
+		} else {
+			log.Fatalf("unexpected argument: %s (use --bootstrap=path to specify bootstrap config)", arg)
+		}
 	}
 
-	if err := loadConfig(confPath, &conf); err != nil {
+	// Check environment variable for bootstrap path (highest priority)
+	if bootstrapPath == "" {
+		bootstrapPath = os.Getenv("FUJIN_BOOTSTRAP_CONFIG")
+	}
+
+	if err := loadConfig(bootstrapPath, &conf); err != nil {
 		log.Fatal(err)
 	}
 	serverConf, err := conf.parse()
@@ -268,43 +282,135 @@ func configureLogger(logLevel, logType string) *slog.Logger {
 	return slog.New(handler)
 }
 
-func loadConfig(filePath string, cfg *Config) error {
-	paths := []string{}
+// BootstrapConfig represents the bootstrap configuration that contains
+// only the config loader settings.
+type BootstrapConfig struct {
+	ConfigLoader struct {
+		Type     string         `yaml:"type"`
+		Settings map[string]any `yaml:",inline"`
+	} `yaml:"config_loader"`
+}
 
-	if filePath == "" {
-		paths = append(paths, "./config.yaml", "conf/config.yaml", "config/config.yaml")
-	} else {
-		paths = append(paths, filePath)
+// loadConfig loads configuration using the priority system:
+// 1. Environment variables (highest priority)
+// 2. Bootstrap configuration file
+// 3. File system fallback (default)
+func loadConfig(bootstrapPath string, cfg *Config) error {
+	ctx := context.Background()
+
+	// Priority 1: Check environment variables
+	if loaderType := os.Getenv("FUJIN_CONFIG_LOADER"); loaderType != "" {
+		loaderConfig := parseLoaderConfigFromEnv(loaderType)
+		if err := loadConfigWithLoader(ctx, loaderType, loaderConfig, cfg); err != nil {
+			return fmt.Errorf("load config from env: loader type %s: %w", loaderType, err)
+		}
+		log.Printf("loaded config using config loader from environment: %s\n", loaderType)
+		return nil
 	}
 
-	for _, p := range paths {
-		f, err := os.Open(p)
-		if err == nil {
-			log.Printf("reading config from: %s\n", p)
-			data, err := io.ReadAll(f)
-			f.Close()
-			if err != nil {
-				return fmt.Errorf("read config: %w", err)
+	// Priority 2: Check bootstrap configuration
+	// First, try explicitly specified path (from flag or env var)
+	if bootstrapPath != "" {
+		data, err := os.ReadFile(bootstrapPath)
+		if err != nil {
+			return fmt.Errorf("read bootstrap config from %q: %w", bootstrapPath, err)
+		}
+		var bootstrap BootstrapConfig
+		if err := yaml.Unmarshal(data, &bootstrap); err != nil {
+			return fmt.Errorf("unmarshal bootstrap config: %w", err)
+		}
+		if bootstrap.ConfigLoader.Type != "" {
+			if err := loadConfigWithLoader(ctx, bootstrap.ConfigLoader.Type, bootstrap.ConfigLoader.Settings, cfg); err != nil {
+				return fmt.Errorf("load config from bootstrap loader %q: %w", bootstrap.ConfigLoader.Type, err)
 			}
-
-			if err := yaml.Unmarshal(data, &cfg); err != nil {
-				return fmt.Errorf("unmarshal config: %w", err)
-			}
-
+			log.Printf("loaded config using config loader from bootstrap file: %s loader type: %s\n", bootstrapPath, bootstrap.ConfigLoader.Type)
 			return nil
 		}
 	}
 
-	return fmt.Errorf("failed to find config in: %v", paths)
+	// If no explicit bootstrap path, try default locations
+	bootstrapPaths := []string{"./bootstrap.dev.yaml", "./config.bootstrap.yaml", "./bootstrap.yaml"}
+	for _, p := range bootstrapPaths {
+		data, err := os.ReadFile(p)
+		if err == nil {
+			var bootstrap BootstrapConfig
+			if err := yaml.Unmarshal(data, &bootstrap); err == nil {
+				if bootstrap.ConfigLoader.Type != "" {
+					if err := loadConfigWithLoader(ctx, bootstrap.ConfigLoader.Type, bootstrap.ConfigLoader.Settings, cfg); err != nil {
+						return fmt.Errorf("load config from bootstrap loader %q: %w", bootstrap.ConfigLoader.Type, err)
+					}
+					log.Printf("loaded config using config loader from bootstrap: %s (bootstrap: %s)\n", bootstrap.ConfigLoader.Type, p)
+					return nil
+				}
+			}
+		}
+	}
+
+	return errors.New("failed to load config: config loader not specified")
 }
 
-// logRegisteredPlugins logs all registered connectors and decorators
+// loadConfigWithLoader loads configuration using a config loader plugin.
+// The loader directly fills the provided config struct.
+func loadConfigWithLoader(ctx context.Context, loaderType string, loaderConfig any, cfg *Config) error {
+	factory, ok := configloader.Get(loaderType)
+	if !ok {
+		return fmt.Errorf("config loader %q not found (available: %v)", loaderType, configloader.List())
+	}
+
+	// Create a temporary logger for config loading
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+
+	loader, err := factory(loaderConfig, logger)
+	if err != nil {
+		return fmt.Errorf("create config loader: %w", err)
+	}
+
+	if err := loader.Load(ctx, cfg); err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+
+	return nil
+}
+
+// parseLoaderConfigFromEnv parses config loader configuration from environment variables.
+// Currently supports only the "file" loader type.
+func parseLoaderConfigFromEnv(loaderType string) any {
+	switch loaderType {
+	case "file":
+		// Parse paths from environment variable
+		pathsEnv := os.Getenv("FUJIN_CONFIG_LOADER_FILE_PATHS")
+		if pathsEnv == "" {
+			// Default paths if not specified
+			return map[string]any{
+				"paths": []string{"./config.yaml", "conf/config.yaml", "config/config.yaml"},
+			}
+		}
+		// Split comma-separated paths
+		paths := strings.Split(pathsEnv, ",")
+		for i := range paths {
+			paths[i] = strings.TrimSpace(paths[i])
+		}
+		return map[string]any{
+			"paths": paths,
+		}
+	default:
+		// For other loaders, return empty config
+		// They should parse their own env vars
+		return nil
+	}
+}
+
+// logRegisteredPlugins logs all registered connectors, decorators, and config loaders
 func logRegisteredPlugins(l *slog.Logger) {
 	connectors := connector.List()
 	decorators := decorator.List()
+	configLoaders := configloader.List()
 
 	sort.Strings(connectors)
 	sort.Strings(decorators)
+	sort.Strings(configLoaders)
 
 	if len(connectors) > 0 {
 		l.Info("registered connectors", "list", strings.Join(connectors, ", "))
@@ -316,5 +422,9 @@ func logRegisteredPlugins(l *slog.Logger) {
 		l.Info("registered decorators", "list", strings.Join(decorators, ", "))
 	} else {
 		l.Warn("no decorators registered")
+	}
+
+	if len(configLoaders) > 0 {
+		l.Info("registered config loaders", "list", strings.Join(configLoaders, ", "))
 	}
 }

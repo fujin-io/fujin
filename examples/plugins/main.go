@@ -19,12 +19,14 @@ import (
 
 	// Import your custom connector plugin:
 	_ "github.com/fujin-io/fujin/examples/plugins/connector/faker"
+	_ "github.com/fujin-io/fujin/examples/plugins/decorator/ratelimit"
+	_ "github.com/fujin-io/fujin/public/plugins/configloader/file"
 )
 
 // This example demonstrates how to run a Fujin server with custom plugins.
 // It accepts an optional config file path as an argument.
 // Default config search paths: ["./config.yaml", "conf/config.yaml", "config/config.yaml"]
-// Run from repo root: go run -tags fujin examples/plugins/main.go ./examples/plugins/config.yaml
+// Run from repo root: go run -tags fujin examples/plugins/main.go --bootstrap=./examples/plugins/bootstrap.yaml
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	defer cancel()

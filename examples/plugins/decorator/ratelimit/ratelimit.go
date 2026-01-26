@@ -19,6 +19,7 @@ package ratelimit
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -32,6 +33,7 @@ type Config struct {
 }
 
 func init() {
+	fmt.Println("INIT")
 	_ = decorator.Register("ratelimit", func(config any, l *slog.Logger) (decorator.Decorator, error) {
 		cfg := Config{
 			RequestsPerSecond: 1000, // default
@@ -109,4 +111,3 @@ func (w *rateLimitWriter) rateLimit() {
 	}
 	w.lastAccess = time.Now()
 }
-

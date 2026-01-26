@@ -39,7 +39,6 @@ func (m *ManagerV2) GetReader(name string, autoCommit bool) (connector.ReadClose
 
 	// Apply decorators
 	if len(m.conf.Decorators) > 0 {
-		// Decorators are already in the correct type (decoratorconfig.Config)
 		wrapped, err := decorator.ChainReader(r, m.connectorName, m.conf.Decorators, m.l)
 		if err != nil {
 			r.Close()
@@ -87,7 +86,6 @@ func (m *ManagerV2) GetWriter(name string) (connector.WriteCloser, error) {
 
 			// Apply decorators
 			if len(m.conf.Decorators) > 0 {
-				// Decorators are already in the correct type (decoratorconfig.Config)
 				wrapped, err := decorator.ChainWriter(w, m.connectorName, m.conf.Decorators, m.l)
 				if err != nil {
 					w.Close()
@@ -125,7 +123,6 @@ func (m *ManagerV2) PutWriter(c connector.WriteCloser, name string) {
 	m.cmu.RUnlock()
 
 	if !ok {
-		// Pool doesn't exist, just close the writer
 		c.Close()
 		return
 	}

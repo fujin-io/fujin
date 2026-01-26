@@ -19,3 +19,7 @@ fujin:
 connectors:
   kafka_connector:
     protocol: faker
+    decorators:
+      - name: ratelimit
+        config:
+          requests_per_second: 10

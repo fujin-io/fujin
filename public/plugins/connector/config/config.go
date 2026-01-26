@@ -9,9 +9,8 @@ type ConnectorsConfig map[string]ConnectorConfig
 
 // ConnectorConfig represents the configuration for a single connector
 type ConnectorConfig struct {
-	Protocol    string                 `yaml:"protocol"`
-	Overridable []string               `yaml:"overridable,omitempty"` // Whitelist of paths that clients can override
+	Protocol    string                   `yaml:"protocol"`
+	Overridable []string                 `yaml:"overridable,omitempty"` // Whitelist of paths that clients can override
 	Decorators  []decoratorconfig.Config `yaml:"decorators,omitempty"`  // Decorators to apply to this connector
-	Settings    any                    `yaml:"settings"`
+	Settings    any                      `yaml:"settings"`
 }
-
