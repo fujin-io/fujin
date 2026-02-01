@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"sync"
 	"time"
 	"unsafe"
@@ -16,6 +17,8 @@ import (
 	"github.com/fujin-io/fujin/internal/connectors"
 	"github.com/fujin-io/fujin/public/plugins/connector"
 	"github.com/fujin-io/fujin/public/plugins/connector/config"
+	bmw "github.com/fujin-io/fujin/public/plugins/middleware/bind"
+	bmwconfig "github.com/fujin-io/fujin/public/plugins/middleware/bind/config"
 	v1 "github.com/fujin-io/fujin/public/proto/fujin/v1"
 	"github.com/quic-go/quic-go"
 )
@@ -26,6 +29,11 @@ const (
 	OP_INIT
 	OP_INIT_CONNECTOR_NAME_LEN
 	OP_INIT_CONNECTOR_NAME_PAYLOAD
+	OP_INIT_META_COUNT
+	OP_INIT_META_KEY_LEN
+	OP_INIT_META_KEY
+	OP_INIT_META_VALUE_LEN
+	OP_INIT_META_VALUE
 	OP_INIT_CONFIG_OVERRIDES_COUNT
 	OP_INIT_CONFIG_OVERRIDE_KEY_LEN
 	OP_INIT_CONFIG_OVERRIDE_KEY
@@ -186,6 +194,7 @@ type subscribeArgs struct {
 }
 
 type initArgs struct {
+	meta               map[string]string
 	configOverrides    map[string]string
 	connectorNameLen   uint32
 	connectorNameValue string
@@ -193,6 +202,8 @@ type initArgs struct {
 	currentValue       string
 	keyLen             uint32
 	valueLen           uint32
+	metaCount          uint16
+	metaRead           uint16
 	overridesCount     uint16
 	overridesRead      uint16
 }
@@ -1680,8 +1691,95 @@ func (h *handler) handle(buf []byte) error {
 				h.ps.ina.connectorNameValue = string(h.ps.argBuf)
 				pool.Put(h.ps.argBuf)
 				h.connectorConfig = h.baseConfig[h.ps.ina.connectorNameValue]
-				h.ps.state = OP_INIT_CONFIG_OVERRIDES_COUNT
+				h.ps.state = OP_INIT_META_COUNT
 				h.ps.argBuf = pool.Get(v1.Uint16Len)
+			}
+		case OP_INIT_META_COUNT:
+			// Parse meta count (uint16)
+			h.ps.argBuf = append(h.ps.argBuf, b)
+			if len(h.ps.argBuf) >= v1.Uint16Len {
+				h.ps.ina.metaCount = binary.BigEndian.Uint16(h.ps.argBuf[:v1.Uint16Len])
+				pool.Put(h.ps.argBuf)
+				h.ps.argBuf = nil
+				if h.ps.ina.metaCount == 0 {
+					// No meta, proceed to config overrides
+					h.ps.state = OP_INIT_CONFIG_OVERRIDES_COUNT
+					h.ps.argBuf = pool.Get(v1.Uint16Len)
+				} else {
+					h.ps.ina.meta = make(map[string]string, h.ps.ina.metaCount)
+					h.ps.state = OP_INIT_META_KEY_LEN
+					h.ps.argBuf = pool.Get(v1.Uint32Len)
+				}
+			}
+		case OP_INIT_META_KEY_LEN:
+			h.ps.argBuf = append(h.ps.argBuf, b)
+			if len(h.ps.argBuf) >= v1.Uint32Len {
+				h.ps.ina.keyLen = binary.BigEndian.Uint32(h.ps.argBuf[:v1.Uint32Len])
+				pool.Put(h.ps.argBuf)
+				h.ps.argBuf = nil
+				if h.ps.ina.keyLen == 0 {
+					return ErrParseProto
+				}
+				h.ps.argBuf = pool.Get(int(h.ps.ina.keyLen))
+				h.ps.state = OP_INIT_META_KEY
+			}
+		case OP_INIT_META_KEY:
+			toCopy := int(h.ps.ina.keyLen) - len(h.ps.argBuf)
+			avail := len(buf) - i
+			if avail < toCopy {
+				toCopy = avail
+			}
+			if toCopy > 0 {
+				start := len(h.ps.argBuf)
+				h.ps.argBuf = h.ps.argBuf[:start+toCopy]
+				copy(h.ps.argBuf[start:], buf[i:i+toCopy])
+				i = (i + toCopy) - 1
+			} else {
+				h.ps.argBuf = append(h.ps.argBuf, b)
+			}
+			if len(h.ps.argBuf) >= int(h.ps.ina.keyLen) {
+				h.ps.ina.currentKey = string(h.ps.argBuf)
+				pool.Put(h.ps.argBuf)
+				h.ps.state = OP_INIT_META_VALUE_LEN
+				h.ps.argBuf = pool.Get(v1.Uint32Len)
+			}
+		case OP_INIT_META_VALUE_LEN:
+			h.ps.argBuf = append(h.ps.argBuf, b)
+			if len(h.ps.argBuf) >= v1.Uint32Len {
+				h.ps.ina.valueLen = binary.BigEndian.Uint32(h.ps.argBuf[:v1.Uint32Len])
+				pool.Put(h.ps.argBuf)
+				h.ps.argBuf = pool.Get(int(h.ps.ina.valueLen))
+				h.ps.state = OP_INIT_META_VALUE
+			}
+		case OP_INIT_META_VALUE:
+			toCopy := int(h.ps.ina.valueLen) - len(h.ps.argBuf)
+			avail := len(buf) - i
+			if avail < toCopy {
+				toCopy = avail
+			}
+			if toCopy > 0 {
+				start := len(h.ps.argBuf)
+				h.ps.argBuf = h.ps.argBuf[:start+toCopy]
+				copy(h.ps.argBuf[start:], buf[i:i+toCopy])
+				i = (i + toCopy) - 1
+			} else {
+				h.ps.argBuf = append(h.ps.argBuf, b)
+			}
+			if len(h.ps.argBuf) >= int(h.ps.ina.valueLen) {
+				h.ps.ina.currentValue = string(h.ps.argBuf)
+				h.ps.ina.meta[h.ps.ina.currentKey] = h.ps.ina.currentValue
+				pool.Put(h.ps.argBuf)
+				h.ps.argBuf = nil
+				h.ps.ina.metaRead++
+				if h.ps.ina.metaRead >= h.ps.ina.metaCount {
+					// All meta parsed, proceed to config overrides
+					h.ps.state = OP_INIT_CONFIG_OVERRIDES_COUNT
+					h.ps.argBuf = pool.Get(v1.Uint16Len)
+				} else {
+					// Continue with next meta pair
+					h.ps.state = OP_INIT_META_KEY_LEN
+					h.ps.argBuf = pool.Get(v1.Uint32Len)
+				}
 			}
 		case OP_INIT_CONFIG_OVERRIDES_COUNT:
 			// Parse config_overrides count (uint16)
@@ -1692,7 +1790,11 @@ func (h *handler) handle(buf []byte) error {
 				h.ps.argBuf = nil
 				if h.ps.ina.overridesCount == 0 {
 					// No overrides, create Manager with base config
-					if err := h.handleInit(nil); err != nil {
+					meta := h.ps.ina.meta
+					if meta == nil {
+						meta = make(map[string]string)
+					}
+					if err := h.handleInit(meta, nil); err != nil {
 						return err
 					}
 					h.ps.ina = initArgs{}
@@ -1765,7 +1867,11 @@ func (h *handler) handle(buf []byte) error {
 				h.ps.ina.overridesRead++
 				if h.ps.ina.overridesRead >= h.ps.ina.overridesCount {
 					// All overrides parsed, create Manager
-					if err := h.handleInit(h.ps.ina.configOverrides); err != nil {
+					meta := h.ps.ina.meta
+					if meta == nil {
+						meta = make(map[string]string)
+					}
+					if err := h.handleInit(meta, h.ps.ina.configOverrides); err != nil {
 						return err
 					}
 					h.ps.ina = initArgs{}
@@ -1942,16 +2048,33 @@ func (h *handler) handle(buf []byte) error {
 }
 
 // handleInit processes INIT command and creates Manager with config overrides
-func (h *handler) handleInit(configOverrides map[string]string) error {
+func (h *handler) handleInit(meta map[string]string, configOverrides map[string]string) error {
 	if h.connected {
 		// Already initialized, ignore
 		return fmt.Errorf("already initialized")
 	}
 
-	// Apply config overrides if provided
+	// Process bind middlewares
+	overrides := make(map[string]string, len(configOverrides))
+	maps.Copy(overrides, configOverrides)
+
+	// Convert bind middleware configs
+	bindMiddlewareConfigs := make([]bmwconfig.Config, 0, len(h.connectorConfig.BindMiddlewares))
+	bindMiddlewareConfigs = append(bindMiddlewareConfigs, h.connectorConfig.BindMiddlewares...)
+
+	// Process bind middlewares
+	if len(bindMiddlewareConfigs) > 0 {
+		if err := bmw.Chain(h.ctx, meta, bindMiddlewareConfigs, h.l); err != nil {
+			h.l.Warn("bind middleware rejected", "connector", h.ps.ina.connectorNameValue, "err", err)
+			h.out.EnqueueProtoMulti([]byte{byte(v1.RESP_CODE_INIT)}, errProtoBuf(err))
+			return nil
+		}
+	}
+
+	// Apply config overrides if provided (may have been modified by middlewares)
 	modifiedConfig := h.connectorConfig
-	if len(configOverrides) > 0 {
-		modifiedConfigForOverride, err := connectors.ApplyOverrides(h.connectorConfig, configOverrides)
+	if len(overrides) > 0 {
+		modifiedConfigForOverride, err := connectors.ApplyOverrides(h.connectorConfig, overrides)
 		if err != nil {
 			h.out.EnqueueProtoMulti([]byte{byte(v1.RESP_CODE_INIT)}, errProtoBuf(err))
 			return nil

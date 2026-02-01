@@ -7,8 +7,7 @@ import (
 )
 
 func init() {
-	if err := connector.Register("amqp10", NewAMQP10Connector); err != nil {
-		panic(fmt.Sprintf("failed to register amqp10 connector: %v", err))
+	if err := connector.Register("amqp10", newAMQP10Connector); err != nil {
+		panic(fmt.Sprintf("register amqp10 connector: %v", err))
 	}
 }
-

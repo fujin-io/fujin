@@ -1,20 +1,23 @@
-// Package metrics provides a Prometheus metrics decorator for connectors.
+// Package metrics provides a Prometheus metrics connector for connectors.
 // Import this package to enable metrics collection:
 //
-//	import _ "github.com/fujin-io/fujin/public/plugins/decorator/metrics"
+//	import _ "github.com/fujin-io/fujin/public/plugins/middleware/connector/metrics"
 //
 // Configure in YAML:
 //
-//	decorators:
+//	connector_middlewares:
 //	  - name: metrics
 //	    config:
 //	      enabled: true
 //	      addr: ":9090"      # HTTP server address for /metrics endpoint
 //	      path: "/metrics"   # Metrics endpoint path
+//
+// Only one http server will be started to serve metrics.
 package metrics
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -24,7 +27,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/fujin-io/fujin/public/plugins/connector"
-	"github.com/fujin-io/fujin/public/plugins/decorator"
+	cmv "github.com/fujin-io/fujin/public/plugins/middleware/connector"
 )
 
 var (
@@ -38,7 +41,7 @@ var (
 	httpSrvOnce sync.Once
 )
 
-// Config for metrics decorator
+// Config for metrics connector
 type Config struct {
 	Enabled bool   `yaml:"enabled"`
 	Addr    string `yaml:"addr"` // HTTP server address (e.g., ":9090")
@@ -46,10 +49,12 @@ type Config struct {
 }
 
 func init() {
-	_ = decorator.Register("metrics", newMetricsDecorator)
+	if err := cmv.Register("metrics", newMetricsMiddleware); err != nil {
+		panic(fmt.Sprintf("register metrics connector: %v", err))
+	}
 }
 
-func newMetricsDecorator(config any, l *slog.Logger) (decorator.Decorator, error) {
+func newMetricsMiddleware(config any, l *slog.Logger) (cmv.Middleware, error) {
 	cfg := Config{
 		Enabled: true,
 		Addr:    ":9090",    // default address
@@ -77,11 +82,10 @@ func newMetricsDecorator(config any, l *slog.Logger) (decorator.Decorator, error
 
 	if cfg.Enabled {
 		initMetrics()
-		// HTTP server is initialized via Init() function at server startup
-		// This allows using config from observability.metrics section
+		initHTTPServer(cfg.Addr, cfg.Path, l)
 	}
 
-	return &metricsDecorator{enabled: cfg.Enabled, l: l}, nil
+	return &metricsMiddleware{enabled: cfg.Enabled, l: l}, nil
 }
 
 func initMetrics() {
@@ -165,20 +169,20 @@ func ObserveProduceLatency(connector string, d time.Duration) {
 	}
 }
 
-// metricsDecorator implements decorator.Decorator
-type metricsDecorator struct {
+// metricsMiddleware implements connector.Middleware
+type metricsMiddleware struct {
 	enabled bool
 	l       *slog.Logger
 }
 
-func (d *metricsDecorator) WrapWriter(w connector.Writer, connectorName string) connector.Writer {
+func (d *metricsMiddleware) WrapWriter(w connector.WriteCloser, connectorName string) connector.WriteCloser {
 	if !d.enabled {
 		return w
 	}
 	return &metricsWriterWrapper{w: w, connectorName: connectorName}
 }
 
-func (d *metricsDecorator) WrapReader(r connector.Reader, connectorName string) connector.Reader {
+func (d *metricsMiddleware) WrapReader(r connector.ReadCloser, connectorName string) connector.ReadCloser {
 	if !d.enabled {
 		return r
 	}
@@ -188,7 +192,7 @@ func (d *metricsDecorator) WrapReader(r connector.Reader, connectorName string) 
 // Writer wrapper
 
 type metricsWriterWrapper struct {
-	w             connector.Writer
+	w             connector.WriteCloser
 	connectorName string
 }
 
@@ -255,10 +259,17 @@ func (d *metricsWriterWrapper) RollbackTx(ctx context.Context) error {
 	return err
 }
 
+func (d *metricsWriterWrapper) Close() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	_ = Shutdown(ctx)
+	return d.w.Close()
+}
+
 // Reader wrapper
 
 type metricsReaderWrapper struct {
-	r             connector.Reader
+	r             connector.ReadCloser
 	connectorName string
 }
 
@@ -354,4 +365,11 @@ func (d *metricsReaderWrapper) EncodeMsgID(buf []byte, topic string, args ...any
 
 func (d *metricsReaderWrapper) IsAutoCommit() bool {
 	return d.r.IsAutoCommit()
+}
+
+func (d *metricsReaderWrapper) Close() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	_ = Shutdown(ctx)
+	return d.r.Close()
 }

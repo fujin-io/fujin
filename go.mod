@@ -6,7 +6,6 @@ require (
 	github.com/Azure/go-amqp v1.5.0
 	github.com/bytedance/sonic v1.14.2
 	github.com/eclipse/paho.golang v0.23.0
-	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/nats-io/nats-server/v2 v2.12.1
 	github.com/nats-io/nats.go v1.47.0
 	github.com/nsqio/go-nsq v1.1.0

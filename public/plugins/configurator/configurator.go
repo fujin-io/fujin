@@ -1,7 +1,7 @@
-// Package configloader provides a plugin system for configuration loaders.
+// Package configurator provides a plugin system for configuration loaders.
 // Config loaders load configuration from various sources (files, vault, etcd, etc.)
 // instead of static YAML files.
-package configloader
+package configurator
 
 import (
 	"context"
@@ -10,9 +10,9 @@ import (
 	"sync"
 )
 
-// ConfigLoader loads configuration from a source.
+// Boot loads configuration from a source.
 // Load is called once at application startup.
-type ConfigLoader interface {
+type Configurator interface {
 	// Load loads and parses configuration from the source into the provided config struct.
 	// The loader is responsible for determining the format (JSON, YAML, etc.)
 	// and parsing it directly into the config struct.
@@ -20,16 +20,16 @@ type ConfigLoader interface {
 	Load(ctx context.Context, cfg any) error
 }
 
-// Factory creates a config loader from configuration.
+// Factory creates a configurator from configuration.
 // config is the loader-specific configuration (can be nil).
-type Factory func(config any, l *slog.Logger) (ConfigLoader, error)
+type Factory func(l *slog.Logger) (Configurator, error)
 
 var (
 	factories = make(map[string]Factory)
 	mu        sync.RWMutex
 )
 
-// Register registers a config loader factory with the given name.
+// Register registers a configurator factory with the given name.
 // This is typically called from init() in loader implementations.
 // Returns an error if the loader is already registered.
 func Register(name string, factory Factory) error {
@@ -37,14 +37,14 @@ func Register(name string, factory Factory) error {
 	defer mu.Unlock()
 
 	if _, exists := factories[name]; exists {
-		return fmt.Errorf("config loader %q already registered", name)
+		return fmt.Errorf("configurator %q already registered", name)
 	}
 
 	factories[name] = factory
 	return nil
 }
 
-// Get returns a config loader factory by name.
+// Get returns a configurator factory by name.
 func Get(name string) (Factory, bool) {
 	mu.RLock()
 	defer mu.RUnlock()
@@ -53,7 +53,7 @@ func Get(name string) (Factory, bool) {
 	return factory, ok
 }
 
-// List returns all registered config loader names.
+// List returns all registered configurator names.
 func List() []string {
 	mu.RLock()
 	defer mu.RUnlock()
@@ -64,4 +64,3 @@ func List() []string {
 	}
 	return names
 }
-

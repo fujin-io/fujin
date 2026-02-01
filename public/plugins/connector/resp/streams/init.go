@@ -7,7 +7,7 @@ import (
 )
 
 func init() {
-	if err := connector.Register("resp_streams", NewStreamsConnector); err != nil {
-		panic(fmt.Sprintf("failed to register resp_streams connector: %v", err))
+	if err := connector.Register("resp_streams", newRESPStreamsConnector); err != nil {
+		panic(fmt.Sprintf("register resp_streams connector: %v", err))
 	}
 }

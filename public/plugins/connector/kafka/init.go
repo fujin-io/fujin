@@ -7,7 +7,7 @@ import (
 )
 
 func init() {
-	if err := connector.Register("kafka", NewKafkaConnector); err != nil {
-		panic(fmt.Sprintf("failed to register kafka connector: %v", err))
+	if err := connector.Register("kafka", newKafkaConnector); err != nil {
+		panic(fmt.Sprintf("register kafka connector: %v", err))
 	}
 }

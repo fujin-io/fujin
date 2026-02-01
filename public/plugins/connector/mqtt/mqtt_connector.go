@@ -14,8 +14,8 @@ type mqttConnector struct {
 	l      *slog.Logger
 }
 
-// NewMQTTConnector creates a new MQTT connector instance
-func NewMQTTConnector(config any, l *slog.Logger) (connector.Connector, error) {
+// newMQTTConnector creates a new MQTT connector instance
+func newMQTTConnector(config any, l *slog.Logger) (connector.Connector, error) {
 	// Allow nil config for getting converter only
 	if config == nil {
 		return &mqttConnector{

@@ -5,8 +5,10 @@ import (
 	"os/signal"
 	"syscall"
 
+	_ "github.com/fujin-io/fujin/public/plugins/configurator/all"
 	_ "github.com/fujin-io/fujin/public/plugins/connector/all"
-	_ "github.com/fujin-io/fujin/public/plugins/decorator/all"
+	_ "github.com/fujin-io/fujin/public/plugins/middleware/bind/all"
+	_ "github.com/fujin-io/fujin/public/plugins/middleware/connector/all"
 	"github.com/fujin-io/fujin/public/service"
 )
 

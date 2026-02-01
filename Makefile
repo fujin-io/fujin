@@ -3,7 +3,7 @@
 APP_NAME := fujin
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
-ALL_TAGS = kafka,nats_core,amqp091,amqp10,resp_pubsub,resp_streams,mqtt,nsq,observability,grpc,fujin
+ALL_TAGS = grpc,fujin
 
 GO_BUILD_TAGS ?= ${ALL_TAGS}
 
@@ -18,6 +18,7 @@ ifeq ($(OS),Windows_NT)
     RMDIR := rmdir /S /Q
     MKDIR := mkdir
     PATHSEP := \\
+	BOOTCONF := setx FUJIN_CONFIGURATOR "file" && setx FUJIN_CONFIGURATOR_FILE_PATHS "./config.dev.yaml"
 else
     DETECTED_OS := $(shell uname -s)
     BINARY_EXT :=
@@ -25,6 +26,7 @@ else
     RMDIR := rm -rf
     MKDIR := mkdir -p
     PATHSEP := /
+	BOOTCONF := export FUJIN_CONFIGURATOR=file && export FUJIN_CONFIGURATOR_FILE_PATHS=./config.dev.yaml
 endif
 
 BIN_DIR := bin
@@ -51,41 +53,7 @@ endif
 .PHONY: run
 run:
 	@echo "==> Running"
-ifeq ($(OS),Windows_NT)
-	@if defined BOOTSTRAP ( \
-		echo Using bootstrap config: $(BOOTSTRAP) && \
-		$(BINARY) --bootstrap=$(BOOTSTRAP) \
-	) else if exist bootstrap.dev.yaml ( \
-		echo Using bootstrap.dev.yaml && \
-		$(BINARY) --bootstrap=bootstrap.dev.yaml \
-	) else if exist config.bootstrap.yaml ( \
-		echo Using config.bootstrap.yaml && \
-		$(BINARY) --bootstrap=config.bootstrap.yaml \
-	) else if exist bootstrap.yaml ( \
-		echo Using bootstrap.yaml && \
-		$(BINARY) --bootstrap=bootstrap.yaml \
-	) else ( \
-		echo Using default config paths && \
-		$(BINARY) \
-	)
-else
-	@if [ -n "$(BOOTSTRAP)" ]; then \
-		echo "Using bootstrap config: $(BOOTSTRAP)"; \
-		$(BINARY) --bootstrap=$(BOOTSTRAP); \
-	elif [ -f "./bootstrap.dev.yaml" ]; then \
-		echo "Using bootstrap.dev.yaml"; \
-		$(BINARY) --bootstrap=./bootstrap.dev.yaml; \
-	elif [ -f "./config.bootstrap.yaml" ]; then \
-		echo "Using config.bootstrap.yaml"; \
-		$(BINARY) --bootstrap=./config.bootstrap.yaml; \
-	elif [ -f "./bootstrap.yaml" ]; then \
-		echo "Using bootstrap.yaml"; \
-		$(BINARY) --bootstrap=./bootstrap.yaml; \
-	else \
-		echo "Using default config paths (./config.yaml, conf/config.yaml, config/config.yaml)"; \
-		$(BINARY); \
-	fi
-endif
+	@$(BOOTCONF) && $(BINARY)
 
 .PHONY: generate
 generate:
@@ -109,7 +77,7 @@ help:
 	@echo "  make bench                             Run benchmarks."
 	@echo ""
 	@echo "Config Loading Priority:"
-	@echo "  1. Environment variable FUJIN_CONFIG_LOADER (if set)"
+	@echo "  1. Environment variable FUJIN_CONFIGURATOR (if set)"
 	@echo "  2. BOOTSTRAP parameter or ./bootstrap.dev.yaml (default) or ./config.bootstrap.yaml or ./bootstrap.yaml (if exists)"
 	@echo "  3. Default file paths: ./config.yaml, conf/config.yaml, config/config.yaml"
 	@echo ""
@@ -117,7 +85,7 @@ help:
 	@echo "  VERSION (default: git describe || dev) Version tag for builds."
 	@echo "  GO_BUILD_TAGS (default: all features)  Comma-separated Go build tags."
 	@echo "  BOOTSTRAP (optional)                   Path to bootstrap config file."
-	@echo "  FUJIN_CONFIG_LOADER (optional)         Config loader type (e.g., vault, file)."
+	@echo "  FUJIN_CONFIGURATOR (optional)         Config loader type (e.g., vault, file)."
 	@echo "  FUJIN_BOOTSTRAP_CONFIG (optional)      Path to bootstrap config (env var)."
 	@echo ""
 	@echo "Platform: $(DETECTED_OS)"

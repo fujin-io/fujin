@@ -13,6 +13,8 @@ import (
 	"github.com/fujin-io/fujin/internal/connectors"
 	"github.com/fujin-io/fujin/public/plugins/connector"
 	connectorconfig "github.com/fujin-io/fujin/public/plugins/connector/config"
+	bmw "github.com/fujin-io/fujin/public/plugins/middleware/bind"
+	bmwconfig "github.com/fujin-io/fujin/public/plugins/middleware/bind/config"
 	pb "github.com/fujin-io/fujin/public/proto/grpc/v1"
 	serverconfig "github.com/fujin-io/fujin/public/server/config"
 	"google.golang.org/grpc"
@@ -223,8 +225,8 @@ func (s *streamSession) receiveLoop() error {
 // handleRequest processes a single request
 func (s *streamSession) handleRequest(req *pb.FujinRequest) error {
 	switch r := req.Request.(type) {
-	case *pb.FujinRequest_Init:
-		return s.handleInit(r.Init)
+	case *pb.FujinRequest_Bind:
+		return s.handleBind(r.Bind)
 	case *pb.FujinRequest_Produce:
 		return s.handleProduce(r.Produce)
 	case *pb.FujinRequest_Hproduce:
@@ -254,13 +256,13 @@ func (s *streamSession) handleRequest(req *pb.FujinRequest) error {
 	}
 }
 
-// handleInit processes INIT request - initializes the session and applies config overrides
-func (s *streamSession) handleInit(req *pb.InitRequest) error {
+// handleBind processes BIND request - initializes the session and applies config overrides
+func (s *streamSession) handleBind(req *pb.BindRequest) error {
 	if s.connected {
 		return s.sendResponse(&pb.FujinResponse{
-			Response: &pb.FujinResponse_Init{
-				Init: &pb.InitResponse{
-					Error: "already initialized",
+			Response: &pb.FujinResponse_Bind{
+				Bind: &pb.BindResponse{
+					Error: "already binded",
 				},
 			},
 		})
@@ -269,24 +271,59 @@ func (s *streamSession) handleInit(req *pb.InitRequest) error {
 	connectorConfig, ok := s.connectorsConfig[req.Connector]
 	if !ok {
 		return s.sendResponse(&pb.FujinResponse{
-			Response: &pb.FujinResponse_Init{
-				Init: &pb.InitResponse{
+			Response: &pb.FujinResponse_Bind{
+				Bind: &pb.BindResponse{
 					Error: "connector not found",
 				},
 			},
 		})
 	}
-	// Apply config overrides if provided
+
+	// Process bind middlewares before applying config overrides
+	// This allows middlewares to modify config overrides if needed
+	configOverrides := make(map[string]string, len(req.ConfigOverrides))
+	for k, v := range req.ConfigOverrides {
+		configOverrides[k] = v
+	}
+
+	// Convert meta from protobuf map to regular map
+	meta := make(map[string]string, len(req.Meta))
+	for k, v := range req.Meta {
+		meta[k] = v
+	}
+
+	// Convert bind middleware configs
+	bindMiddlewareConfigs := make([]bmwconfig.Config, 0, len(connectorConfig.BindMiddlewares))
+	for _, cfg := range connectorConfig.BindMiddlewares {
+		fmt.Printf("%+v\n", cfg)
+		bindMiddlewareConfigs = append(bindMiddlewareConfigs, cfg)
+	}
+
+	// Process bind middlewares
+	if len(bindMiddlewareConfigs) > 0 {
+		if err := bmw.Chain(s.ctx, meta, bindMiddlewareConfigs, s.l); err != nil {
+			s.l.Warn("bind middleware rejected", "connector", req.Connector, "err", err)
+			return s.sendResponse(&pb.FujinResponse{
+				Response: &pb.FujinResponse_Bind{
+					Bind: &pb.BindResponse{
+						Error: err.Error(),
+					},
+				},
+			})
+		}
+	}
+
+	// Apply config overrides if provided (may have been modified by middlewares)
 	modifiedConfig := connectorConfig
-	if len(req.ConfigOverrides) > 0 {
+	if len(configOverrides) > 0 {
 		// ApplyOverrides works with public/connectors.Config
 		// The function is in internal/connectors but uses public/connectors.Config
-		modifiedConfigForOverride, err := connectors.ApplyOverrides(connectorConfig, req.ConfigOverrides)
+		modifiedConfigForOverride, err := connectors.ApplyOverrides(connectorConfig, configOverrides)
 		if err != nil {
 			s.l.Error("apply config overrides", "err", err)
 			return s.sendResponse(&pb.FujinResponse{
-				Response: &pb.FujinResponse_Init{
-					Init: &pb.InitResponse{
+				Response: &pb.FujinResponse_Bind{
+					Bind: &pb.BindResponse{
 						Error: err.Error(),
 					},
 				},
@@ -300,8 +337,8 @@ func (s *streamSession) handleInit(req *pb.InitRequest) error {
 	s.connected = true
 
 	return s.sendResponse(&pb.FujinResponse{
-		Response: &pb.FujinResponse_Init{
-			Init: &pb.InitResponse{
+		Response: &pb.FujinResponse_Bind{
+			Bind: &pb.BindResponse{
 				Error: "",
 			},
 		},
@@ -315,7 +352,7 @@ func (s *streamSession) handleProduce(req *pb.ProduceRequest) error {
 			Response: &pb.FujinResponse_Produce{
 				Produce: &pb.ProduceResponse{
 					CorrelationId: req.CorrelationId,
-					Error:         "not initialized",
+					Error:         "not binded",
 				},
 			},
 		})
@@ -410,7 +447,7 @@ func (s *streamSession) handleHProduce(req *pb.HProduceRequest) error {
 			Response: &pb.FujinResponse_Hproduce{
 				Hproduce: &pb.HProduceResponse{
 					CorrelationId: req.CorrelationId,
-					Error:         "not initialized",
+					Error:         "not binded",
 				},
 			},
 		})
@@ -511,7 +548,7 @@ func (s *streamSession) handleBeginTx(req *pb.BeginTxRequest) error {
 			Response: &pb.FujinResponse_BeginTx{
 				BeginTx: &pb.BeginTxResponse{
 					CorrelationId: req.CorrelationId,
-					Error:         "not initialized",
+					Error:         "not binded",
 				},
 			},
 		})
@@ -557,7 +594,7 @@ func (s *streamSession) handleCommitTx(req *pb.CommitTxRequest) error {
 			Response: &pb.FujinResponse_CommitTx{
 				CommitTx: &pb.CommitTxResponse{
 					CorrelationId: req.CorrelationId,
-					Error:         "not initialized",
+					Error:         "not binded",
 				},
 			},
 		})
@@ -606,7 +643,7 @@ func (s *streamSession) handleRollbackTx(req *pb.RollbackTxRequest) error {
 			Response: &pb.FujinResponse_RollbackTx{
 				RollbackTx: &pb.RollbackTxResponse{
 					CorrelationId: req.CorrelationId,
-					Error:         "not initialized",
+					Error:         "not binded",
 				},
 			},
 		})
@@ -655,7 +692,7 @@ func (s *streamSession) handleSubscribe(req *pb.SubscribeRequest) error {
 			Response: &pb.FujinResponse_Subscribe{
 				Subscribe: &pb.SubscribeResponse{
 					CorrelationId:  req.CorrelationId,
-					Error:          "not initialized",
+					Error:          "not binded",
 					SubscriptionId: 0,
 				},
 			},
@@ -730,7 +767,7 @@ func (s *streamSession) handleHSubscribe(req *pb.HSubscribeRequest) error {
 			Response: &pb.FujinResponse_Hsubscribe{
 				Hsubscribe: &pb.HSubscribeResponse{
 					CorrelationId:  req.CorrelationId,
-					Error:          "not initialized",
+					Error:          "not binded",
 					SubscriptionId: 0,
 				},
 			},
@@ -806,7 +843,7 @@ func (s *streamSession) handleFetch(req *pb.FetchRequest) error {
 			Response: &pb.FujinResponse_Fetch{
 				Fetch: &pb.FetchResponse{
 					CorrelationId:  req.CorrelationId,
-					Error:          "not initialized",
+					Error:          "not binded",
 					SubscriptionId: 0,
 				},
 			},
@@ -924,7 +961,7 @@ func (s *streamSession) handleHFetch(req *pb.HFetchRequest) error {
 			Response: &pb.FujinResponse_Hfetch{
 				Hfetch: &pb.HFetchResponse{
 					CorrelationId:  req.CorrelationId,
-					Error:          "not initialized",
+					Error:          "not binded",
 					SubscriptionId: 0,
 				},
 			},
@@ -1007,14 +1044,14 @@ func (s *streamSession) handleHFetch(req *pb.HFetchRequest) error {
 		}
 
 		// Convert headers from [][]byte to []*pb.Header
-		var protoHeaders []*pb.Header
+		var protoHeaders []*pb.KV
 		for i := 0; i < len(hs); i += 2 {
 			key := hs[i]
 			var val []byte
 			if i+1 < len(hs) {
 				val = hs[i+1]
 			}
-			protoHeaders = append(protoHeaders, &pb.Header{
+			protoHeaders = append(protoHeaders, &pb.KV{
 				Key:   key,
 				Value: val,
 			})
@@ -1058,7 +1095,7 @@ func (s *streamSession) handleUnsubscribe(req *pb.UnsubscribeRequest) error {
 			Response: &pb.FujinResponse_Unsubscribe{
 				Unsubscribe: &pb.UnsubscribeResponse{
 					CorrelationId: req.CorrelationId,
-					Error:         "not initialized",
+					Error:         "not binded",
 				},
 			},
 		})
@@ -1125,14 +1162,14 @@ func (s *streamSession) subscribeLoop(ctx context.Context, subID byte, state *re
 				msgID = state.reader.EncodeMsgID(msgIDBuf, topic, args...)
 			}
 
-			var protoHeaders []*pb.Header
+			var protoHeaders []*pb.KV
 			for i := 0; i < len(hs); i += 2 {
 				key := hs[i]
 				var val []byte
 				if i+1 < len(hs) {
 					val = hs[i+1]
 				}
-				protoHeaders = append(protoHeaders, &pb.Header{
+				protoHeaders = append(protoHeaders, &pb.KV{
 					Key:   key,
 					Value: val,
 				})
@@ -1210,7 +1247,7 @@ func (s *streamSession) handleAck(req *pb.AckRequest) error {
 			Response: &pb.FujinResponse_Ack{
 				Ack: &pb.AckResponse{
 					CorrelationId: req.CorrelationId,
-					Error:         "not initialized",
+					Error:         "not binded",
 				},
 			},
 		})
@@ -1285,7 +1322,7 @@ func (s *streamSession) handleNack(req *pb.NackRequest) error {
 			Response: &pb.FujinResponse_Nack{
 				Nack: &pb.NackResponse{
 					CorrelationId: req.CorrelationId,
-					Error:         "not initialized",
+					Error:         "not binded",
 				},
 			},
 		})

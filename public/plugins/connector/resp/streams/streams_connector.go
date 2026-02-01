@@ -14,8 +14,8 @@ type streamsConnector struct {
 	l      *slog.Logger
 }
 
-// NewStreamsConnector creates a new Redis Streams connector instance.
-func NewStreamsConnector(config any, l *slog.Logger) (connector.Connector, error) {
+// newRESPStreamsConnector creates a new Redis Streams connector instance.
+func newRESPStreamsConnector(config any, l *slog.Logger) (connector.Connector, error) {
 	// Allow nil config for getting converter only
 	if config == nil {
 		return &streamsConnector{

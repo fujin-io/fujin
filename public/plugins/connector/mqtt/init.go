@@ -7,8 +7,7 @@ import (
 )
 
 func init() {
-	if err := connector.Register("mqtt", NewMQTTConnector); err != nil {
-		panic(fmt.Sprintf("failed to register mqtt connector: %v", err))
+	if err := connector.Register("mqtt", newMQTTConnector); err != nil {
+		panic(fmt.Sprintf("register mqtt connector: %v", err))
 	}
 }
-

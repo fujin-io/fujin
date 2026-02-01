@@ -8,7 +8,7 @@ import (
 	"github.com/fujin-io/fujin/internal/common/pool"
 	"github.com/fujin-io/fujin/public/plugins/connector"
 	connectorconfig "github.com/fujin-io/fujin/public/plugins/connector/config"
-	"github.com/fujin-io/fujin/public/plugins/decorator"
+	cmw "github.com/fujin-io/fujin/public/plugins/middleware/connector"
 )
 
 type ManagerV2 struct {
@@ -37,12 +37,12 @@ func (m *ManagerV2) GetReader(name string, autoCommit bool) (connector.ReadClose
 		return nil, fmt.Errorf("new reader: %w", err)
 	}
 
-	// Apply decorators
-	if len(m.conf.Decorators) > 0 {
-		wrapped, err := decorator.ChainReader(r, m.connectorName, m.conf.Decorators, m.l)
+	// Apply connector middlewares
+	if len(m.conf.ConnectorMiddlewares) > 0 {
+		wrapped, err := cmw.ChainReader(r, m.connectorName, m.conf.ConnectorMiddlewares, m.l)
 		if err != nil {
 			r.Close()
-			return nil, fmt.Errorf("apply decorators: %w", err)
+			return nil, fmt.Errorf("apply connector middlewares: %w", err)
 		}
 		return &decoratedReadCloser{Reader: wrapped, closer: r}, nil
 	}
@@ -84,12 +84,12 @@ func (m *ManagerV2) GetWriter(name string) (connector.WriteCloser, error) {
 				return nil, err
 			}
 
-			// Apply decorators
-			if len(m.conf.Decorators) > 0 {
-				wrapped, err := decorator.ChainWriter(w, m.connectorName, m.conf.Decorators, m.l)
+			// Apply connector middlewares
+			if len(m.conf.ConnectorMiddlewares) > 0 {
+				wrapped, err := cmw.ChainWriter(w, m.connectorName, m.conf.ConnectorMiddlewares, m.l)
 				if err != nil {
 					w.Close()
-					return nil, fmt.Errorf("apply decorators: %w", err)
+					return nil, fmt.Errorf("apply connector middlewares: %w", err)
 				}
 				return &decoratedWriteCloser{Writer: wrapped, closer: w}, nil
 			}

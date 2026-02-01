@@ -32,16 +32,28 @@ grpc:
     min_time: 5m
     permit_without_stream: false
 connectors:
-  writers:
-    pub:
-      protocol: kafka
-      settings:
+  kafka_connector:
+    protocol: kafka
+    settings:
+      common:
         brokers: [localhost:9092, localhost:9093, localhost:9094]
-        topic: my_pub_topic
-        allow_auto_topic_creation: true
-        linger: 10ms
-        max_buffered_records: 10000
-        disable_idempotent_write: false
+      clients:
+        pub:
+          allow_auto_topic_creation: true
+          produce_topic: my_pub_topic
+          linger: 10ms
+          max_buffered_records: 10000
+          disable_idempotent_write: false
+        sub:
+          consume_topics: [my_pub_topic]
+          group: fujin
+          allow_auto_topic_creation: true
+          max_poll_records: 10000
+          auto_commit_interval: 5s
+          auto_commit_marks: false
+          block_rebalance_on_poll: false
+          balancers: [round_robin] # sticky/cooperative_sticky/range/round_robin (defaults to cooperative_sticky)
+          fetch_isolation_level: read_commited # read_commited/read_uncommited (defaults to read_uncommited)
     # pub:
     #   protocol: resp_pubsub
     #   settings:
@@ -110,21 +122,6 @@ connectors:
     #       size: 10000
     #       pre_alloc: true
     #       release_timeout: 5s
-  readers:
-    sub:
-      protocol: kafka
-      settings:
-        brokers: [localhost:9092, localhost:9093, localhost:9094]
-        topic: my_pub_topic
-        group: fujin
-        allow_auto_topic_creation: true
-        max_poll_records: 10000
-        auto_commit_interval: 5s
-        auto_commit_marks: false
-        block_rebalance_on_poll: false
-        balancers:
-          - round_robin # sticky/cooperative_sticky/range/round_robin (defaults to cooperative_sticky)
-        fetch_isolation_level: read_commited # read_commited/read_uncommited (defaults to read_uncommited)
     # sub:
     #   protocol: nats
     #   nats:
@@ -190,17 +187,3 @@ connectors:
     #     topic: my_topic
     #     channel: my_channel
     #     max_in_flight: 1000000
-observability:
-  metrics:
-    enabled: true
-    addr: ":9090"
-    path: "/metrics"
-  tracing:
-    enabled: true
-    otlp_endpoint: "localhost:4317"
-    insecure: true
-    sample_ratio: 0.1
-    resource:
-      service_name: "fujin"
-      service_version: "dev"
-      env: "dev"

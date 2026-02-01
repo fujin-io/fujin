@@ -1,11 +1,11 @@
-// Package tracing provides an OpenTelemetry distributed tracing decorator for connectors.
+// Package tracing provides an OpenTelemetry distributed tracing connector middleware for connectors.
 // Import this package to enable distributed tracing:
 //
-//	import _ "github.com/fujin-io/fujin/public/plugins/decorator/tracing"
+//	import _ "github.com/fujin-io/fujin/public/plugins/middleware/connector/tracing"
 //
 // Configure in YAML:
 //
-//	decorators:
+//	connector_middlewares:
 //	  - name: tracing
 //	    config:
 //	      enabled: true
@@ -13,9 +13,11 @@ package tracing
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
+	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -27,7 +29,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/fujin-io/fujin/public/plugins/connector"
-	"github.com/fujin-io/fujin/public/plugins/decorator"
+	cmw "github.com/fujin-io/fujin/public/plugins/middleware/connector"
 )
 
 var (
@@ -36,7 +38,7 @@ var (
 	tracerProviderOnce   sync.Once
 )
 
-// Config for tracing decorator
+// Config for tracing connector middleware
 type Config struct {
 	Enabled        bool    `yaml:"enabled"`
 	OTLPEndpoint   string  `yaml:"otlp_endpoint"`
@@ -48,10 +50,12 @@ type Config struct {
 }
 
 func init() {
-	_ = decorator.Register("tracing", newTracingDecorator)
+	if err := cmw.Register("tracing", newTracingMiddleware); err != nil {
+		panic(fmt.Sprintf("register tracing connector middleware: %v", err))
+	}
 }
 
-func newTracingDecorator(config any, l *slog.Logger) (decorator.Decorator, error) {
+func newTracingMiddleware(config any, l *slog.Logger) (cmw.Middleware, error) {
 	cfg := Config{
 		Enabled:        true,
 		OTLPEndpoint:   "localhost:4317",
@@ -101,10 +105,13 @@ func newTracingDecorator(config any, l *slog.Logger) (decorator.Decorator, error
 		}
 	}
 
-	// Tracer provider is initialized via Init() function at server startup
-	// This allows using config from observability.tracing section
+	if cfg.Enabled {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		initTracerProvider(ctx, cfg, l)
+	}
 
-	return &tracingDecorator{enabled: cfg.Enabled, l: l}, nil
+	return &tracingMiddleware{enabled: cfg.Enabled, l: l}, nil
 }
 
 // initTracerProvider initializes the OpenTelemetry tracer provider (globally, once)
@@ -139,16 +146,6 @@ func initTracerProvider(ctx context.Context, cfg Config, l *slog.Logger) {
 	})
 }
 
-// Init initializes the OpenTelemetry tracer provider globally.
-// This should be called once at server startup.
-// Config can be passed from YAML observability.tracing section.
-func Init(ctx context.Context, cfg Config, l *slog.Logger) error {
-	if cfg.Enabled {
-		initTracerProvider(ctx, cfg, l)
-	}
-	return nil
-}
-
 // Shutdown gracefully shuts down the tracing provider
 func Shutdown(ctx context.Context) error {
 	if tracerProvider != nil {
@@ -157,20 +154,20 @@ func Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// tracingDecorator implements decorator.Decorator
-type tracingDecorator struct {
+// tracingMiddleware implements connector.Middleware
+type tracingMiddleware struct {
 	enabled bool
 	l       *slog.Logger
 }
 
-func (d *tracingDecorator) WrapWriter(w connector.Writer, connectorName string) connector.Writer {
+func (d *tracingMiddleware) WrapWriter(w connector.WriteCloser, connectorName string) connector.WriteCloser {
 	if !d.enabled {
 		return w
 	}
 	return &tracingWriterWrapper{w: w, connectorName: connectorName}
 }
 
-func (d *tracingDecorator) WrapReader(r connector.Reader, connectorName string) connector.Reader {
+func (d *tracingMiddleware) WrapReader(r connector.ReadCloser, connectorName string) connector.ReadCloser {
 	if !d.enabled {
 		return r
 	}
@@ -235,7 +232,7 @@ func (c byteHeadersCarrier) Keys() []string {
 // Writer wrapper
 
 type tracingWriterWrapper struct {
-	w             connector.Writer
+	w             connector.WriteCloser
 	connectorName string
 }
 
@@ -345,10 +342,17 @@ func (d *tracingWriterWrapper) RollbackTx(ctx context.Context) error {
 	return err
 }
 
+func (d *tracingWriterWrapper) Close() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	_ = Shutdown(ctx)
+	return d.w.Close()
+}
+
 // Reader wrapper
 
 type tracingReaderWrapper struct {
-	r             connector.Reader
+	r             connector.ReadCloser
 	connectorName string
 }
 
@@ -498,4 +502,11 @@ func (d *tracingReaderWrapper) EncodeMsgID(buf []byte, topic string, args ...any
 
 func (d *tracingReaderWrapper) IsAutoCommit() bool {
 	return d.r.IsAutoCommit()
+}
+
+func (d *tracingReaderWrapper) Close() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	_ = Shutdown(ctx)
+	return d.r.Close()
 }

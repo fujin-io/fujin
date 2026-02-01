@@ -14,8 +14,8 @@ type amqp10Connector struct {
 	l      *slog.Logger
 }
 
-// NewAMQP10Connector creates a new AMQP10 connector instance
-func NewAMQP10Connector(config any, l *slog.Logger) (connector.Connector, error) {
+// newAMQP10Connector creates a new AMQP10 connector instance
+func newAMQP10Connector(config any, l *slog.Logger) (connector.Connector, error) {
 	// Allow nil config for getting converter only
 	if config == nil {
 		return &amqp10Connector{

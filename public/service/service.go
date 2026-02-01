@@ -12,15 +12,14 @@ import (
 	"time"
 
 	pconfig "github.com/fujin-io/fujin/public/config"
-	"github.com/fujin-io/fujin/public/plugins/configloader"
-	_ "github.com/fujin-io/fujin/public/plugins/configloader/all"
+	"github.com/fujin-io/fujin/public/plugins/configurator"
 	"github.com/fujin-io/fujin/public/plugins/connector"
 	connectorconfig "github.com/fujin-io/fujin/public/plugins/connector/config"
-	"github.com/fujin-io/fujin/public/plugins/decorator"
+	bmw "github.com/fujin-io/fujin/public/plugins/middleware/bind"
+	cmw "github.com/fujin-io/fujin/public/plugins/middleware/connector"
 	"github.com/fujin-io/fujin/public/server"
 	serverconfig "github.com/fujin-io/fujin/public/server/config"
 	"github.com/quic-go/quic-go"
-	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -208,28 +207,7 @@ var (
 func RunCLI(ctx context.Context) {
 	log.Printf("version: %s", Version)
 
-	// Parse command line arguments
-	// Support: ./fujin --bootstrap=bootstrap.yaml
-	var bootstrapPath string
-
-	// Simple argument parsing (can be enhanced with flag package later)
-	for i := 1; i < len(os.Args); i++ {
-		arg := os.Args[i]
-		if strings.HasPrefix(arg, "--bootstrap=") {
-			bootstrapPath = strings.TrimPrefix(arg, "--bootstrap=")
-		} else if strings.HasPrefix(arg, "--") {
-			log.Fatalf("unknown flag: %s", arg)
-		} else {
-			log.Fatalf("unexpected argument: %s (use --bootstrap=path to specify bootstrap config)", arg)
-		}
-	}
-
-	// Check environment variable for bootstrap path (highest priority)
-	if bootstrapPath == "" {
-		bootstrapPath = os.Getenv("FUJIN_BOOTSTRAP_CONFIG")
-	}
-
-	if err := loadConfig(bootstrapPath, &conf); err != nil {
+	if err := loadConfig(&conf); err != nil {
 		log.Fatal(err)
 	}
 	serverConf, err := conf.parse()
@@ -283,78 +261,35 @@ func configureLogger(logLevel, logType string) *slog.Logger {
 }
 
 // BootstrapConfig represents the bootstrap configuration that contains
-// only the config loader settings.
+// only the configurator settings.
 type BootstrapConfig struct {
-	ConfigLoader struct {
+	Configurator struct {
 		Type     string         `yaml:"type"`
 		Settings map[string]any `yaml:",inline"`
 	} `yaml:"config_loader"`
 }
 
-// loadConfig loads configuration using the priority system:
-// 1. Environment variables (highest priority)
-// 2. Bootstrap configuration file
-// 3. File system fallback (default)
-func loadConfig(bootstrapPath string, cfg *Config) error {
+// loadConfig loads configuration
+func loadConfig(cfg *Config) error {
 	ctx := context.Background()
 
-	// Priority 1: Check environment variables
-	if loaderType := os.Getenv("FUJIN_CONFIG_LOADER"); loaderType != "" {
-		loaderConfig := parseLoaderConfigFromEnv(loaderType)
-		if err := loadConfigWithLoader(ctx, loaderType, loaderConfig, cfg); err != nil {
+	if loaderType := os.Getenv("FUJIN_CONFIGURATOR"); loaderType != "" {
+		if err := loadConfigWithLoader(ctx, loaderType, cfg); err != nil {
 			return fmt.Errorf("load config from env: loader type %s: %w", loaderType, err)
 		}
-		log.Printf("loaded config using config loader from environment: %s\n", loaderType)
+		log.Printf("loaded config using configurator from environment: %s\n", loaderType)
 		return nil
 	}
 
-	// Priority 2: Check bootstrap configuration
-	// First, try explicitly specified path (from flag or env var)
-	if bootstrapPath != "" {
-		data, err := os.ReadFile(bootstrapPath)
-		if err != nil {
-			return fmt.Errorf("read bootstrap config from %q: %w", bootstrapPath, err)
-		}
-		var bootstrap BootstrapConfig
-		if err := yaml.Unmarshal(data, &bootstrap); err != nil {
-			return fmt.Errorf("unmarshal bootstrap config: %w", err)
-		}
-		if bootstrap.ConfigLoader.Type != "" {
-			if err := loadConfigWithLoader(ctx, bootstrap.ConfigLoader.Type, bootstrap.ConfigLoader.Settings, cfg); err != nil {
-				return fmt.Errorf("load config from bootstrap loader %q: %w", bootstrap.ConfigLoader.Type, err)
-			}
-			log.Printf("loaded config using config loader from bootstrap file: %s loader type: %s\n", bootstrapPath, bootstrap.ConfigLoader.Type)
-			return nil
-		}
-	}
-
-	// If no explicit bootstrap path, try default locations
-	bootstrapPaths := []string{"./bootstrap.dev.yaml", "./config.bootstrap.yaml", "./bootstrap.yaml"}
-	for _, p := range bootstrapPaths {
-		data, err := os.ReadFile(p)
-		if err == nil {
-			var bootstrap BootstrapConfig
-			if err := yaml.Unmarshal(data, &bootstrap); err == nil {
-				if bootstrap.ConfigLoader.Type != "" {
-					if err := loadConfigWithLoader(ctx, bootstrap.ConfigLoader.Type, bootstrap.ConfigLoader.Settings, cfg); err != nil {
-						return fmt.Errorf("load config from bootstrap loader %q: %w", bootstrap.ConfigLoader.Type, err)
-					}
-					log.Printf("loaded config using config loader from bootstrap: %s (bootstrap: %s)\n", bootstrap.ConfigLoader.Type, p)
-					return nil
-				}
-			}
-		}
-	}
-
-	return errors.New("failed to load config: config loader not specified")
+	return errors.New("failed to load config: configurator not specified")
 }
 
-// loadConfigWithLoader loads configuration using a config loader plugin.
+// loadConfigWithLoader loads configuration using a configurator plugin.
 // The loader directly fills the provided config struct.
-func loadConfigWithLoader(ctx context.Context, loaderType string, loaderConfig any, cfg *Config) error {
-	factory, ok := configloader.Get(loaderType)
+func loadConfigWithLoader(ctx context.Context, loaderType string, cfg *Config) error {
+	factory, ok := configurator.Get(loaderType)
 	if !ok {
-		return fmt.Errorf("config loader %q not found (available: %v)", loaderType, configloader.List())
+		return fmt.Errorf("configurator %q not found (available: %v)", loaderType, configurator.List())
 	}
 
 	// Create a temporary logger for config loading
@@ -362,9 +297,9 @@ func loadConfigWithLoader(ctx context.Context, loaderType string, loaderConfig a
 		Level: slog.LevelInfo,
 	}))
 
-	loader, err := factory(loaderConfig, logger)
+	loader, err := factory(logger)
 	if err != nil {
-		return fmt.Errorf("create config loader: %w", err)
+		return fmt.Errorf("create configurator: %w", err)
 	}
 
 	if err := loader.Load(ctx, cfg); err != nil {
@@ -374,42 +309,16 @@ func loadConfigWithLoader(ctx context.Context, loaderType string, loaderConfig a
 	return nil
 }
 
-// parseLoaderConfigFromEnv parses config loader configuration from environment variables.
-// Currently supports only the "file" loader type.
-func parseLoaderConfigFromEnv(loaderType string) any {
-	switch loaderType {
-	case "file":
-		// Parse paths from environment variable
-		pathsEnv := os.Getenv("FUJIN_CONFIG_LOADER_FILE_PATHS")
-		if pathsEnv == "" {
-			// Default paths if not specified
-			return map[string]any{
-				"paths": []string{"./config.yaml", "conf/config.yaml", "config/config.yaml"},
-			}
-		}
-		// Split comma-separated paths
-		paths := strings.Split(pathsEnv, ",")
-		for i := range paths {
-			paths[i] = strings.TrimSpace(paths[i])
-		}
-		return map[string]any{
-			"paths": paths,
-		}
-	default:
-		// For other loaders, return empty config
-		// They should parse their own env vars
-		return nil
-	}
-}
-
-// logRegisteredPlugins logs all registered connectors, decorators, and config loaders
+// logRegisteredPlugins logs all registered connectors, connector middlewares, bind middlewares, and configurators
 func logRegisteredPlugins(l *slog.Logger) {
 	connectors := connector.List()
-	decorators := decorator.List()
-	configLoaders := configloader.List()
+	cmws := cmw.List()
+	bmws := bmw.List()
+	configLoaders := configurator.List()
 
 	sort.Strings(connectors)
-	sort.Strings(decorators)
+	sort.Strings(cmws)
+	sort.Strings(bmws)
 	sort.Strings(configLoaders)
 
 	if len(connectors) > 0 {
@@ -418,13 +327,21 @@ func logRegisteredPlugins(l *slog.Logger) {
 		l.Warn("no connectors registered")
 	}
 
-	if len(decorators) > 0 {
-		l.Info("registered decorators", "list", strings.Join(decorators, ", "))
+	if len(cmws) > 0 {
+		l.Info("registered connector middlewares", "list", strings.Join(cmws, ", "))
 	} else {
-		l.Warn("no decorators registered")
+		l.Warn("no connector middlewares registered")
+	}
+
+	if len(bmws) > 0 {
+		l.Info("registered bind middlewares", "list", strings.Join(bmws, ", "))
+	} else {
+		l.Warn("no bind middlewares registered")
 	}
 
 	if len(configLoaders) > 0 {
-		l.Info("registered config loaders", "list", strings.Join(configLoaders, ", "))
+		l.Info("registered configurators", "list", strings.Join(configLoaders, ", "))
+	} else {
+		l.Warn("no configurators registered")
 	}
 }

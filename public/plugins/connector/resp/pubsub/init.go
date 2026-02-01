@@ -7,8 +7,7 @@ import (
 )
 
 func init() {
-	if err := connector.Register("resp_pubsub", NewPubSubConnector); err != nil {
-		panic(fmt.Sprintf("failed to register resp_pubsub connector: %v", err))
+	if err := connector.Register("resp_pubsub", newRESPPubSubConnector); err != nil {
+		panic(fmt.Sprintf("register resp_pubsub connector: %v", err))
 	}
 }
-

@@ -1,17 +1,17 @@
-// Package ratelimit provides an example rate limiting decorator.
-// This demonstrates how to create a custom decorator plugin.
+// Package ratelimit provides an example rate limiting connector middleware.
+// This demonstrates how to create a custom connector middleware plugin.
 //
-// To use this decorator:
+// To use this connector middleware:
 // 1. Import this package in your main.go:
 //
-//	import _ "github.com/fujin-io/fujin/examples/plugins/decorator/ratelimit"
+//	import _ "github.com/fujin-io/fujin/examples/plugins/middleware/connector/ratelimit"
 //
 // 2. Add it to your connector config:
 //
 //	connectors:
 //	  my_connector:
 //	    protocol: kafka
-//	    decorators:
+//	    connector_middlewares:
 //	      - name: ratelimit
 //	        config:
 //	          requests_per_second: 1000
@@ -19,22 +19,20 @@ package ratelimit
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/fujin-io/fujin/public/plugins/connector"
-	"github.com/fujin-io/fujin/public/plugins/decorator"
+	cmw "github.com/fujin-io/fujin/public/plugins/middleware/connector"
 )
 
-// Config for rate limit decorator
+// Config for rate limit connector middleware
 type Config struct {
 	RequestsPerSecond int `yaml:"requests_per_second"`
 }
 
 func init() {
-	fmt.Println("INIT")
-	_ = decorator.Register("ratelimit", func(config any, l *slog.Logger) (decorator.Decorator, error) {
+	_ = cmw.Register("ratelimit", func(config any, l *slog.Logger) (cmw.Middleware, error) {
 		cfg := Config{
 			RequestsPerSecond: 1000, // default
 		}
@@ -48,32 +46,32 @@ func init() {
 		}
 
 		interval := time.Second / time.Duration(cfg.RequestsPerSecond)
-		return &rateLimitDecorator{
+		return &rateLimitMiddleware{
 			interval: interval,
 			l:        l,
 		}, nil
 	})
 }
 
-type rateLimitDecorator struct {
+type rateLimitMiddleware struct {
 	interval time.Duration
 	l        *slog.Logger
 }
 
-func (d *rateLimitDecorator) WrapWriter(w connector.Writer, connectorName string) connector.Writer {
+func (d *rateLimitMiddleware) WrapWriter(w connector.WriteCloser, connectorName string) connector.WriteCloser {
 	return &rateLimitWriter{
 		w:        w,
 		interval: d.interval,
 	}
 }
 
-func (d *rateLimitDecorator) WrapReader(r connector.Reader, connectorName string) connector.Reader {
+func (d *rateLimitMiddleware) WrapReader(r connector.ReadCloser, connectorName string) connector.ReadCloser {
 	// Rate limiting on reader is typically not needed
 	return r
 }
 
 type rateLimitWriter struct {
-	w          connector.Writer
+	w          connector.WriteCloser
 	interval   time.Duration
 	lastAccess time.Time
 }
@@ -102,6 +100,10 @@ func (w *rateLimitWriter) CommitTx(ctx context.Context) error {
 
 func (w *rateLimitWriter) RollbackTx(ctx context.Context) error {
 	return w.w.RollbackTx(ctx)
+}
+
+func (w *rateLimitWriter) Close() error {
+	return nil
 }
 
 func (w *rateLimitWriter) rateLimit() {

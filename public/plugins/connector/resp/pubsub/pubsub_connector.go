@@ -14,8 +14,8 @@ type pubsubConnector struct {
 	l      *slog.Logger
 }
 
-// NewPubSubConnector creates a new Redis PubSub connector instance
-func NewPubSubConnector(config any, l *slog.Logger) (connector.Connector, error) {
+// newRESPPubSubConnector creates a new Redis PubSub connector instance
+func newRESPPubSubConnector(config any, l *slog.Logger) (connector.Connector, error) {
 	// Allow nil config for getting converter only
 	if config == nil {
 		return &pubsubConnector{

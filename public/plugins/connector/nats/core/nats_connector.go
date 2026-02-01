@@ -14,8 +14,8 @@ type natsConnector struct {
 	l      *slog.Logger
 }
 
-// NewNATSConnector creates a new NATS Core connector instance
-func NewNATSConnector(config any, l *slog.Logger) (connector.Connector, error) {
+// newNATSCoreConnector creates a new NATS Core connector instance
+func newNATSCoreConnector(config any, l *slog.Logger) (connector.Connector, error) {
 	// Allow nil config for getting converter only
 	if config == nil {
 		return &natsConnector{

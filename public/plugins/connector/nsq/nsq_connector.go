@@ -14,8 +14,8 @@ type nsqConnector struct {
 	l      *slog.Logger
 }
 
-// NewNSQConnector creates a new NSQ connector instance
-func NewNSQConnector(config any, l *slog.Logger) (connector.Connector, error) {
+// newNSQConnector creates a new NSQ connector instance
+func newNSQConnector(config any, l *slog.Logger) (connector.Connector, error) {
 	// Allow nil config for getting converter only
 	if config == nil {
 		return &nsqConnector{

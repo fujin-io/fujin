@@ -17,9 +17,9 @@ fujin:
     keepalive_period: 2s
   observability_enabled: false
 connectors:
-  kafka_connector:
+  faker_connector:
     protocol: faker
-    decorators:
+    connector_middlewares:
       - name: ratelimit
         config:
           requests_per_second: 10

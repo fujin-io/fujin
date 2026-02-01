@@ -14,8 +14,8 @@ type kafkaConnector struct {
 	l      *slog.Logger
 }
 
-// NewKafkaConnector creates a new Kafka connector instance
-func NewKafkaConnector(config any, l *slog.Logger) (connector.Connector, error) {
+// newKafkaConnector creates a new Kafka connector instance
+func newKafkaConnector(config any, l *slog.Logger) (connector.Connector, error) {
 	// Allow nil config for getting converter only
 	if config == nil {
 		return &kafkaConnector{

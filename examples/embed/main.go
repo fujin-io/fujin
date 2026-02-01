@@ -14,10 +14,11 @@ import (
 	"syscall"
 	"time"
 
+	cconfig "github.com/fujin-io/fujin/public/plugins/connector/config"
+	nats_core "github.com/fujin-io/fujin/public/plugins/connector/nats/core"
 	"github.com/fujin-io/fujin/public/server"
 	"github.com/fujin-io/fujin/public/server/config"
 	nats_server "github.com/nats-io/nats-server/v2/server"
-	// TODO: import plugin
 )
 
 var DefaultFujinServerTestConfig = config.FujinServerConfig{
@@ -26,32 +27,33 @@ var DefaultFujinServerTestConfig = config.FujinServerConfig{
 	TLS:     generateTLSConfig(),
 }
 
+var DefaultGRPCServerTestConfig = config.GRPCServerConfig{
+	Enabled: true,
+	Addr:    ":4849",
+	// TLS disabled
+}
+
 var DefaultTestConfigWithNats = config.Config{
 	Fujin: DefaultFujinServerTestConfig,
-	GRPC: config.GRPCServerConfig{
-		Enabled: true,
-		Addr:    ":4849",
+	GRPC:  DefaultGRPCServerTestConfig,
+	Connectors: cconfig.ConnectorsConfig{
+		"nats_core_connector": {
+			Protocol: "nats_core",
+			Settings: nats_core.Config{
+				Common: nats_core.CommonSettings{
+					URL: "nats://localhost:4222",
+				},
+				Clients: map[string]nats_core.ClientSpecificSettings{
+					"client1": {
+						Subject: "my_subject",
+					},
+					"client2": {
+						Subject: "my_subject",
+					},
+				},
+			},
+		},
 	},
-	// Connectors: connectors.Config{
-	// 	Readers: map[string]reader_config.Config{
-	// 		"sub": {
-	// 			Protocol: "nats_core",
-	// 			Settings: nats_core.ReaderConfig{
-	// 				URL:     "nats://localhost:4222",
-	// 				Subject: "my_subject",
-	// 			},
-	// 		},
-	// 	},
-	// 	Writers: map[string]writer_config.Config{
-	// 		"pub": {
-	// 			Protocol: "nats_core",
-	// 			Settings: nats_core.WriterConfig{
-	// 				URL:     "nats://localhost:4222",
-	// 				Subject: "my_subject",
-	// 			},
-	// 		},
-	// 	},
-	// },
 }
 
 // This example demonstrates how to embed the Fujin server into your Go application.
@@ -59,7 +61,7 @@ var DefaultTestConfigWithNats = config.Config{
 // To run this example:
 // 1. Import the nats/core plugin
 // 2. Build with the "nats_core" tag
-// 3. Run from repo root: go run -tags nats_core ./examples/embed/main.go
+// 3. Run from repo root: go run -tags fujin,grpc ./examples/embed/main.go
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	defer cancel()

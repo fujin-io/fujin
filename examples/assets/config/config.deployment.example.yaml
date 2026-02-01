@@ -7,18 +7,16 @@ fujin:
 grpc:
   enabled: true
 connectors:
-  writers:
-    pub:
-      protocol: kafka
-      settings:
+  kafka_connector:
+    protocol: kafka
+    settings:
+      common:
         brokers: [kafka1:19092, kafka2:19093, kafka3:19094]
-        topic: my_pub_topic
-        allow_auto_topic_creation: true
-  readers:
-    sub:
-      protocol: kafka
-      settings:
-        brokers: [kafka1:19092, kafka2:19093, kafka3:19094]
-        topic: my_pub_topic
-        group: fujin
-        allow_auto_topic_creation: true
+      clients:
+        pub:
+          allow_auto_topic_creation: true
+          produce_topic: my_pub_topic
+        sub:
+          consume_topics: [my_pub_topic]
+          group: fujin
+          allow_auto_topic_creation: true

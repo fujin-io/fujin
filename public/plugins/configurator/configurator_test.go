@@ -1,4 +1,4 @@
-package configloader
+package configurator
 
 import (
 	"context"
@@ -8,14 +8,14 @@ import (
 	"testing"
 )
 
-// mockLoader is a test config loader implementation
-type mockLoader struct {
+// mockConfigurator is a test configurator implementation
+type mockConfigurator struct {
 	loadCalled bool
 	loadError  error
 	config     any
 }
 
-func (m *mockLoader) Load(ctx context.Context, cfg any) error {
+func (m *mockConfigurator) Load(ctx context.Context, cfg any) error {
 	m.loadCalled = true
 	m.config = cfg
 	return m.loadError
@@ -23,16 +23,16 @@ func (m *mockLoader) Load(ctx context.Context, cfg any) error {
 
 func TestRegister(t *testing.T) {
 	// Register a test loader
-	err := Register("test_loader", func(config any, l *slog.Logger) (ConfigLoader, error) {
-		return &mockLoader{}, nil
+	err := Register("test_loader", func(l *slog.Logger) (Configurator, error) {
+		return &mockConfigurator{}, nil
 	})
 	if err != nil {
 		t.Fatalf("Register() error = %v", err)
 	}
 
 	// Try to register again - should fail
-	err = Register("test_loader", func(config any, l *slog.Logger) (ConfigLoader, error) {
-		return &mockLoader{}, nil
+	err = Register("test_loader", func(l *slog.Logger) (Configurator, error) {
+		return &mockConfigurator{}, nil
 	})
 	if err == nil {
 		t.Fatal("Register() should have failed for duplicate name")
@@ -41,8 +41,8 @@ func TestRegister(t *testing.T) {
 
 func TestGet(t *testing.T) {
 	// Register a loader for this test
-	_ = Register("get_test_loader", func(config any, l *slog.Logger) (ConfigLoader, error) {
-		return &mockLoader{}, nil
+	_ = Register("get_test_loader", func(l *slog.Logger) (Configurator, error) {
+		return &mockConfigurator{}, nil
 	})
 
 	// Get existing loader factory
@@ -63,8 +63,8 @@ func TestGet(t *testing.T) {
 
 func TestList(t *testing.T) {
 	// Register a loader to ensure List() has something to return
-	_ = Register("list_test_loader", func(config any, l *slog.Logger) (ConfigLoader, error) {
-		return &mockLoader{}, nil
+	_ = Register("list_test_loader", func(l *slog.Logger) (Configurator, error) {
+		return &mockConfigurator{}, nil
 	})
 
 	names := List()
@@ -89,8 +89,8 @@ func TestLoader_Load(t *testing.T) {
 	l := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
 	// Register a loader
-	_ = Register("load_test_loader", func(config any, l *slog.Logger) (ConfigLoader, error) {
-		return &mockLoader{}, nil
+	_ = Register("load_test_loader", func(l *slog.Logger) (Configurator, error) {
+		return &mockConfigurator{}, nil
 	})
 
 	// Get factory and create loader
@@ -99,7 +99,7 @@ func TestLoader_Load(t *testing.T) {
 		t.Fatal("Get() should find registered factory")
 	}
 
-	loader, err := factory(nil, l)
+	loader, err := factory(l)
 	if err != nil {
 		t.Fatalf("factory() error = %v", err)
 	}
@@ -118,7 +118,7 @@ func TestLoader_Load(t *testing.T) {
 	}
 
 	// Verify mock was called
-	mock, ok := loader.(*mockLoader)
+	mock, ok := loader.(*mockConfigurator)
 	if !ok {
 		t.Fatal("loader should be *mockLoader")
 	}
@@ -131,8 +131,8 @@ func TestLoader_Load_WithError(t *testing.T) {
 	l := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
 	// Register a loader that returns error
-	_ = Register("error_loader", func(config any, l *slog.Logger) (ConfigLoader, error) {
-		return &mockLoader{
+	_ = Register("error_loader", func(l *slog.Logger) (Configurator, error) {
+		return &mockConfigurator{
 			loadError: errors.New("load error"),
 		}, nil
 	})
@@ -143,7 +143,7 @@ func TestLoader_Load_WithError(t *testing.T) {
 		t.Fatal("Get() should find registered factory")
 	}
 
-	loader, err := factory(nil, l)
+	loader, err := factory(l)
 	if err != nil {
 		t.Fatalf("factory() error = %v", err)
 	}
@@ -163,7 +163,7 @@ func TestLoader_Factory_WithError(t *testing.T) {
 	l := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
 	// Register a factory that returns error
-	_ = Register("error_factory", func(config any, l *slog.Logger) (ConfigLoader, error) {
+	_ = Register("error_factory", func(l *slog.Logger) (Configurator, error) {
 		return nil, errors.New("factory error")
 	})
 
@@ -173,7 +173,7 @@ func TestLoader_Factory_WithError(t *testing.T) {
 		t.Fatal("Get() should find registered factory")
 	}
 
-	_, err := factory(nil, l)
+	_, err := factory(l)
 	if err == nil {
 		t.Fatal("factory() should return error when factory fails")
 	}
@@ -183,8 +183,8 @@ func TestLoader_Load_WithNilConfig(t *testing.T) {
 	l := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
 	// Register a loader
-	_ = Register("nil_config_loader", func(config any, l *slog.Logger) (ConfigLoader, error) {
-		return &mockLoader{}, nil
+	_ = Register("nil_config_loader", func(l *slog.Logger) (Configurator, error) {
+		return &mockConfigurator{}, nil
 	})
 
 	// Get factory and create loader
@@ -193,7 +193,7 @@ func TestLoader_Load_WithNilConfig(t *testing.T) {
 		t.Fatal("Get() should find registered factory")
 	}
 
-	loader, err := factory(nil, l)
+	loader, err := factory(l)
 	if err != nil {
 		t.Fatalf("factory() error = %v", err)
 	}
@@ -211,8 +211,8 @@ func TestRegister_Concurrent(t *testing.T) {
 	done := make(chan error, 10)
 	for i := 0; i < 10; i++ {
 		go func(id int) {
-			err := Register("concurrent_test_loader", func(config any, l *slog.Logger) (ConfigLoader, error) {
-				return &mockLoader{}, nil
+			err := Register("concurrent_test_loader", func(l *slog.Logger) (Configurator, error) {
+				return &mockConfigurator{}, nil
 			})
 			done <- err
 		}(i)
@@ -241,8 +241,8 @@ func TestRegister_Concurrent(t *testing.T) {
 
 func TestGet_Concurrent(t *testing.T) {
 	// Register a loader
-	_ = Register("concurrent_get_loader", func(config any, l *slog.Logger) (ConfigLoader, error) {
-		return &mockLoader{}, nil
+	_ = Register("concurrent_get_loader", func(l *slog.Logger) (Configurator, error) {
+		return &mockConfigurator{}, nil
 	})
 
 	// Test concurrent Get calls (should be safe due to RWMutex)
@@ -265,8 +265,8 @@ func TestGet_Concurrent(t *testing.T) {
 
 func TestList_Concurrent(t *testing.T) {
 	// Register a loader
-	_ = Register("concurrent_list_loader", func(config any, l *slog.Logger) (ConfigLoader, error) {
-		return &mockLoader{}, nil
+	_ = Register("concurrent_list_loader", func(l *slog.Logger) (Configurator, error) {
+		return &mockConfigurator{}, nil
 	})
 
 	// Test concurrent List calls (should be safe due to RWMutex)
@@ -294,4 +294,3 @@ func TestList_Concurrent(t *testing.T) {
 		}
 	}
 }
-
