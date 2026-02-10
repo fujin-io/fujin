@@ -18,7 +18,7 @@ func newTestHandler() *handler {
 	h := &handler{
 		ctx:          ctx,
 		ps:           &parseState{},
-		sessionState: STREAM_STATE_INIT,
+		sessionState: STREAM_STATE_BIND,
 		pingInterval: 2 * time.Second,
 		pingTimeout:  5 * time.Second,
 		closed:       make(chan struct{}),
@@ -180,7 +180,7 @@ func TestHandler_SessionStates(t *testing.T) {
 		name  string
 		state sessionState
 	}{
-		{"init state", STREAM_STATE_INIT},
+		{"bind state", STREAM_STATE_BIND},
 		{"connected state", STREAM_STATE_CONNECTED},
 		{"connected in tx state", STREAM_STATE_CONNECTED_IN_TX},
 	}
@@ -243,16 +243,16 @@ func TestHandler_SubscribeArgs(t *testing.T) {
 
 func TestHandler_InitArgs(t *testing.T) {
 	h := newTestHandler()
-	h.ps.ina.configOverrides = make(map[string]string)
-	h.ps.ina.configOverrides["writer.pub.transactional_id"] = "my-tx-id"
-	h.ps.ina.configOverrides["reader.sub.group"] = "my-group"
-	h.ps.ina.overridesCount = 2
-	h.ps.ina.overridesRead = 2
+	h.ps.ba.configOverrides = make(map[string]string)
+	h.ps.ba.configOverrides["writer.pub.transactional_id"] = "my-tx-id"
+	h.ps.ba.configOverrides["reader.sub.group"] = "my-group"
+	h.ps.ba.overridesCount = 2
+	h.ps.ba.overridesRead = 2
 
-	assert.Equal(t, uint32(2), h.ps.ina.overridesCount)
-	assert.Equal(t, uint32(2), h.ps.ina.overridesRead)
-	assert.Equal(t, "my-tx-id", h.ps.ina.configOverrides["writer.pub.transactional_id"])
-	assert.Equal(t, "my-group", h.ps.ina.configOverrides["reader.sub.group"])
+	assert.Equal(t, uint32(2), h.ps.ba.overridesCount)
+	assert.Equal(t, uint32(2), h.ps.ba.overridesRead)
+	assert.Equal(t, "my-tx-id", h.ps.ba.configOverrides["writer.pub.transactional_id"])
+	assert.Equal(t, "my-group", h.ps.ba.configOverrides["reader.sub.group"])
 }
 
 func TestHandler_FetchArgs(t *testing.T) {
@@ -355,7 +355,7 @@ func TestHandler_ErrorConstants(t *testing.T) {
 }
 
 func TestHandler_StateConstants(t *testing.T) {
-	assert.Equal(t, sessionState(0), STREAM_STATE_INIT)
+	assert.Equal(t, sessionState(0), STREAM_STATE_BIND)
 	assert.Equal(t, sessionState(1), STREAM_STATE_CONNECTED)
 	assert.Equal(t, sessionState(2), STREAM_STATE_CONNECTED_IN_TX)
 }
@@ -363,7 +363,7 @@ func TestHandler_StateConstants(t *testing.T) {
 func TestHandler_OpCodeConstants(t *testing.T) {
 	// Test some operation code constants exist
 	assert.Equal(t, 0, OP_START)
-	assert.GreaterOrEqual(t, OP_INIT, 0)
+	assert.GreaterOrEqual(t, OP_BIND, 0)
 	assert.GreaterOrEqual(t, OP_PRODUCE, 0)
 	assert.GreaterOrEqual(t, OP_SUBSCRIBE, 0)
 	assert.GreaterOrEqual(t, OP_FETCH, 0)

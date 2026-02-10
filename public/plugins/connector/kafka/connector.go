@@ -36,7 +36,6 @@ func NewConnector(conf ConnectorConfig, autoCommit bool, l *slog.Logger) (*Conne
 		conf.PingTimeout = 5 * time.Second
 	}
 
-	fmt.Println("NEW CLIENT")
 	client, err := kgo.NewClient(opts...)
 	if err != nil {
 		return nil, fmt.Errorf("kafka: new client: %w", err)

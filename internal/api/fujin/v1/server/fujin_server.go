@@ -18,7 +18,6 @@ import (
 	v1 "github.com/fujin-io/fujin/public/proto/fujin/v1"
 	serverconfig "github.com/fujin-io/fujin/public/server/config"
 	"github.com/quic-go/quic-go"
-	"github.com/quic-go/quic-go/metrics"
 )
 
 var (
@@ -57,11 +56,6 @@ func (s *FujinServer) ListenAndServe(ctx context.Context) error {
 	}
 	tr := &quic.Transport{
 		Conn: conn,
-	}
-
-	if s.conf.ObservabilityEnabled {
-		tr.Tracer = metrics.NewTracer()
-		s.conf.QUIC.Tracer = metrics.DefaultConnectionTracer
 	}
 
 	s.conf.TLS = s.conf.TLS.Clone()

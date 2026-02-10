@@ -43,9 +43,9 @@ var (
 
 // Config for metrics connector
 type Config struct {
-	Enabled bool   `yaml:"enabled"`
-	Addr    string `yaml:"addr"` // HTTP server address (e.g., ":9090")
-	Path    string `yaml:"path"` // Metrics endpoint path (default: "/metrics")
+	Disabled bool   `yaml:"enabled"`
+	Addr     string `yaml:"addr"` // HTTP server address (e.g., ":9090")
+	Path     string `yaml:"path"` // Metrics endpoint path (default: "/metrics")
 }
 
 func init() {
@@ -56,16 +56,15 @@ func init() {
 
 func newMetricsMiddleware(config any, l *slog.Logger) (cmv.Middleware, error) {
 	cfg := Config{
-		Enabled: true,
-		Addr:    ":9090",    // default address
-		Path:    "/metrics", // default path
+		Addr: ":9090",    // default address
+		Path: "/metrics", // default path
 	}
 
 	// Parse config if provided
 	if m, ok := config.(map[string]any); ok {
-		if enabled, exists := m["enabled"]; exists {
-			if v, ok := enabled.(bool); ok {
-				cfg.Enabled = v
+		if disabled, exists := m["disabled"]; exists {
+			if v, ok := disabled.(bool); ok {
+				cfg.Disabled = v
 			}
 		}
 		if addr, exists := m["addr"]; exists {
@@ -80,12 +79,12 @@ func newMetricsMiddleware(config any, l *slog.Logger) (cmv.Middleware, error) {
 		}
 	}
 
-	if cfg.Enabled {
+	if !cfg.Disabled {
 		initMetrics()
 		initHTTPServer(cfg.Addr, cfg.Path, l)
 	}
 
-	return &metricsMiddleware{enabled: cfg.Enabled, l: l}, nil
+	return &metricsMiddleware{disabled: cfg.Disabled, l: l}, nil
 }
 
 func initMetrics() {
@@ -171,19 +170,19 @@ func ObserveProduceLatency(connector string, d time.Duration) {
 
 // metricsMiddleware implements connector.Middleware
 type metricsMiddleware struct {
-	enabled bool
-	l       *slog.Logger
+	disabled bool
+	l        *slog.Logger
 }
 
 func (d *metricsMiddleware) WrapWriter(w connector.WriteCloser, connectorName string) connector.WriteCloser {
-	if !d.enabled {
+	if d.disabled {
 		return w
 	}
 	return &metricsWriterWrapper{w: w, connectorName: connectorName}
 }
 
 func (d *metricsMiddleware) WrapReader(r connector.ReadCloser, connectorName string) connector.ReadCloser {
-	if !d.enabled {
+	if d.disabled {
 		return r
 	}
 	return &metricsReaderWrapper{r: r, connectorName: connectorName}

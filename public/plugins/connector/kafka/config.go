@@ -26,10 +26,9 @@ const (
 )
 
 type CommonSettings struct {
-	Brokers                []string          `yaml:"brokers"`
-	AllowAutoTopicCreation bool              `yaml:"allow_auto_topic_creation"`
-	PingTimeout            time.Duration     `yaml:"ping_timeout"`
-	TLS                    pconfig.TLSConfig `yaml:"tls"`
+	Brokers     []string          `yaml:"brokers"`
+	PingTimeout time.Duration     `yaml:"ping_timeout"`
+	TLS         pconfig.TLSConfig `yaml:"tls"`
 }
 
 type ClientSpecificSettings struct {
@@ -43,6 +42,7 @@ type ClientSpecificSettings struct {
 	Balancers            []Balancer     `yaml:"balancers"`
 	BlockRebalanceOnPoll bool           `yaml:"block_rebalance_on_poll"`
 	// writer settings
+	AllowAutoTopicCreation bool          `yaml:"allow_auto_topic_creation"`
 	ProduceTopic           string        `yaml:"produce_topic"`
 	Linger                 time.Duration `yaml:"linger"`
 	MaxBufferedRecords     int           `yaml:"max_buffered_records"`

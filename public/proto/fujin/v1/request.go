@@ -3,7 +3,7 @@ package v1
 type OpCode byte
 
 const (
-	OP_CODE_INIT        OpCode = 1 // Renamed from CONNECT
+	OP_CODE_BIND        OpCode = 1
 	OP_CODE_PRODUCE     OpCode = 2
 	OP_CODE_HPRODUCE    OpCode = 3
 	OP_CODE_TX_BEGIN    OpCode = 4

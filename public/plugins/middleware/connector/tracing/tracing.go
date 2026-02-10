@@ -40,7 +40,7 @@ var (
 
 // Config for tracing connector middleware
 type Config struct {
-	Enabled        bool    `yaml:"enabled"`
+	Disabled       bool    `yaml:"disabled"`
 	OTLPEndpoint   string  `yaml:"otlp_endpoint"`
 	Insecure       bool    `yaml:"insecure"`
 	SampleRatio    float64 `yaml:"sample_ratio"`
@@ -57,7 +57,6 @@ func init() {
 
 func newTracingMiddleware(config any, l *slog.Logger) (cmw.Middleware, error) {
 	cfg := Config{
-		Enabled:        true,
 		OTLPEndpoint:   "localhost:4317",
 		Insecure:       true,
 		SampleRatio:    0.1,
@@ -68,9 +67,9 @@ func newTracingMiddleware(config any, l *slog.Logger) (cmw.Middleware, error) {
 
 	// Parse config if provided
 	if m, ok := config.(map[string]any); ok {
-		if enabled, exists := m["enabled"]; exists {
-			if v, ok := enabled.(bool); ok {
-				cfg.Enabled = v
+		if disabled, exists := m["disabled"]; exists {
+			if v, ok := disabled.(bool); ok {
+				cfg.Disabled = v
 			}
 		}
 		if endpoint, exists := m["otlp_endpoint"]; exists {
@@ -105,13 +104,13 @@ func newTracingMiddleware(config any, l *slog.Logger) (cmw.Middleware, error) {
 		}
 	}
 
-	if cfg.Enabled {
+	if !cfg.Disabled {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		initTracerProvider(ctx, cfg, l)
 	}
 
-	return &tracingMiddleware{enabled: cfg.Enabled, l: l}, nil
+	return &tracingMiddleware{disabled: cfg.Disabled, l: l}, nil
 }
 
 // initTracerProvider initializes the OpenTelemetry tracer provider (globally, once)
@@ -156,19 +155,19 @@ func Shutdown(ctx context.Context) error {
 
 // tracingMiddleware implements connector.Middleware
 type tracingMiddleware struct {
-	enabled bool
-	l       *slog.Logger
+	disabled bool
+	l        *slog.Logger
 }
 
 func (d *tracingMiddleware) WrapWriter(w connector.WriteCloser, connectorName string) connector.WriteCloser {
-	if !d.enabled {
+	if d.disabled {
 		return w
 	}
 	return &tracingWriterWrapper{w: w, connectorName: connectorName}
 }
 
 func (d *tracingMiddleware) WrapReader(r connector.ReadCloser, connectorName string) connector.ReadCloser {
-	if !d.enabled {
+	if d.disabled {
 		return r
 	}
 	return &tracingReaderWrapper{r: r, connectorName: connectorName}

@@ -15,7 +15,6 @@ fujin:
     max_incoming_streams: 1000
     max_idle_timeout: 5s
     keepalive_period: 2s
-  observability_enabled: false
 grpc:
   enabled: true
   addr: :4849

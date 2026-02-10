@@ -25,7 +25,6 @@ type FujinServerConfig struct {
 	ForceTerminateTimeout time.Duration
 	TLS                   *tls.Config
 	QUIC                  *quic.Config
-	ObservabilityEnabled  bool
 }
 
 type GRPCServerConfig struct {

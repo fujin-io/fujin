@@ -207,6 +207,13 @@ func (o *Outbound) QueueOutboundNoLock(data []byte) {
 	}
 }
 
+func (o *Outbound) QueueOutboundByteNoLock(data byte) {
+	o.pb += 1
+	new := pool.Get(1)[:1]
+	new[0] = data
+	o.v = append(o.v, new)
+}
+
 func (o *Outbound) IsClosed() bool {
 	return o.closed.Load()
 }

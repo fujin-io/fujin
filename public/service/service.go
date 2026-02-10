@@ -43,7 +43,6 @@ type FujinConfig struct {
 	PingMaxRetries        int               `yaml:"ping_max_retries"`
 	TLS                   pconfig.TLSConfig `yaml:"tls"`
 	QUIC                  QUICConfig        `yaml:"quic"`
-	ObservabilityEnabled  bool              `yaml:"observability_enabled"`
 }
 
 type GRPCConfig struct {
@@ -137,7 +136,6 @@ func (c *Config) parseFujinServerConfig() (serverconfig.FujinServerConfig, error
 		PingMaxRetries:        c.Fujin.PingMaxRetries,
 		TLS:                   c.Fujin.TLS.Config,
 		QUIC:                  c.Fujin.QUIC.parse(),
-		ObservabilityEnabled:  c.Fujin.ObservabilityEnabled,
 	}, nil
 }
 
@@ -260,15 +258,6 @@ func configureLogger(logLevel, logType string) *slog.Logger {
 	return slog.New(handler)
 }
 
-// BootstrapConfig represents the bootstrap configuration that contains
-// only the configurator settings.
-type BootstrapConfig struct {
-	Configurator struct {
-		Type     string         `yaml:"type"`
-		Settings map[string]any `yaml:",inline"`
-	} `yaml:"config_loader"`
-}
-
 // loadConfig loads configuration
 func loadConfig(cfg *Config) error {
 	ctx := context.Background()
@@ -314,12 +303,12 @@ func logRegisteredPlugins(l *slog.Logger) {
 	connectors := connector.List()
 	cmws := cmw.List()
 	bmws := bmw.List()
-	configLoaders := configurator.List()
+	configurators := configurator.List()
 
 	sort.Strings(connectors)
 	sort.Strings(cmws)
 	sort.Strings(bmws)
-	sort.Strings(configLoaders)
+	sort.Strings(configurators)
 
 	if len(connectors) > 0 {
 		l.Info("registered connectors", "list", strings.Join(connectors, ", "))
@@ -339,8 +328,8 @@ func logRegisteredPlugins(l *slog.Logger) {
 		l.Warn("no bind middlewares registered")
 	}
 
-	if len(configLoaders) > 0 {
-		l.Info("registered configurators", "list", strings.Join(configLoaders, ", "))
+	if len(configurators) > 0 {
+		l.Info("registered configurators", "list", strings.Join(configurators, ", "))
 	} else {
 		l.Warn("no configurators registered")
 	}

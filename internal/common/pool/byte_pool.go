@@ -7,28 +7,26 @@ import (
 
 type BytePool struct {
 	mu   sync.Mutex
-	bits [4]uint64 // 256 бит: 4 * 64
+	bits [4]uint64
 }
 
 func NewBytePool() *BytePool {
-	// Все биты = 1: все значения свободны
 	return &BytePool{
 		bits: [4]uint64{^uint64(0), ^uint64(0), ^uint64(0), ^uint64(0)},
 	}
 }
 
-// Get возвращает свободное значение (0–255)
+// Get returns free value (0-255)
 func (bp *BytePool) Get() (byte, error) {
 	bp.mu.Lock()
 	defer bp.mu.Unlock()
 
 	for i := range 4 {
 		if bp.bits[i] != 0 {
-			// ищем первый установленный бит
 			for j := range 64 {
 				mask := uint64(1) << j
 				if bp.bits[i]&mask != 0 {
-					bp.bits[i] &^= mask // сбросить бит
+					bp.bits[i] &^= mask
 					return byte(i*64 + j), nil
 				}
 			}
@@ -37,7 +35,7 @@ func (bp *BytePool) Get() (byte, error) {
 	return 0, errors.New("no available byte values")
 }
 
-// Put возвращает значение обратно в пул
+// Put returns value to pool
 func (bp *BytePool) Put(val byte) error {
 	if val > 254 {
 		return errors.New("invalid byte value")
