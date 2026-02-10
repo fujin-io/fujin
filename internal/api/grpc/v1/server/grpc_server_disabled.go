@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/fujin-io/fujin/public/connectors"
-	"github.com/fujin-io/fujin/public/server/config"
+	connectorconfig "github.com/fujin-io/fujin/public/plugins/connector/config"
+	serverconfig "github.com/fujin-io/fujin/public/server/config"
 )
 
 var ErrGRPCNotCompiledIn = fmt.Errorf("grpc is not compiled in")
@@ -20,7 +20,7 @@ type GRPCServer struct {
 }
 
 // NewGRPCServer creates a stub gRPC server instance
-func NewGRPCServer(conf config.GRPCServerConfig, _ connectors.Config, l *slog.Logger) *GRPCServer {
+func NewGRPCServer(conf serverconfig.GRPCServerConfig, _ connectorconfig.ConnectorsConfig, l *slog.Logger) *GRPCServer {
 	return &GRPCServer{
 		enabled: conf.Enabled,
 		l:       l.With("server", "grpc"),

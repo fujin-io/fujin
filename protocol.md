@@ -65,39 +65,51 @@ Since the QUIC protocol supports multiplexing, `PING` messages are sent over a d
 ### Examples
 - `[99]` -> `[99]`
 
-## INIT
+## BIND
 
 ### Direction
 Client -> Server
 ### Description
-Before producing messages, the client must open a QUIC stream and send an `INIT` command to the server. This command initializes the session and optionally applies configuration overrides to connector settings. The `INIT` command must be sent before any other commands (except `PING`/`PONG`).
+Before producing messages, the client must open a QUIC stream and send a `BIND` command to the server. This command binds the session to a connector and optionally applies configuration overrides to connector settings. The `BIND` command must be sent before any other commands (except `PING`/`PONG`).
 
-Configuration overrides allow dynamic modification of connector settings at runtime. The format is: `{type}.{connector_name}.{setting_path}` where:
+The `BIND` command includes:
+- `connector_name`: The name of the connector to bind to (e.g., `kafka_connector`)
+- `meta`: Optional metadata key-value pairs that can be used by bind middleware plugins (e.g., for authentication)
+- `config_overrides`: Optional configuration overrides that allow dynamic modification of connector settings at runtime
+
+Configuration overrides format is: `{type}.{connector_name}.{setting_path}` where:
 - `type` is either `writer` or `reader`
 - `connector_name` is the name of the connector (e.g., `pub`, `sub`)
 - `setting_path` is the path to the setting (e.g., `transactional_id`, `linger`, `group`)
 
 ### Syntax
 ##### Request
- `[1, <config_overrides>]`  
+ `[1, <connector_name>, <meta>, <config_overrides>]`  
  where:
  | name              | description                                          | type           |
 | ------------------ | ---------------------------------------------------- | -------------- |
+| `connector_name`   | The name of the connector to bind to.                | string         |
+| `meta`             | Optional metadata key-value pairs.                   | [uint16]string |
 | `config_overrides` | Array of key-value pairs for configuration override. | [uint16]string |
+
+Where `meta` and `config_overrides` are arrays of key-value pairs, each pair represented as:
+- `[uint32]string` (key length + key)
+- `[uint32]string` (value length + value)
 
 ##### Response
 `[16, <error>]` 
 
 ### Examples
-- `[1, 0, 0, 0, 0]` -> `[16, 0]` (INIT with no overrides)
-- `[1, 0, 0, 0, 1, 0, 0, 0, 25, 119, 114, 105, 116, 101, 114, 46, 112, 117, 98, 46, 116, 114, 97, 110, 115, 97, 99, 116, 105, 111, 110, 97, 108, 95, 105, 100, 0, 0, 0, 15, 109, 121, 45, 116, 120, 45, 105, 100, 45, 49, 50, 51, 52, 53]` -> `[16, 0]` (INIT with one override: `writer.pub.transactional_id` = `my-tx-id-12345`)
+- `[1, 0, 0, 0, 14, 107, 97, 102, 107, 97, 95, 99, 111, 110, 110, 101, 99, 116, 111, 114, 0, 0, 0, 0]` -> `[16, 0]` (BIND with connector name "kafka_connector", no meta, no overrides)
+- `[1, 0, 0, 0, 14, 107, 97, 102, 107, 97, 95, 99, 111, 110, 110, 101, 99, 116, 111, 114, 0, 0, 0, 1, 0, 0, 0, 7, 97, 112, 105, 95, 107, 101, 121, 0, 0, 0, 16, 109, 121, 45, 115, 101, 99, 114, 101, 116, 45, 107, 101, 121, 45, 49, 50, 51, 0, 0]` -> `[16, 0]` (BIND with connector name "kafka_connector", one meta pair: `api_key` = `my-secret-key-123`, no overrides)
+- `[1, 0, 0, 0, 14, 107, 97, 102, 107, 97, 95, 99, 111, 110, 110, 101, 99, 116, 111, 114, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 25, 119, 114, 105, 116, 101, 114, 46, 112, 117, 98, 46, 116, 114, 97, 110, 115, 97, 99, 116, 105, 111, 110, 97, 108, 95, 105, 100, 0, 0, 0, 15, 109, 121, 45, 116, 120, 45, 105, 100, 45, 49, 50, 51, 52, 53]` -> `[16, 0]` (BIND with connector name "kafka_connector", no meta, one override: `writer.pub.transactional_id` = `my-tx-id-12345`)
 
 ## PRODUCE
 
 ### Direction
 Client -> Server
 ### Description
-Sends a message to the specified topic. This must be sent in the same QUIC stream where the `INIT` command was previously issued.
+Sends a message to the specified topic. This must be sent in the same QUIC stream where the `BIND` command was previously issued.
 ### Syntax
 ##### Request
 `[2, <correlation id>, <topic>, <message>]`  
@@ -122,7 +134,7 @@ where:
 ### Direction
 Client -> Server
 ### Description
-Sends a message to the specified topic. This must be sent in the same QUIC stream where the `INIT` command was previously issued.
+Sends a message to the specified topic. This must be sent in the same QUIC stream where the `BIND` command was previously issued.
 ### Syntax
 ##### Request
 `[3, <correlation id>, <topic>, <headers>, <message>]`  
@@ -149,7 +161,7 @@ where:
 Client -> Server
 
 ### Description
-Begins transaction. Must be sent in a QUIC stream where `INIT` command was sent previously. For Kafka transactions, `transactional_id` should be configured via `INIT` command's config overrides (e.g., `writer.pub.transactional_id`).
+Begins transaction. Must be sent in a QUIC stream where `BIND` command was sent previously. For Kafka transactions, `transactional_id` should be configured via `BIND` command's config overrides (e.g., `writer.pub.transactional_id`).
 
 ### Syntax
 ##### Request
@@ -174,7 +186,7 @@ where:
 Client -> Server
 
 ### Description
-Commits transaction. Must be sent in a QUIC stream where `INIT` command was sent previously.
+Commits transaction. Must be sent in a QUIC stream where `BIND` command was sent previously.
 
 ### Syntax
 ##### Request
@@ -199,7 +211,7 @@ where:
 Client -> Server
 
 ### Description
-Rolls back transaction. Must be sent in a QUIC stream where `INIT` command was sent previously.
+Rolls back transaction. Must be sent in a QUIC stream where `BIND` command was sent previously.
 
 ### Syntax
 ##### Request

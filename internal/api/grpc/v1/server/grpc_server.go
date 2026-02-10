@@ -11,11 +11,12 @@ import (
 	"sync"
 
 	"github.com/fujin-io/fujin/internal/connectors"
-	public_connectors "github.com/fujin-io/fujin/public/connectors"
-	internal_reader "github.com/fujin-io/fujin/public/connectors/reader"
-	"github.com/fujin-io/fujin/public/connectors/writer"
+	"github.com/fujin-io/fujin/public/plugins/connector"
+	connectorconfig "github.com/fujin-io/fujin/public/plugins/connector/config"
+	bmw "github.com/fujin-io/fujin/public/plugins/middleware/bind"
+	bmwconfig "github.com/fujin-io/fujin/public/plugins/middleware/bind/config"
 	pb "github.com/fujin-io/fujin/public/proto/grpc/v1"
-	"github.com/fujin-io/fujin/public/server/config"
+	serverconfig "github.com/fujin-io/fujin/public/server/config"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
@@ -25,19 +26,19 @@ import (
 type GRPCServer struct {
 	pb.UnimplementedFujinServiceServer
 
-	conf       config.GRPCServerConfig
-	baseConfig public_connectors.Config
-	l          *slog.Logger
+	conf             serverconfig.GRPCServerConfig
+	connectorsConfig connectorconfig.ConnectorsConfig
+	l                *slog.Logger
 
 	grpcServer *grpc.Server
 }
 
 // NewGRPCServer creates a new gRPC server instance
-func NewGRPCServer(conf config.GRPCServerConfig, baseConfig public_connectors.Config, l *slog.Logger) *GRPCServer {
+func NewGRPCServer(conf serverconfig.GRPCServerConfig, connectorsConfig connectorconfig.ConnectorsConfig, l *slog.Logger) *GRPCServer {
 	return &GRPCServer{
-		conf:       conf,
-		baseConfig: baseConfig,
-		l:          l.With("server", "grpc"),
+		conf:             conf,
+		connectorsConfig: connectorsConfig,
+		l:                l.With("server", "grpc"),
 	}
 }
 
@@ -142,16 +143,16 @@ func (s *GRPCServer) Stream(stream pb.FujinService_StreamServer) error {
 	ctx := stream.Context()
 
 	session := &streamSession{
-		stream:       stream,
-		baseConfig:   s.baseConfig,
-		cman:         nil, // Will be created during Init
-		l:            s.l,
-		ctx:          ctx,
-		writers:      make(map[string]writer.Writer),
-		readers:      make(map[byte]*readerState),
-		fetchReaders: make(map[string]byte),
-		nextSubID:    0,
-		connected:    false,
+		stream:           stream,
+		connectorsConfig: s.connectorsConfig,
+		cman:             nil, // Will be created during Init
+		l:                s.l,
+		ctx:              ctx,
+		writers:          make(map[string]connector.WriteCloser),
+		readers:          make(map[byte]*readerState),
+		fetchReaders:     make(map[string]byte),
+		nextSubID:        0,
+		connected:        false,
 	}
 
 	errCh := make(chan error, 2)
@@ -175,15 +176,15 @@ func (s *GRPCServer) Stream(stream pb.FujinService_StreamServer) error {
 
 // streamSession represents a single bidirectional stream session
 type streamSession struct {
-	stream     pb.FujinService_StreamServer
-	baseConfig public_connectors.Config
-	cman       *connectors.Manager // Created during Init with overrides applied
-	l          *slog.Logger
-	ctx        context.Context
+	stream           pb.FujinService_StreamServer
+	connectorsConfig connectorconfig.ConnectorsConfig
+	cman             *connectors.ManagerV2 // Created during Init with overrides applied
+	l                *slog.Logger
+	ctx              context.Context
 
 	mu           sync.RWMutex
 	sendMu       sync.Mutex
-	writers      map[string]writer.Writer
+	writers      map[string]connector.WriteCloser
 	readers      map[byte]*readerState
 	fetchReaders map[string]byte // topic -> subscription_id mapping for fetch implicit subscriptions
 	nextSubID    byte
@@ -191,12 +192,12 @@ type streamSession struct {
 
 	// Transaction state
 	inTx                 bool
-	currentTxWriter      writer.Writer
+	currentTxWriter      connector.WriteCloser
 	currentTxWriterTopic string // Original topic used to get the writer (for PutWriter)
 }
 
 type readerState struct {
-	reader      internal_reader.Reader
+	reader      connector.ReadCloser
 	topic       string
 	autoCommit  bool
 	withHeaders bool
@@ -224,8 +225,8 @@ func (s *streamSession) receiveLoop() error {
 // handleRequest processes a single request
 func (s *streamSession) handleRequest(req *pb.FujinRequest) error {
 	switch r := req.Request.(type) {
-	case *pb.FujinRequest_Init:
-		return s.handleInit(r.Init)
+	case *pb.FujinRequest_Bind:
+		return s.handleBind(r.Bind)
 	case *pb.FujinRequest_Produce:
 		return s.handleProduce(r.Produce)
 	case *pb.FujinRequest_Hproduce:
@@ -255,29 +256,74 @@ func (s *streamSession) handleRequest(req *pb.FujinRequest) error {
 	}
 }
 
-// handleInit processes INIT request - initializes the session and applies config overrides
-func (s *streamSession) handleInit(req *pb.InitRequest) error {
+// handleBind processes BIND request - initializes the session and applies config overrides
+func (s *streamSession) handleBind(req *pb.BindRequest) error {
 	if s.connected {
 		return s.sendResponse(&pb.FujinResponse{
-			Response: &pb.FujinResponse_Init{
-				Init: &pb.InitResponse{
-					Error: "already initialized",
+			Response: &pb.FujinResponse_Bind{
+				Bind: &pb.BindResponse{
+					Error: "already binded",
 				},
 			},
 		})
 	}
 
-	// Apply config overrides if provided
-	modifiedConfig := s.baseConfig
-	if len(req.ConfigOverrides) > 0 {
+	connectorConfig, ok := s.connectorsConfig[req.Connector]
+	if !ok {
+		return s.sendResponse(&pb.FujinResponse{
+			Response: &pb.FujinResponse_Bind{
+				Bind: &pb.BindResponse{
+					Error: "connector not found",
+				},
+			},
+		})
+	}
+
+	// Process bind middlewares before applying config overrides
+	// This allows middlewares to modify config overrides if needed
+	configOverrides := make(map[string]string, len(req.ConfigOverrides))
+	for k, v := range req.ConfigOverrides {
+		configOverrides[k] = v
+	}
+
+	// Convert meta from protobuf map to regular map
+	meta := make(map[string]string, len(req.Meta))
+	for k, v := range req.Meta {
+		meta[k] = v
+	}
+
+	// Convert bind middleware configs
+	bindMiddlewareConfigs := make([]bmwconfig.Config, 0, len(connectorConfig.BindMiddlewares))
+	for _, cfg := range connectorConfig.BindMiddlewares {
+		fmt.Printf("%+v\n", cfg)
+		bindMiddlewareConfigs = append(bindMiddlewareConfigs, cfg)
+	}
+
+	// Process bind middlewares
+	if len(bindMiddlewareConfigs) > 0 {
+		if err := bmw.Chain(s.ctx, meta, bindMiddlewareConfigs, s.l); err != nil {
+			s.l.Warn("bind middleware rejected", "connector", req.Connector, "err", err)
+			return s.sendResponse(&pb.FujinResponse{
+				Response: &pb.FujinResponse_Bind{
+					Bind: &pb.BindResponse{
+						Error: err.Error(),
+					},
+				},
+			})
+		}
+	}
+
+	// Apply config overrides if provided (may have been modified by middlewares)
+	modifiedConfig := connectorConfig
+	if len(configOverrides) > 0 {
 		// ApplyOverrides works with public/connectors.Config
 		// The function is in internal/connectors but uses public/connectors.Config
-		modifiedConfigForOverride, err := connectors.ApplyOverrides(s.baseConfig, req.ConfigOverrides)
+		modifiedConfigForOverride, err := connectors.ApplyOverrides(connectorConfig, configOverrides)
 		if err != nil {
 			s.l.Error("apply config overrides", "err", err)
 			return s.sendResponse(&pb.FujinResponse{
-				Response: &pb.FujinResponse_Init{
-					Init: &pb.InitResponse{
+				Response: &pb.FujinResponse_Bind{
+					Bind: &pb.BindResponse{
 						Error: err.Error(),
 					},
 				},
@@ -287,12 +333,12 @@ func (s *streamSession) handleInit(req *pb.InitRequest) error {
 	}
 
 	// Create a new Manager with the modified configuration
-	s.cman = connectors.NewManager(modifiedConfig, s.l)
+	s.cman = connectors.NewManagerV2(modifiedConfig, req.Connector, s.l)
 	s.connected = true
 
 	return s.sendResponse(&pb.FujinResponse{
-		Response: &pb.FujinResponse_Init{
-			Init: &pb.InitResponse{
+		Response: &pb.FujinResponse_Bind{
+			Bind: &pb.BindResponse{
 				Error: "",
 			},
 		},
@@ -306,7 +352,7 @@ func (s *streamSession) handleProduce(req *pb.ProduceRequest) error {
 			Response: &pb.FujinResponse_Produce{
 				Produce: &pb.ProduceResponse{
 					CorrelationId: req.CorrelationId,
-					Error:         "not initialized",
+					Error:         "not binded",
 				},
 			},
 		})
@@ -344,24 +390,11 @@ func (s *streamSession) handleProduce(req *pb.ProduceRequest) error {
 			}
 			s.currentTxWriter = w
 			s.currentTxWriterTopic = req.Topic
-		} else {
-			// Check if the new topic has the same endpoint as current transactional writer
-			if !s.cman.WriterMatchEndpoint(s.currentTxWriter, req.Topic) {
-				s.mu.Unlock()
-				return s.sendResponse(&pb.FujinResponse{
-					Response: &pb.FujinResponse_Produce{
-						Produce: &pb.ProduceResponse{
-							CorrelationId: req.CorrelationId,
-							Error:         "transaction cannot span different broker endpoints",
-						},
-					},
-				})
-			}
 		}
 	}
 	s.mu.Unlock()
 
-	var w writer.Writer
+	var w connector.WriteCloser
 	var err error
 	if inTx {
 		s.mu.RLock()
@@ -414,7 +447,7 @@ func (s *streamSession) handleHProduce(req *pb.HProduceRequest) error {
 			Response: &pb.FujinResponse_Hproduce{
 				Hproduce: &pb.HProduceResponse{
 					CorrelationId: req.CorrelationId,
-					Error:         "not initialized",
+					Error:         "not binded",
 				},
 			},
 		})
@@ -452,24 +485,11 @@ func (s *streamSession) handleHProduce(req *pb.HProduceRequest) error {
 			}
 			s.currentTxWriter = w
 			s.currentTxWriterTopic = req.Topic
-		} else {
-			// Check if the new topic has the same endpoint as current transactional writer
-			if !s.cman.WriterMatchEndpoint(s.currentTxWriter, req.Topic) {
-				s.mu.Unlock()
-				return s.sendResponse(&pb.FujinResponse{
-					Response: &pb.FujinResponse_Hproduce{
-						Hproduce: &pb.HProduceResponse{
-							CorrelationId: req.CorrelationId,
-							Error:         "transaction cannot span different broker endpoints",
-						},
-					},
-				})
-			}
 		}
 	}
 	s.mu.Unlock()
 
-	var w writer.Writer
+	var w connector.WriteCloser
 	var err error
 	if inTx {
 		s.mu.RLock()
@@ -528,7 +548,7 @@ func (s *streamSession) handleBeginTx(req *pb.BeginTxRequest) error {
 			Response: &pb.FujinResponse_BeginTx{
 				BeginTx: &pb.BeginTxResponse{
 					CorrelationId: req.CorrelationId,
-					Error:         "not initialized",
+					Error:         "not binded",
 				},
 			},
 		})
@@ -553,7 +573,7 @@ func (s *streamSession) handleBeginTx(req *pb.BeginTxRequest) error {
 		w.Flush(s.ctx)
 		s.cman.PutWriter(w, topic)
 	}
-	s.writers = make(map[string]writer.Writer)
+	s.writers = make(map[string]connector.WriteCloser)
 
 	s.inTx = true
 
@@ -574,7 +594,7 @@ func (s *streamSession) handleCommitTx(req *pb.CommitTxRequest) error {
 			Response: &pb.FujinResponse_CommitTx{
 				CommitTx: &pb.CommitTxResponse{
 					CorrelationId: req.CorrelationId,
-					Error:         "not initialized",
+					Error:         "not binded",
 				},
 			},
 		})
@@ -623,7 +643,7 @@ func (s *streamSession) handleRollbackTx(req *pb.RollbackTxRequest) error {
 			Response: &pb.FujinResponse_RollbackTx{
 				RollbackTx: &pb.RollbackTxResponse{
 					CorrelationId: req.CorrelationId,
-					Error:         "not initialized",
+					Error:         "not binded",
 				},
 			},
 		})
@@ -672,7 +692,7 @@ func (s *streamSession) handleSubscribe(req *pb.SubscribeRequest) error {
 			Response: &pb.FujinResponse_Subscribe{
 				Subscribe: &pb.SubscribeResponse{
 					CorrelationId:  req.CorrelationId,
-					Error:          "not initialized",
+					Error:          "not binded",
 					SubscriptionId: 0,
 				},
 			},
@@ -747,7 +767,7 @@ func (s *streamSession) handleHSubscribe(req *pb.HSubscribeRequest) error {
 			Response: &pb.FujinResponse_Hsubscribe{
 				Hsubscribe: &pb.HSubscribeResponse{
 					CorrelationId:  req.CorrelationId,
-					Error:          "not initialized",
+					Error:          "not binded",
 					SubscriptionId: 0,
 				},
 			},
@@ -773,6 +793,7 @@ func (s *streamSession) handleHSubscribe(req *pb.HSubscribeRequest) error {
 
 	r, err := s.cman.GetReader(req.Topic, req.AutoCommit)
 	if err != nil {
+		fmt.Println(err.Error())
 		return s.sendResponse(&pb.FujinResponse{
 			Response: &pb.FujinResponse_Hsubscribe{
 				Hsubscribe: &pb.HSubscribeResponse{
@@ -822,7 +843,7 @@ func (s *streamSession) handleFetch(req *pb.FetchRequest) error {
 			Response: &pb.FujinResponse_Fetch{
 				Fetch: &pb.FetchResponse{
 					CorrelationId:  req.CorrelationId,
-					Error:          "not initialized",
+					Error:          "not binded",
 					SubscriptionId: 0,
 				},
 			},
@@ -940,7 +961,7 @@ func (s *streamSession) handleHFetch(req *pb.HFetchRequest) error {
 			Response: &pb.FujinResponse_Hfetch{
 				Hfetch: &pb.HFetchResponse{
 					CorrelationId:  req.CorrelationId,
-					Error:          "not initialized",
+					Error:          "not binded",
 					SubscriptionId: 0,
 				},
 			},
@@ -1023,14 +1044,14 @@ func (s *streamSession) handleHFetch(req *pb.HFetchRequest) error {
 		}
 
 		// Convert headers from [][]byte to []*pb.Header
-		var protoHeaders []*pb.Header
+		var protoHeaders []*pb.KV
 		for i := 0; i < len(hs); i += 2 {
 			key := hs[i]
 			var val []byte
 			if i+1 < len(hs) {
 				val = hs[i+1]
 			}
-			protoHeaders = append(protoHeaders, &pb.Header{
+			protoHeaders = append(protoHeaders, &pb.KV{
 				Key:   key,
 				Value: val,
 			})
@@ -1074,7 +1095,7 @@ func (s *streamSession) handleUnsubscribe(req *pb.UnsubscribeRequest) error {
 			Response: &pb.FujinResponse_Unsubscribe{
 				Unsubscribe: &pb.UnsubscribeResponse{
 					CorrelationId: req.CorrelationId,
-					Error:         "not initialized",
+					Error:         "not binded",
 				},
 			},
 		})
@@ -1141,14 +1162,14 @@ func (s *streamSession) subscribeLoop(ctx context.Context, subID byte, state *re
 				msgID = state.reader.EncodeMsgID(msgIDBuf, topic, args...)
 			}
 
-			var protoHeaders []*pb.Header
+			var protoHeaders []*pb.KV
 			for i := 0; i < len(hs); i += 2 {
 				key := hs[i]
 				var val []byte
 				if i+1 < len(hs) {
 					val = hs[i+1]
 				}
-				protoHeaders = append(protoHeaders, &pb.Header{
+				protoHeaders = append(protoHeaders, &pb.KV{
 					Key:   key,
 					Value: val,
 				})
@@ -1226,7 +1247,7 @@ func (s *streamSession) handleAck(req *pb.AckRequest) error {
 			Response: &pb.FujinResponse_Ack{
 				Ack: &pb.AckResponse{
 					CorrelationId: req.CorrelationId,
-					Error:         "not initialized",
+					Error:         "not binded",
 				},
 			},
 		})
@@ -1301,7 +1322,7 @@ func (s *streamSession) handleNack(req *pb.NackRequest) error {
 			Response: &pb.FujinResponse_Nack{
 				Nack: &pb.NackResponse{
 					CorrelationId: req.CorrelationId,
-					Error:         "not initialized",
+					Error:         "not binded",
 				},
 			},
 		})
@@ -1370,7 +1391,7 @@ func (s *streamSession) handleNack(req *pb.NackRequest) error {
 }
 
 // getWriter retrieves or creates a writer for the given topic
-func (s *streamSession) getWriter(topic string) (writer.Writer, error) {
+func (s *streamSession) getWriter(topic string) (connector.WriteCloser, error) {
 	s.mu.RLock()
 	if w, exists := s.writers[topic]; exists {
 		s.mu.RUnlock()
@@ -1411,7 +1432,7 @@ func (s *streamSession) cleanup() {
 			s.cman.PutWriter(w, topic)
 		}
 	}
-	s.writers = make(map[string]writer.Writer)
+	s.writers = make(map[string]connector.WriteCloser)
 
 	// Cancel all readers
 	for _, state := range s.readers {

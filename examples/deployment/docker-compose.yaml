@@ -1,11 +1,15 @@
 services:
   fujin:
     build:
-      context: https://github.com/fujin-io/fujin.git#v0.1.7
+      # context: https://github.com/fujin-io/fujin.git#v0.1.7
+      context: ../..
       dockerfile: Dockerfile
       args:
-        GO_BUILD_TAGS: fujin,grpc,kafka,observability
+        GO_BUILD_TAGS: fujin,grpc
     container_name: fujin
+    environment:
+      FUJIN_CONFIGURATOR: file
+      FUJIN_CONFIGURATOR_FILE_PATHS: ./config/config.yaml
     ports:
       - "4848:4848/udp"
       - "4949:4949"

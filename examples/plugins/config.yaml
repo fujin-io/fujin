@@ -1,20 +1,25 @@
 fujin:
+  enabled: true
   addr: :4848
   ping_interval: 5s
-  ping_timeout: 5s
+  ping_timeout: 10s
+  ping_stream: false
+  ping_max_retries: 5
   write_deadline: 10s
   force_terminate_timeout: 15s
   tls:
-    server_cert_pem_path: ./assets/certs/fujin.io.pem
-    server_key_pem_path: ./assets/certs/fujin.io-key.pem
+    enabled: true
+    server_cert_pem_path: ./resources/assets/certs/fujin.io.pem
+    server_key_pem_path: ./resources/assets/certs/fujin.io-key.pem
   quic:
     max_incoming_streams: 1000
     max_idle_timeout: 5s
     keepalive_period: 2s
+  observability_enabled: false
 connectors:
-  writers:
-    pub:
-      protocol: faker
-  readers:
-    sub:
-      protocol: faker
+  faker_connector:
+    protocol: faker
+    connector_middlewares:
+      - name: ratelimit
+        config:
+          requests_per_second: 10

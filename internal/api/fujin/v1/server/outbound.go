@@ -1,9 +1,6 @@
-//go:build fujin
-
 package server
 
 import (
-	"fmt"
 	"log/slog"
 	"net"
 	"sync"
@@ -126,8 +123,6 @@ func (o *Outbound) flushOutbound() bool {
 		}
 		consumed := len(wv)
 
-		fmt.Println("writing to stream", wv)
-
 		_ = o.str.SetWriteDeadline(start.Add(o.wdl))
 		wn, err = wv.WriteTo(o.str)
 		_ = o.str.SetWriteDeadline(time.Time{})
@@ -210,6 +205,13 @@ func (o *Outbound) QueueOutboundNoLock(data []byte) {
 		o.v = append(o.v, new[:n])
 		toBuffer = toBuffer[n:]
 	}
+}
+
+func (o *Outbound) QueueOutboundByteNoLock(data byte) {
+	o.pb += 1
+	new := pool.Get(1)[:1]
+	new[0] = data
+	o.v = append(o.v, new)
 }
 
 func (o *Outbound) IsClosed() bool {

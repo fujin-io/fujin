@@ -3,7 +3,7 @@
 APP_NAME := fujin
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
-ALL_TAGS = kafka,nats_core,amqp091,amqp10,resp_pubsub,resp_streams,mqtt,nsq,observability,grpc,fujin
+ALL_TAGS = grpc,fujin
 
 GO_BUILD_TAGS ?= ${ALL_TAGS}
 
@@ -18,6 +18,7 @@ ifeq ($(OS),Windows_NT)
     RMDIR := rmdir /S /Q
     MKDIR := mkdir
     PATHSEP := \\
+	BOOTCONF := setx FUJIN_CONFIGURATOR "file" && setx FUJIN_CONFIGURATOR_FILE_PATHS "./config.dev.yaml"
 else
     DETECTED_OS := $(shell uname -s)
     BINARY_EXT :=
@@ -25,6 +26,7 @@ else
     RMDIR := rm -rf
     MKDIR := mkdir -p
     PATHSEP := /
+	BOOTCONF := export FUJIN_CONFIGURATOR=file && export FUJIN_CONFIGURATOR_FILE_PATHS=./config.dev.yaml
 endif
 
 BIN_DIR := bin
@@ -51,29 +53,7 @@ endif
 .PHONY: run
 run:
 	@echo "==> Running"
-ifeq ($(OS),Windows_NT)
-	@if defined CONFIG ( \
-		echo Using custom config: $(CONFIG) && \
-		$(BINARY) $(CONFIG) \
-	) else if exist config.dev.yaml ( \
-		echo Using config.dev.yaml && \
-		$(BINARY) config.dev.yaml \
-	) else ( \
-		echo Using examples/assets/config/config.yaml && \
-		$(BINARY) examples\assets\config\config.yaml \
-	)
-else
-	@if [ -n "$(CONFIG)" ]; then \
-		echo "Using custom config: $(CONFIG)"; \
-		$(BINARY) $(CONFIG); \
-	elif [ -f "./config.dev.yaml" ]; then \
-		echo "Using config.dev.yaml"; \
-		$(BINARY) ./config.dev.yaml; \
-	else \
-		echo "Using examples/assets/config/config.yaml"; \
-		$(BINARY) ./examples/assets/config/config.yaml; \
-	fi
-endif
+	@$(BOOTCONF) && $(BINARY)
 
 .PHONY: generate
 generate:
@@ -91,20 +71,22 @@ help:
 	@echo ""
 	@echo "Usage:"
 	@echo "  make build [GO_BUILD_TAGS=\"tag1,tag2\"]  Build binary. Default GO_BUILD_TAGS=\"$(ALL_TAGS)\"."
-	@echo "  make run [CONFIG=\"path/to/config.yaml\"]  Run binary with config."
+	@echo "  make run [BOOTSTRAP=\"path/to/bootstrap.yaml\"]  Run binary with bootstrap config."
 	@echo "  make clean                             Remove build artifacts."
 	@echo "  make test                              Run all tests."
 	@echo "  make bench                             Run benchmarks."
 	@echo ""
-	@echo "Config Priority:"
-	@echo "  1. CONFIG parameter (if provided)"
-	@echo "  2. ./config.dev.yaml (if exists)"
-	@echo "  3. ./examples/assets/config/config.yaml (fallback)"
+	@echo "Config Loading Priority:"
+	@echo "  1. Environment variable FUJIN_CONFIGURATOR (if set)"
+	@echo "  2. BOOTSTRAP parameter or ./bootstrap.dev.yaml (default) or ./config.bootstrap.yaml or ./bootstrap.yaml (if exists)"
+	@echo "  3. Default file paths: ./config.yaml, conf/config.yaml, config/config.yaml"
 	@echo ""
 	@echo "Variables:"
 	@echo "  VERSION (default: git describe || dev) Version tag for builds."
 	@echo "  GO_BUILD_TAGS (default: all features)  Comma-separated Go build tags."
-	@echo "  CONFIG (optional)                      Path to custom config file."
+	@echo "  BOOTSTRAP (optional)                   Path to bootstrap config file."
+	@echo "  FUJIN_CONFIGURATOR (optional)         Config loader type (e.g., vault, file)."
+	@echo "  FUJIN_BOOTSTRAP_CONFIG (optional)      Path to bootstrap config (env var)."
 	@echo ""
 	@echo "Platform: $(DETECTED_OS)"
 	@echo "Binary: $(BINARY)"

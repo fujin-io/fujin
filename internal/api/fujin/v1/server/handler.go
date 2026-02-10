@@ -1,5 +1,3 @@
-//go:build fujin
-
 package server
 
 import (
@@ -8,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"sync"
 	"time"
 	"unsafe"
@@ -16,10 +15,10 @@ import (
 	"github.com/fujin-io/fujin/internal/api/fujin/v1/proto/response/server"
 	pool2 "github.com/fujin-io/fujin/internal/common/pool"
 	"github.com/fujin-io/fujin/internal/connectors"
-	public_connectors "github.com/fujin-io/fujin/public/connectors"
-	"github.com/fujin-io/fujin/public/connectors/reader"
-	internal_reader "github.com/fujin-io/fujin/public/connectors/reader"
-	"github.com/fujin-io/fujin/public/connectors/writer"
+	"github.com/fujin-io/fujin/public/plugins/connector"
+	"github.com/fujin-io/fujin/public/plugins/connector/config"
+	bmw "github.com/fujin-io/fujin/public/plugins/middleware/bind"
+	bmwconfig "github.com/fujin-io/fujin/public/plugins/middleware/bind/config"
 	v1 "github.com/fujin-io/fujin/public/proto/fujin/v1"
 	"github.com/quic-go/quic-go"
 )
@@ -27,12 +26,19 @@ import (
 const (
 	OP_START int = iota
 
-	OP_INIT
-	OP_INIT_CONFIG_OVERRIDES_COUNT
-	OP_INIT_CONFIG_OVERRIDE_KEY_LEN
-	OP_INIT_CONFIG_OVERRIDE_KEY
-	OP_INIT_CONFIG_OVERRIDE_VALUE_LEN
-	OP_INIT_CONFIG_OVERRIDE_VALUE
+	OP_BIND
+	OP_BIND_CONNECTOR_NAME_LEN
+	OP_BIND_CONNECTOR_NAME_PAYLOAD
+	OP_BIND_META_COUNT
+	OP_BIND_META_KEY_LEN
+	OP_BIND_META_KEY
+	OP_BIND_META_VALUE_LEN
+	OP_BIND_META_VALUE
+	OP_BIND_CONFIG_OVERRIDES_COUNT
+	OP_BIND_CONFIG_OVERRIDE_KEY_LEN
+	OP_BIND_CONFIG_OVERRIDE_KEY
+	OP_BIND_CONFIG_OVERRIDE_VALUE_LEN
+	OP_BIND_CONFIG_OVERRIDE_VALUE
 
 	OP_PRODUCE
 	OP_PRODUCE_CORRELATION_ID_ARG
@@ -142,7 +148,7 @@ var (
 type sessionState byte
 
 const (
-	STREAM_STATE_INIT sessionState = iota
+	STREAM_STATE_BIND sessionState = iota
 	STREAM_STATE_CONNECTED
 	STREAM_STATE_CONNECTED_IN_TX
 )
@@ -155,7 +161,7 @@ type parseState struct {
 
 	ca correlationIDArg
 
-	ina initArgs
+	ba  bindArgs
 	pa  produceArgs
 	pma produceMsgArgs
 
@@ -187,14 +193,19 @@ type subscribeArgs struct {
 	headered   bool
 }
 
-type initArgs struct {
-	configOverrides map[string]string
-	currentKey      string
-	currentValue    string
-	keyLen          uint32
-	valueLen        uint32
-	overridesCount  uint16
-	overridesRead   uint16
+type bindArgs struct {
+	meta               map[string]string
+	configOverrides    map[string]string
+	connectorNameLen   uint32
+	connectorNameValue string
+	currentKey         string
+	currentValue       string
+	keyLen             uint32
+	valueLen           uint32
+	metaCount          uint16
+	metaRead           uint16
+	overridesCount     uint16
+	overridesRead      uint16
 }
 
 type fetchArgs struct {
@@ -219,11 +230,12 @@ type headerArgs struct {
 }
 
 type handler struct {
-	ctx        context.Context
-	out        *Outbound
-	str        *quic.Stream
-	baseConfig public_connectors.Config
-	cman       *connectors.Manager // Created during INIT
+	ctx             context.Context
+	out             *Outbound
+	str             *quic.Stream
+	baseConfig      config.ConnectorsConfig
+	connectorConfig config.ConnectorConfig
+	cman            *connectors.ManagerV2 // Created during BIND
 
 	ps           *parseState
 	sessionState sessionState
@@ -234,24 +246,23 @@ type handler struct {
 	pingStream   bool
 
 	// producer
-	nonTxSessionWriters  map[string]writer.Writer
-	currentTxWriter      writer.Writer
+	nonTxSessionWriters  map[string]connector.WriteCloser
+	currentTxWriter      connector.WriteCloser
 	currentTxWriterTopic string
-	connected            bool // Whether INIT has been called
+	connected            bool // Whether BIND has been called
 
 	// subscriber
 	subIDPool   *pool2.BytePool
-	subscribers map[byte]internal_reader.Reader
+	subscribers map[byte]connector.ReadCloser
 	unsubFuncs  map[byte]func()
 	sMu         sync.Mutex
 
-	cpool                       *connectors.Pool
-	fetchReaders                map[string]byte // topic -> subscription_id mapping for fetch implicit subscriptions
+	fetchReaders                map[string]map[bool]byte // topic -> subscription_id mapping for fetch implicit subscriptions
 	fetchMsgHandlers            map[string]map[bool]func(message []byte, topic string, args ...any)
 	fetchMsgWithHeadersHandlers map[string]map[bool]func(message []byte, topic string, hs [][]byte, args ...any)
 	fhMu                        sync.RWMutex
 
-	acker internal_reader.Reader
+	acker connector.ReadCloser
 
 	disconnect func()
 
@@ -265,19 +276,19 @@ type handler struct {
 func newHandler(
 	ctx context.Context,
 	pingInterval time.Duration, pingTimeout time.Duration, pingStream bool,
-	baseConfig public_connectors.Config,
+	baseConfig config.ConnectorsConfig,
 	out *Outbound, str *quic.Stream, l *slog.Logger,
 ) *handler {
 	h := &handler{
 		ctx:                         ctx,
 		baseConfig:                  baseConfig,
-		cman:                        nil, // Will be created during INIT
+		cman:                        nil, // Will be created during BIND
 		pingInterval:                pingInterval,
 		pingTimeout:                 pingTimeout,
 		subIDPool:                   pool2.NewBytePool(),
-		subscribers:                 make(map[byte]internal_reader.Reader),
+		subscribers:                 make(map[byte]connector.ReadCloser),
 		unsubFuncs:                  make(map[byte]func()),
-		fetchReaders:                make(map[string]byte),
+		fetchReaders:                make(map[string]map[bool]byte),
 		fetchMsgHandlers:            make(map[string]map[bool]func(message []byte, topic string, args ...any)),
 		fetchMsgWithHeadersHandlers: make(map[string]map[bool]func(message []byte, topic string, hs [][]byte, args ...any)),
 		l:                           l,
@@ -285,7 +296,7 @@ func newHandler(
 		str:                         str,
 		ps:                          &parseState{},
 		disconnect:                  func() {},
-		sessionState:                STREAM_STATE_INIT,
+		sessionState:                STREAM_STATE_BIND,
 		connected:                   false,
 		closed:                      make(chan struct{}),
 	}
@@ -309,11 +320,11 @@ func (h *handler) handle(buf []byte) error {
 		switch h.ps.state {
 		case OP_START:
 			switch h.sessionState {
-			case STREAM_STATE_INIT:
+			case STREAM_STATE_BIND:
 				switch b {
-				case byte(v1.OP_CODE_INIT):
-					h.ps.state = OP_INIT_CONFIG_OVERRIDES_COUNT
-					h.ps.argBuf = pool.Get(v1.Uint16Len)
+				case byte(v1.OP_CODE_BIND):
+					h.ps.state = OP_BIND_CONNECTOR_NAME_LEN
+					h.ps.argBuf = pool.Get(v1.Uint32Len)
 				case byte(v1.OP_CODE_SUBSCRIBE):
 					h.ps.state = OP_SUBSCRIBE
 				case byte(v1.RESP_CODE_PONG):
@@ -1138,16 +1149,7 @@ func (h *handler) handle(buf []byte) error {
 				}
 
 				if len(h.ps.payloadBuf) >= int(h.ps.pma.size) {
-					if h.currentTxWriter != nil {
-						if !h.cman.WriterMatchEndpoint(h.currentTxWriter, h.ps.pa.topic) {
-							h.l.Error("writer can not be reused in tx")
-							h.enqueueWriteErrResponse(ErrWriterCanNotBeReusedInTx)
-							pool.Put(h.ps.ca.cID)
-							pool.Put(h.ps.payloadBuf)
-							h.ps.ca.cID, h.ps.payloadBuf, h.ps.pa, h.ps.state = nil, nil, produceArgs{}, OP_START
-							continue
-						}
-					} else {
+					if h.currentTxWriter == nil {
 						var err error // 1 byte (resp op code) + 4 bytes (request id) + 1 byte (success/failure)
 						currentTxWriter, err := h.cman.GetWriter(h.ps.pa.topic)
 						if err != nil {
@@ -1180,16 +1182,7 @@ func (h *handler) handle(buf []byte) error {
 				h.ps.payloadBuf = append(h.ps.payloadBuf, b)
 
 				if len(h.ps.payloadBuf) >= int(h.ps.pma.size) {
-					if h.currentTxWriter != nil {
-						if !h.cman.WriterMatchEndpoint(h.currentTxWriter, h.ps.pa.topic) {
-							h.l.Error("writer can not be reused in tx1")
-							h.enqueueWriteErrResponse(ErrWriterCanNotBeReusedInTx)
-							pool.Put(h.ps.ca.cID)
-							pool.Put(h.ps.payloadBuf)
-							h.ps.ca.cID, h.ps.payloadBuf, h.ps.pa, h.ps.state = nil, nil, produceArgs{}, OP_START
-							continue
-						}
-					} else {
+					if h.currentTxWriter == nil {
 						var err error // 1 byte (resp op code) + 4 bytes (request id) + 1 byte (success/failure)
 						currentTxWriter, err := h.cman.GetWriter(h.ps.pa.topic)
 						if err != nil {
@@ -1383,16 +1376,7 @@ func (h *handler) handle(buf []byte) error {
 				}
 
 				if len(h.ps.payloadBuf) >= int(h.ps.pma.size) {
-					if h.currentTxWriter != nil {
-						if !h.cman.WriterMatchEndpoint(h.currentTxWriter, h.ps.pa.topic) {
-							h.l.Error("writer can not be reused in tx")
-							h.enqueueWriteErrResponse(ErrWriterCanNotBeReusedInTx)
-							pool.Put(h.ps.ca.cID)
-							pool.Put(h.ps.payloadBuf)
-							h.ps.ca.cID, h.ps.payloadBuf, h.ps.pa, h.ps.state = nil, nil, produceArgs{}, OP_START
-							continue
-						}
-					} else {
+					if h.currentTxWriter == nil {
 						var err error // 1 byte (resp op code) + 4 bytes (request id) + 1 byte (success/failure)
 						currentTxWriter, err := h.cman.GetWriter(h.ps.pa.topic)
 						if err != nil {
@@ -1425,16 +1409,7 @@ func (h *handler) handle(buf []byte) error {
 				h.ps.payloadBuf = append(h.ps.payloadBuf, b)
 
 				if len(h.ps.payloadBuf) >= int(h.ps.pma.size) {
-					if h.currentTxWriter != nil {
-						if !h.cman.WriterMatchEndpoint(h.currentTxWriter, h.ps.pa.topic) {
-							h.l.Error("writer can not be reused in tx1")
-							h.enqueueWriteErrResponse(ErrWriterCanNotBeReusedInTx)
-							pool.Put(h.ps.ca.cID)
-							pool.Put(h.ps.payloadBuf)
-							h.ps.ca.cID, h.ps.payloadBuf, h.ps.pa, h.ps.state = nil, nil, produceArgs{}, OP_START
-							continue
-						}
-					} else {
+					if h.currentTxWriter == nil {
 						var err error // 1 byte (resp op code) + 4 bytes (request id) + 1 byte (success/failure)
 						currentTxWriter, err := h.cman.GetWriter(h.ps.pa.topic)
 						if err != nil {
@@ -1687,40 +1662,69 @@ func (h *handler) handle(buf []byte) error {
 				h.ps.ca.cID = pool.Get(v1.Uint32Len)
 				h.ps.ca.cID = append(h.ps.ca.cID, b)
 			}
-		case OP_INIT_CONFIG_OVERRIDES_COUNT:
-			// Parse config_overrides count (uint16)
+		case OP_BIND_CONNECTOR_NAME_LEN:
+			h.ps.argBuf = append(h.ps.argBuf, b)
+			if len(h.ps.argBuf) >= v1.Uint32Len {
+				h.ps.ba.connectorNameLen = binary.BigEndian.Uint32(h.ps.argBuf[:v1.Uint32Len])
+				pool.Put(h.ps.argBuf)
+				if h.ps.ba.connectorNameLen == 0 {
+					return ErrParseProto
+				}
+				h.ps.argBuf = pool.Get(int(h.ps.ba.connectorNameLen))
+				h.ps.state = OP_BIND_CONNECTOR_NAME_PAYLOAD
+			}
+		case OP_BIND_CONNECTOR_NAME_PAYLOAD:
+			toCopy := int(h.ps.ba.connectorNameLen) - len(h.ps.argBuf)
+			avail := len(buf) - i
+			if avail < toCopy {
+				toCopy = avail
+			}
+			if toCopy > 0 {
+				start := len(h.ps.argBuf)
+				h.ps.argBuf = h.ps.argBuf[:start+toCopy]
+				copy(h.ps.argBuf[start:], buf[i:i+toCopy])
+				i = (i + toCopy) - 1
+			} else {
+				h.ps.argBuf = append(h.ps.argBuf, b)
+			}
+			if len(h.ps.argBuf) >= int(h.ps.ba.connectorNameLen) {
+				h.ps.ba.connectorNameValue = string(h.ps.argBuf)
+				pool.Put(h.ps.argBuf)
+				h.connectorConfig = h.baseConfig[h.ps.ba.connectorNameValue]
+				h.ps.state = OP_BIND_META_COUNT
+				h.ps.argBuf = pool.Get(v1.Uint16Len)
+			}
+		case OP_BIND_META_COUNT:
+			// Parse meta count (uint16)
 			h.ps.argBuf = append(h.ps.argBuf, b)
 			if len(h.ps.argBuf) >= v1.Uint16Len {
-				h.ps.ina.overridesCount = binary.BigEndian.Uint16(h.ps.argBuf[:v1.Uint16Len])
+				h.ps.ba.metaCount = binary.BigEndian.Uint16(h.ps.argBuf[:v1.Uint16Len])
 				pool.Put(h.ps.argBuf)
 				h.ps.argBuf = nil
-				if h.ps.ina.overridesCount == 0 {
-					// No overrides, create Manager with base config
-					if err := h.handleInit(nil); err != nil {
-						return err
-					}
-					h.ps.ina = initArgs{}
-					h.ps.state = OP_START
+				if h.ps.ba.metaCount == 0 {
+					// No meta, proceed to config overrides
+					h.ps.state = OP_BIND_CONFIG_OVERRIDES_COUNT
+					h.ps.argBuf = pool.Get(v1.Uint16Len)
 				} else {
-					h.ps.ina.configOverrides = make(map[string]string, h.ps.ina.overridesCount)
-					h.ps.state = OP_INIT_CONFIG_OVERRIDE_KEY_LEN
+					h.ps.ba.meta = make(map[string]string, h.ps.ba.metaCount)
+					h.ps.state = OP_BIND_META_KEY_LEN
 					h.ps.argBuf = pool.Get(v1.Uint32Len)
 				}
 			}
-		case OP_INIT_CONFIG_OVERRIDE_KEY_LEN:
+		case OP_BIND_META_KEY_LEN:
 			h.ps.argBuf = append(h.ps.argBuf, b)
 			if len(h.ps.argBuf) >= v1.Uint32Len {
-				h.ps.ina.keyLen = binary.BigEndian.Uint32(h.ps.argBuf[:v1.Uint32Len])
+				h.ps.ba.keyLen = binary.BigEndian.Uint32(h.ps.argBuf[:v1.Uint32Len])
 				pool.Put(h.ps.argBuf)
 				h.ps.argBuf = nil
-				if h.ps.ina.keyLen == 0 {
+				if h.ps.ba.keyLen == 0 {
 					return ErrParseProto
 				}
-				h.ps.argBuf = pool.Get(int(h.ps.ina.keyLen))
-				h.ps.state = OP_INIT_CONFIG_OVERRIDE_KEY
+				h.ps.argBuf = pool.Get(int(h.ps.ba.keyLen))
+				h.ps.state = OP_BIND_META_KEY
 			}
-		case OP_INIT_CONFIG_OVERRIDE_KEY:
-			toCopy := int(h.ps.ina.keyLen) - len(h.ps.argBuf)
+		case OP_BIND_META_KEY:
+			toCopy := int(h.ps.ba.keyLen) - len(h.ps.argBuf)
 			avail := len(buf) - i
 			if avail < toCopy {
 				toCopy = avail
@@ -1733,24 +1737,22 @@ func (h *handler) handle(buf []byte) error {
 			} else {
 				h.ps.argBuf = append(h.ps.argBuf, b)
 			}
-			if len(h.ps.argBuf) >= int(h.ps.ina.keyLen) {
-				h.ps.ina.currentKey = string(h.ps.argBuf)
+			if len(h.ps.argBuf) >= int(h.ps.ba.keyLen) {
+				h.ps.ba.currentKey = string(h.ps.argBuf)
 				pool.Put(h.ps.argBuf)
-				h.ps.argBuf = nil
-				h.ps.state = OP_INIT_CONFIG_OVERRIDE_VALUE_LEN
+				h.ps.state = OP_BIND_META_VALUE_LEN
 				h.ps.argBuf = pool.Get(v1.Uint32Len)
 			}
-		case OP_INIT_CONFIG_OVERRIDE_VALUE_LEN:
+		case OP_BIND_META_VALUE_LEN:
 			h.ps.argBuf = append(h.ps.argBuf, b)
 			if len(h.ps.argBuf) >= v1.Uint32Len {
-				h.ps.ina.valueLen = binary.BigEndian.Uint32(h.ps.argBuf[:v1.Uint32Len])
+				h.ps.ba.valueLen = binary.BigEndian.Uint32(h.ps.argBuf[:v1.Uint32Len])
 				pool.Put(h.ps.argBuf)
-				h.ps.argBuf = nil
-				h.ps.argBuf = pool.Get(int(h.ps.ina.valueLen))
-				h.ps.state = OP_INIT_CONFIG_OVERRIDE_VALUE
+				h.ps.argBuf = pool.Get(int(h.ps.ba.valueLen))
+				h.ps.state = OP_BIND_META_VALUE
 			}
-		case OP_INIT_CONFIG_OVERRIDE_VALUE:
-			toCopy := int(h.ps.ina.valueLen) - len(h.ps.argBuf)
+		case OP_BIND_META_VALUE:
+			toCopy := int(h.ps.ba.valueLen) - len(h.ps.argBuf)
 			avail := len(buf) - i
 			if avail < toCopy {
 				toCopy = avail
@@ -1763,22 +1765,121 @@ func (h *handler) handle(buf []byte) error {
 			} else {
 				h.ps.argBuf = append(h.ps.argBuf, b)
 			}
-			if len(h.ps.argBuf) >= int(h.ps.ina.valueLen) {
-				h.ps.ina.currentValue = string(h.ps.argBuf)
-				h.ps.ina.configOverrides[h.ps.ina.currentKey] = h.ps.ina.currentValue
+			if len(h.ps.argBuf) >= int(h.ps.ba.valueLen) {
+				h.ps.ba.currentValue = string(h.ps.argBuf)
+				h.ps.ba.meta[h.ps.ba.currentKey] = h.ps.ba.currentValue
 				pool.Put(h.ps.argBuf)
 				h.ps.argBuf = nil
-				h.ps.ina.overridesRead++
-				if h.ps.ina.overridesRead >= h.ps.ina.overridesCount {
-					// All overrides parsed, create Manager
-					if err := h.handleInit(h.ps.ina.configOverrides); err != nil {
+				h.ps.ba.metaRead++
+				if h.ps.ba.metaRead >= h.ps.ba.metaCount {
+					// All meta parsed, proceed to config overrides
+					h.ps.state = OP_BIND_CONFIG_OVERRIDES_COUNT
+					h.ps.argBuf = pool.Get(v1.Uint16Len)
+				} else {
+					// Continue with next meta pair
+					h.ps.state = OP_BIND_META_KEY_LEN
+					h.ps.argBuf = pool.Get(v1.Uint32Len)
+				}
+			}
+		case OP_BIND_CONFIG_OVERRIDES_COUNT:
+			fmt.Println(h.ps.ba.meta)
+			// Parse config_overrides count (uint16)
+			h.ps.argBuf = append(h.ps.argBuf, b)
+			if len(h.ps.argBuf) >= v1.Uint16Len {
+				h.ps.ba.overridesCount = binary.BigEndian.Uint16(h.ps.argBuf[:v1.Uint16Len])
+				pool.Put(h.ps.argBuf)
+				h.ps.argBuf = nil
+				if h.ps.ba.overridesCount == 0 {
+					// No overrides, create Manager with base config
+					meta := h.ps.ba.meta
+					if meta == nil {
+						meta = make(map[string]string)
+					}
+					if err := h.handleInit(meta, nil); err != nil {
 						return err
 					}
-					h.ps.ina = initArgs{}
+					h.ps.ba = bindArgs{}
+					h.ps.state = OP_START
+				} else {
+					h.ps.ba.configOverrides = make(map[string]string, h.ps.ba.overridesCount)
+					h.ps.state = OP_BIND_CONFIG_OVERRIDE_KEY_LEN
+					h.ps.argBuf = pool.Get(v1.Uint32Len)
+				}
+			}
+		case OP_BIND_CONFIG_OVERRIDE_KEY_LEN:
+			h.ps.argBuf = append(h.ps.argBuf, b)
+			if len(h.ps.argBuf) >= v1.Uint32Len {
+				h.ps.ba.keyLen = binary.BigEndian.Uint32(h.ps.argBuf[:v1.Uint32Len])
+				pool.Put(h.ps.argBuf)
+				h.ps.argBuf = nil
+				if h.ps.ba.keyLen == 0 {
+					return ErrParseProto
+				}
+				h.ps.argBuf = pool.Get(int(h.ps.ba.keyLen))
+				h.ps.state = OP_BIND_CONFIG_OVERRIDE_KEY
+			}
+		case OP_BIND_CONFIG_OVERRIDE_KEY:
+			toCopy := int(h.ps.ba.keyLen) - len(h.ps.argBuf)
+			avail := len(buf) - i
+			if avail < toCopy {
+				toCopy = avail
+			}
+			if toCopy > 0 {
+				start := len(h.ps.argBuf)
+				h.ps.argBuf = h.ps.argBuf[:start+toCopy]
+				copy(h.ps.argBuf[start:], buf[i:i+toCopy])
+				i = (i + toCopy) - 1
+			} else {
+				h.ps.argBuf = append(h.ps.argBuf, b)
+			}
+			if len(h.ps.argBuf) >= int(h.ps.ba.keyLen) {
+				h.ps.ba.currentKey = string(h.ps.argBuf)
+				pool.Put(h.ps.argBuf)
+				h.ps.state = OP_BIND_CONFIG_OVERRIDE_VALUE_LEN
+				h.ps.argBuf = pool.Get(v1.Uint32Len)
+			}
+		case OP_BIND_CONFIG_OVERRIDE_VALUE_LEN:
+			h.ps.argBuf = append(h.ps.argBuf, b)
+			if len(h.ps.argBuf) >= v1.Uint32Len {
+				h.ps.ba.valueLen = binary.BigEndian.Uint32(h.ps.argBuf[:v1.Uint32Len])
+				pool.Put(h.ps.argBuf)
+				h.ps.argBuf = pool.Get(int(h.ps.ba.valueLen))
+				h.ps.state = OP_BIND_CONFIG_OVERRIDE_VALUE
+			}
+		case OP_BIND_CONFIG_OVERRIDE_VALUE:
+			toCopy := int(h.ps.ba.valueLen) - len(h.ps.argBuf)
+			avail := len(buf) - i
+			if avail < toCopy {
+				toCopy = avail
+			}
+			if toCopy > 0 {
+				start := len(h.ps.argBuf)
+				h.ps.argBuf = h.ps.argBuf[:start+toCopy]
+				copy(h.ps.argBuf[start:], buf[i:i+toCopy])
+				i = (i + toCopy) - 1
+			} else {
+				h.ps.argBuf = append(h.ps.argBuf, b)
+			}
+			if len(h.ps.argBuf) >= int(h.ps.ba.valueLen) {
+				h.ps.ba.currentValue = string(h.ps.argBuf)
+				h.ps.ba.configOverrides[h.ps.ba.currentKey] = h.ps.ba.currentValue
+				pool.Put(h.ps.argBuf)
+				h.ps.argBuf = nil
+				h.ps.ba.overridesRead++
+				if h.ps.ba.overridesRead >= h.ps.ba.overridesCount {
+					// All overrides parsed, create Manager
+					meta := h.ps.ba.meta
+					if meta == nil {
+						meta = make(map[string]string)
+					}
+					if err := h.handleInit(meta, h.ps.ba.configOverrides); err != nil {
+						return err
+					}
+					h.ps.ba = bindArgs{}
 					h.ps.state = OP_START
 				} else {
 					// Continue with next override
-					h.ps.state = OP_INIT_CONFIG_OVERRIDE_KEY_LEN
+					h.ps.state = OP_BIND_CONFIG_OVERRIDE_KEY_LEN
 					h.ps.argBuf = pool.Get(v1.Uint32Len)
 				}
 			}
@@ -1947,31 +2048,47 @@ func (h *handler) handle(buf []byte) error {
 	return nil
 }
 
-// handleInit processes INIT command and creates Manager with config overrides
-func (h *handler) handleInit(configOverrides map[string]string) error {
+// handleInit processes BIND command and creates Manager with config overrides
+func (h *handler) handleInit(meta map[string]string, configOverrides map[string]string) error {
 	if h.connected {
 		// Already initialized, ignore
 		return fmt.Errorf("already initialized")
 	}
 
-	// Apply config overrides if provided
-	modifiedConfig := h.baseConfig
-	if len(configOverrides) > 0 {
-		modifiedConfigForOverride, err := connectors.ApplyOverrides(h.baseConfig, configOverrides)
+	// Process bind middlewares
+	overrides := make(map[string]string, len(configOverrides))
+	maps.Copy(overrides, configOverrides)
+
+	// Convert bind middleware configs
+	bindMiddlewareConfigs := make([]bmwconfig.Config, 0, len(h.connectorConfig.BindMiddlewares))
+	bindMiddlewareConfigs = append(bindMiddlewareConfigs, h.connectorConfig.BindMiddlewares...)
+
+	// Process bind middlewares
+	if len(bindMiddlewareConfigs) > 0 {
+		if err := bmw.Chain(h.ctx, meta, bindMiddlewareConfigs, h.l); err != nil {
+			h.l.Warn("bind middleware rejected", "connector", h.ps.ba.connectorNameValue, "err", err)
+			h.out.EnqueueProtoMulti([]byte{byte(v1.RESP_CODE_BIND)}, errProtoBuf(err))
+			return nil
+		}
+	}
+
+	// Apply config overrides if provided (may have been modified by middlewares)
+	modifiedConfig := h.connectorConfig
+	if len(overrides) > 0 {
+		modifiedConfigForOverride, err := connectors.ApplyOverrides(h.connectorConfig, overrides)
 		if err != nil {
-			h.out.EnqueueProtoMulti([]byte{byte(v1.RESP_CODE_INIT)}, errProtoBuf(err))
+			h.out.EnqueueProtoMulti([]byte{byte(v1.RESP_CODE_BIND)}, errProtoBuf(err))
 			return nil
 		} else {
 			modifiedConfig = modifiedConfigForOverride
 		}
 	}
 
-	h.out.EnqueueProto([]byte{byte(v1.RESP_CODE_INIT), v1.ERR_CODE_NO})
+	h.out.EnqueueProto([]byte{byte(v1.RESP_CODE_BIND), v1.ERR_CODE_NO})
 
 	// Create a new Manager with the modified configuration
-	h.cman = connectors.NewManager(modifiedConfig, h.l)
-	h.cpool = connectors.NewPool(h.cman)
-	h.nonTxSessionWriters = make(map[string]writer.Writer)
+	h.cman = connectors.NewManagerV2(modifiedConfig, h.ps.ba.connectorNameValue, h.l)
+	h.nonTxSessionWriters = make(map[string]connector.WriteCloser)
 	h.connected = true
 	h.sessionState = STREAM_STATE_CONNECTED
 
@@ -1985,9 +2102,6 @@ func (h *handler) handleInit(configOverrides map[string]string) error {
 			_ = h.currentTxWriter.RollbackTx(h.ctx)
 			h.cman.PutWriter(h.currentTxWriter, h.currentTxWriterTopic)
 			h.currentTxWriter = nil
-		}
-		if h.cpool != nil {
-			h.cpool.Close()
 		}
 		h.sMu.Lock()
 		for _, unsub := range h.unsubFuncs {
@@ -2017,7 +2131,7 @@ func (h *handler) writePing() {
 	}
 }
 
-func (h *handler) subscribe(ctx context.Context, subID byte, r internal_reader.Reader) {
+func (h *handler) subscribe(ctx context.Context, subID byte, r connector.ReadCloser) {
 	msgHandler := h.subEnqueueMsgFunc(h.out, subID, r)
 	for {
 		select {
@@ -2033,7 +2147,7 @@ func (h *handler) subscribe(ctx context.Context, subID byte, r internal_reader.R
 	}
 }
 
-func (h *handler) hsubscribe(ctx context.Context, subID byte, r internal_reader.Reader) {
+func (h *handler) hsubscribe(ctx context.Context, subID byte, r connector.ReadCloser) {
 	msgHandler := h.subEnqueueMsgFuncWithHeaders(h.out, subID, r)
 	for {
 		select {
@@ -2140,7 +2254,12 @@ func (h *handler) hproduceTx(msg []byte) {
 func (h *handler) fetch(topic string, autoCommit bool, n uint32) {
 	// Check if we already have a subscription_id for this topic (implicit subscription)
 	h.fhMu.Lock()
-	subID, exists := h.fetchReaders[topic]
+	topicReaders, exists := h.fetchReaders[topic]
+	if !exists {
+		topicReaders = make(map[bool]byte, 2)
+		h.fetchReaders[topic] = topicReaders
+	}
+	subID, exists := topicReaders[autoCommit]
 	if !exists {
 		// Create new implicit subscription
 		h.sMu.Lock()
@@ -2161,11 +2280,11 @@ func (h *handler) fetch(topic string, autoCommit bool, n uint32) {
 			pool.Put(header)
 			return
 		}
-		h.fetchReaders[topic] = subID
+		h.fetchReaders[topic][autoCommit] = subID
 	}
 	h.fhMu.Unlock()
 
-	header := pool.Get(7)[:0]
+	header := pool.Get(6)[:0]
 	op := byte(v1.RESP_CODE_FETCH)
 	if h.ps.fa.headered {
 		op = byte(v1.RESP_CODE_HFETCH)
@@ -2173,15 +2292,20 @@ func (h *handler) fetch(topic string, autoCommit bool, n uint32) {
 	header = append(header, op)
 	header = append(header, h.ps.ca.cID...)
 	header = append(header, v1.ERR_CODE_NO)
-	header = append(header, subID)
+	// header = append(header, subID)
 
 	go func(headered bool, subscriptionID byte) {
-		fetcher, err := h.cpool.GetReader(topic, autoCommit)
-		if err != nil {
-			header[5] = v1.ERR_CODE_YES
-			h.out.EnqueueProtoMulti(header, errProtoBuf(err))
-			pool.Put(header)
-			return
+		fetcher, ok := h.subscribers[subscriptionID]
+		if !ok {
+			var err error
+			fetcher, err = h.cman.GetReader(topic, autoCommit)
+			if err != nil {
+				fmt.Println(err)
+				header[5] = v1.ERR_CODE_YES
+				h.out.EnqueueProtoMulti(header, errProtoBuf(err))
+				pool.Put(header)
+				return
+			}
 		}
 
 		// Store fetcher in subscribers map for ACK/NACK operations
@@ -2205,6 +2329,7 @@ func (h *handler) fetch(topic string, autoCommit bool, n uint32) {
 
 					h.out.QueueOutboundNoLock(header)
 					pool.Put(header)
+					h.out.QueueOutboundByteNoLock(subID)
 					count := pool.Get(v1.Uint32Len)
 					count = binary.BigEndian.AppendUint32(count, n)
 					h.out.QueueOutboundNoLock(count)
@@ -2230,6 +2355,7 @@ func (h *handler) fetch(topic string, autoCommit bool, n uint32) {
 
 				h.out.QueueOutboundNoLock(header)
 				pool.Put(header)
+				h.out.QueueOutboundByteNoLock(subID)
 				count := pool.Get(v1.Uint32Len)
 				count = binary.BigEndian.AppendUint32(count, n)
 				h.out.QueueOutboundNoLock(count)
@@ -2508,7 +2634,7 @@ func enqueueUnsubscribeSuccess(out *Outbound, cID []byte) {
 }
 
 func (h *handler) subEnqueueMsgFunc(
-	out *Outbound, subID byte, r internal_reader.Reader,
+	out *Outbound, subID byte, r connector.ReadCloser,
 ) func(message []byte, topic string, args ...any) {
 	staticArgsLen := r.MsgIDStaticArgsLen()
 	constBufLen := staticArgsLen + 6 // cmd(1) + subID(1) + msgLen(4)
@@ -2544,7 +2670,7 @@ func (h *handler) subEnqueueMsgFunc(
 }
 
 func (h *handler) subEnqueueMsgFuncWithHeaders(
-	out *Outbound, subID byte, r internal_reader.Reader,
+	out *Outbound, subID byte, r connector.ReadCloser,
 ) func(message []byte, topic string, hs [][]byte, args ...any) {
 	staticArgsLen := r.MsgIDStaticArgsLen()
 	constBufLen := staticArgsLen + 8 // cmd(1) + subID(1) + headersLen(2) + msgLen(4)
@@ -2600,7 +2726,7 @@ func (h *handler) subEnqueueMsgFuncWithHeaders(
 }
 
 func (h *handler) fetchEnqueueMsgFunc(
-	out *Outbound, r internal_reader.Reader, topic string, autoCommit bool,
+	out *Outbound, r connector.ReadCloser, topic string, autoCommit bool,
 ) func(message []byte, topic string, args ...any) {
 	staticArgsLen := r.MsgIDStaticArgsLen()
 	constBufLen := staticArgsLen + 4 // msgLen(4)
@@ -2650,7 +2776,7 @@ func (h *handler) fetchEnqueueMsgFunc(
 }
 
 func (h *handler) fetchEnqueueMsgFuncWithHeaders(
-	out *Outbound, r internal_reader.Reader, topic string, autoCommit bool,
+	out *Outbound, r connector.ReadCloser, topic string, autoCommit bool,
 ) func(message []byte, topic string, hs [][]byte, args ...any) {
 	staticArgsLen := r.MsgIDStaticArgsLen()
 	constBufLen := staticArgsLen + 6 // headersLen(2) + msgLen(4)
@@ -2717,56 +2843,6 @@ func (h *handler) fetchEnqueueMsgFuncWithHeaders(
 
 	mhm[autoCommit] = mh
 	return mh
-}
-
-func (h *handler) enqueueMsgFunc(
-	out *Outbound, r internal_reader.Reader, readerType reader.ReaderType, msgConstsLen int,
-) func(message []byte, topic string, args ...any) {
-	staticArgsLen := r.MsgIDStaticArgsLen()
-
-	if readerType == reader.Subscriber {
-		if r.IsAutoCommit() {
-			return func(message []byte, topic string, args ...any) {
-				buf := pool.Get(len(message) + msgConstsLen)
-				buf = append(buf, byte(v1.RESP_CODE_MSG))
-				buf = binary.BigEndian.AppendUint32(buf, uint32(len(message)))
-				buf = append(buf, message...)
-				out.EnqueueProto(buf)
-				pool.Put(buf)
-			}
-		}
-
-		return func(message []byte, topic string, args ...any) {
-			buf := pool.Get(len(message) + len(topic) + msgConstsLen)
-			buf = append(buf, byte(v1.RESP_CODE_MSG))
-			buf = binary.BigEndian.AppendUint32(buf, uint32(len(topic)+staticArgsLen))
-			buf = r.EncodeMsgID(buf, topic, args...)
-			buf = binary.BigEndian.AppendUint32(buf, uint32(len(message)))
-			buf = append(buf, message...)
-			out.EnqueueProto(buf)
-			pool.Put(buf)
-		}
-	}
-
-	if r.IsAutoCommit() {
-		return func(message []byte, topic string, args ...any) {
-			buf := pool.Get(len(message) + msgConstsLen)
-			buf = binary.BigEndian.AppendUint32(buf, uint32(len(message)))
-			buf = append(buf, message...)
-			out.QueueOutboundNoLock(buf)
-			pool.Put(buf)
-		}
-	}
-
-	return func(message []byte, topic string, args ...any) {
-		buf := pool.Get(len(message) + len(topic) + msgConstsLen)
-		buf = binary.BigEndian.AppendUint32(buf, uint32(len(topic)+staticArgsLen))
-		buf = r.EncodeMsgID(buf, topic, args...)
-		buf = binary.BigEndian.AppendUint32(buf, uint32(len(message)))
-		buf = append(buf, message...)
-		out.QueueOutboundNoLock(buf)
-		pool.Put(buf)
-	}
 }
 
 func enqueueSubscribeErr(out *Outbound, cID []byte, respCode v1.RespCode, errCode v1.ErrCode, err error) {

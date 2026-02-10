@@ -18,18 +18,6 @@ import (
 	"github.com/fujin-io/fujin/internal/api/fujin/v1/proto/request"
 	"github.com/fujin-io/fujin/internal/api/fujin/v1/proto/response"
 	"github.com/fujin-io/fujin/internal/api/fujin/v1/version"
-	"github.com/fujin-io/fujin/public/connectors"
-	"github.com/fujin-io/fujin/public/connectors/impl/amqp091"
-	"github.com/fujin-io/fujin/public/connectors/impl/amqp10"
-	"github.com/fujin-io/fujin/public/connectors/impl/kafka"
-	"github.com/fujin-io/fujin/public/connectors/impl/mqtt"
-	nats_core "github.com/fujin-io/fujin/public/connectors/impl/nats/core"
-	"github.com/fujin-io/fujin/public/connectors/impl/nsq"
-	redis_config "github.com/fujin-io/fujin/public/connectors/impl/resp/config"
-	"github.com/fujin-io/fujin/public/connectors/impl/resp/pubsub"
-	resp_streams "github.com/fujin-io/fujin/public/connectors/impl/resp/streams"
-	reader_config "github.com/fujin-io/fujin/public/connectors/reader/config"
-	writer_config "github.com/fujin-io/fujin/public/connectors/writer/config"
 	"github.com/fujin-io/fujin/public/server"
 	"github.com/fujin-io/fujin/public/server/config"
 	"github.com/quic-go/quic-go"
@@ -47,293 +35,293 @@ var DefaultFujinServerTestConfig = config.FujinServerConfig{
 
 var DefaultTestConfigWithKafka3Brokers = config.Config{
 	Fujin: DefaultFujinServerTestConfig,
-	Connectors: connectors.Config{
-		Readers: map[string]reader_config.Config{
-			"sub": {
-				Protocol: "kafka",
-				Settings: kafka.ReaderConfig{
-					Brokers:                []string{"localhost:9092", "localhost:9093", "localhost:9094"},
-					Topic:                  "my_pub_topic",
-					Group:                  "fujin",
-					AllowAutoTopicCreation: true,
-				},
-			},
-		},
-		Writers: map[string]writer_config.Config{
-			"pub": {
-				Protocol: "kafka",
-				Settings: &kafka.WriterConfig{
-					Brokers:                []string{"localhost:9092", "localhost:9093", "localhost:9094"},
-					Topic:                  "my_pub_topic",
-					AllowAutoTopicCreation: true,
-					Linger:                 10 * time.Millisecond,
-				},
-			},
-		},
-	},
+	// Connectors: connectors.Config{
+	// 	Readers: map[string]reader_config.Config{
+	// 		"sub": {
+	// 			Protocol: "kafka",
+	// 			Settings: kafka.ReaderConfig{
+	// 				Brokers:                []string{"localhost:9092", "localhost:9093", "localhost:9094"},
+	// 				Topic:                  "my_pub_topic",
+	// 				Group:                  "fujin",
+	// 				AllowAutoTopicCreation: true,
+	// 			},
+	// 		},
+	// 	},
+	// 	Writers: map[string]writer_config.Config{
+	// 		"pub": {
+	// 			Protocol: "kafka",
+	// 			Settings: &kafka.WriterConfig{
+	// 				Brokers:                []string{"localhost:9092", "localhost:9093", "localhost:9094"},
+	// 				Topic:                  "my_pub_topic",
+	// 				AllowAutoTopicCreation: true,
+	// 				Linger:                 10 * time.Millisecond,
+	// 			},
+	// 		},
+	// 	},
+	// },
 }
 
 var DefaultTestConfigWithNats = config.Config{
 	Fujin: DefaultFujinServerTestConfig,
-	Connectors: connectors.Config{
-		Readers: map[string]reader_config.Config{
-			"sub": {
-				Protocol: "nats_core",
-				Settings: nats_core.ReaderConfig{
-					URL:     "nats://localhost:4222",
-					Subject: "my_subject",
-				},
-			},
-		},
-		Writers: map[string]writer_config.Config{
-			"pub": {
-				Protocol: "nats_core",
-				Settings: &nats_core.WriterConfig{
-					URL:     "nats://localhost:4222",
-					Subject: "my_subject",
-				},
-			},
-		},
-	},
+	// Connectors: connectors.Config{
+	// 	Readers: map[string]reader_config.Config{
+	// 		"sub": {
+	// 			Protocol: "nats_core",
+	// 			Settings: nats_core.ReaderConfig{
+	// 				URL:     "nats://localhost:4222",
+	// 				Subject: "my_subject",
+	// 			},
+	// 		},
+	// 	},
+	// 	Writers: map[string]writer_config.Config{
+	// 		"pub": {
+	// 			Protocol: "nats_core",
+	// 			Settings: &nats_core.WriterConfig{
+	// 				URL:     "nats://localhost:4222",
+	// 				Subject: "my_subject",
+	// 			},
+	// 		},
+	// 	},
+	// },
 }
 
 var DefaultTestConfigWithAMQP091 = config.Config{
 	Fujin: DefaultFujinServerTestConfig,
-	Connectors: connectors.Config{
-		Readers: map[string]reader_config.Config{
-			"sub": {
-				Protocol: "amqp091",
-				Settings: amqp091.ReaderConfig{
-					Conn: amqp091.ConnConfig{
-						URL: "amqp://guest:guest@localhost",
-					},
-					Exchange: amqp091.ExchangeConfig{
-						Name: "events",
-						Kind: "fanout",
-					},
-					Queue: amqp091.QueueConfig{
-						Name: "my_queue",
-					},
-					QueueBind: amqp091.QueueBindConfig{
-						RoutingKey: "my_routing_key",
-					},
-					Consume: amqp091.ConsumeConfig{
-						Consumer: "fujin",
-					},
-				},
-			},
-		},
-		Writers: map[string]writer_config.Config{
-			"pub": {
-				Protocol: "amqp091",
-				Settings: &amqp091.WriterConfig{
-					Conn: amqp091.ConnConfig{
-						URL: "amqp://guest:guest@localhost",
-					},
-					Exchange: amqp091.ExchangeConfig{
-						Name: "events",
-						Kind: "fanout",
-					},
-					Queue: amqp091.QueueConfig{
-						Name: "my_queue",
-					},
-					QueueBind: amqp091.QueueBindConfig{
-						RoutingKey: "my_routing_key",
-					},
-					Publish: amqp091.PublishConfig{
-						ContentType: "text/plain",
-					},
-				},
-			},
-		},
-	},
+	// Connectors: connectors.Config{
+	// 	Readers: map[string]reader_config.Config{
+	// 		"sub": {
+	// 			Protocol: "amqp091",
+	// 			Settings: amqp091.ReaderConfig{
+	// 				Conn: amqp091.ConnConfig{
+	// 					URL: "amqp://guest:guest@localhost",
+	// 				},
+	// 				Exchange: amqp091.ExchangeConfig{
+	// 					Name: "events",
+	// 					Kind: "fanout",
+	// 				},
+	// 				Queue: amqp091.QueueConfig{
+	// 					Name: "my_queue",
+	// 				},
+	// 				QueueBind: amqp091.QueueBindConfig{
+	// 					RoutingKey: "my_routing_key",
+	// 				},
+	// 				Consume: amqp091.ConsumeConfig{
+	// 					Consumer: "fujin",
+	// 				},
+	// 			},
+	// 		},
+	// 	},
+	// 	Writers: map[string]writer_config.Config{
+	// 		"pub": {
+	// 			Protocol: "amqp091",
+	// 			Settings: &amqp091.WriterConfig{
+	// 				Conn: amqp091.ConnConfig{
+	// 					URL: "amqp://guest:guest@localhost",
+	// 				},
+	// 				Exchange: amqp091.ExchangeConfig{
+	// 					Name: "events",
+	// 					Kind: "fanout",
+	// 				},
+	// 				Queue: amqp091.QueueConfig{
+	// 					Name: "my_queue",
+	// 				},
+	// 				QueueBind: amqp091.QueueBindConfig{
+	// 					RoutingKey: "my_routing_key",
+	// 				},
+	// 				Publish: amqp091.PublishConfig{
+	// 					ContentType: "text/plain",
+	// 				},
+	// 			},
+	// 		},
+	// 	},
+	// },
 }
 
 var DefaultTestConfigWithAMQP10 = config.Config{
 	Fujin: DefaultFujinServerTestConfig,
-	Connectors: connectors.Config{
-		Readers: map[string]reader_config.Config{
-			"sub": {
-				Protocol: "amqp10",
-				Settings: amqp10.ReaderConfig{
-					Conn: amqp10.ConnConfig{
-						Addr: "amqp://artemis:artemis@localhost:61616",
-					},
-					Receiver: amqp10.ReceiverConfig{
-						Source: "queue",
-					},
-				},
-			},
-		},
-		Writers: map[string]writer_config.Config{
-			"pub": {
-				Protocol: "amqp10",
-				Settings: &amqp10.WriterConfig{
-					Conn: amqp10.ConnConfig{
-						Addr: "amqp://artemis:artemis@localhost:61616",
-					},
-					Sender: amqp10.SenderConfig{
-						Target: "queue",
-					},
-				},
-			},
-		},
-	},
+	// Connectors: connectors.Config{
+	// 	Readers: map[string]reader_config.Config{
+	// 		"sub": {
+	// 			Protocol: "amqp10",
+	// 			Settings: amqp10.ReaderConfig{
+	// 				Conn: amqp10.ConnConfig{
+	// 					Addr: "amqp://artemis:artemis@localhost:61616",
+	// 				},
+	// 				Receiver: amqp10.ReceiverConfig{
+	// 					Source: "queue",
+	// 				},
+	// 			},
+	// 		},
+	// 	},
+	// 	Writers: map[string]writer_config.Config{
+	// 		"pub": {
+	// 			Protocol: "amqp10",
+	// 			Settings: &amqp10.WriterConfig{
+	// 				Conn: amqp10.ConnConfig{
+	// 					Addr: "amqp://artemis:artemis@localhost:61616",
+	// 				},
+	// 				Sender: amqp10.SenderConfig{
+	// 					Target: "queue",
+	// 				},
+	// 			},
+	// 		},
+	// 	},
+	// },
 }
 
 var DefaultTestConfigWithRedisPubSub = config.Config{
 	Fujin: DefaultFujinServerTestConfig,
-	Connectors: connectors.Config{
-		Readers: map[string]reader_config.Config{
-			"sub": {
-				Protocol: "resp_pubsub",
-				Settings: pubsub.ReaderConfig{
-					ReaderConfig: redis_config.ReaderConfig{
-						RedisConfig: redis_config.RedisConfig{
-							InitAddress:  []string{"localhost:6379"},
-							DisableCache: true,
-						},
-					},
-					Channels: []string{"channel"},
-				},
-			},
-		},
-		Writers: map[string]writer_config.Config{
-			"pub": {
-				Protocol: "resp_pubsub",
-				Settings: &pubsub.WriterConfig{
-					WriterConfig: redis_config.WriterConfig{
-						RedisConfig: redis_config.RedisConfig{
-							InitAddress:  []string{"localhost:6379"},
-							DisableCache: true,
-						},
-						BatchSize: 1000,
-						Linger:    5 * time.Millisecond,
-					},
-					Channel: "channel",
-				},
-			},
-		},
-	},
+	// Connectors: connectors.Config{
+	// 	Readers: map[string]reader_config.Config{
+	// 		"sub": {
+	// 			Protocol: "resp_pubsub",
+	// 			Settings: pubsub.ReaderConfig{
+	// 				ReaderConfig: redis_config.ReaderConfig{
+	// 					RedisConfig: redis_config.RedisConfig{
+	// 						InitAddress:  []string{"localhost:6379"},
+	// 						DisableCache: true,
+	// 					},
+	// 				},
+	// 				Channels: []string{"channel"},
+	// 			},
+	// 		},
+	// 	},
+	// 	Writers: map[string]writer_config.Config{
+	// 		"pub": {
+	// 			Protocol: "resp_pubsub",
+	// 			Settings: &pubsub.WriterConfig{
+	// 				WriterConfig: redis_config.WriterConfig{
+	// 					RedisConfig: redis_config.RedisConfig{
+	// 						InitAddress:  []string{"localhost:6379"},
+	// 						DisableCache: true,
+	// 					},
+	// 					BatchSize: 1000,
+	// 					Linger:    5 * time.Millisecond,
+	// 				},
+	// 				Channel: "channel",
+	// 			},
+	// 		},
+	// 	},
+	// },
 }
 
 var DefaultTestConfigWithRedisStreams = config.Config{
 	Fujin: DefaultFujinServerTestConfig,
-	Connectors: connectors.Config{
-		Readers: map[string]reader_config.Config{
-			"sub": {
-				Protocol: "resp_streams",
-				Settings: resp_streams.ReaderConfig{
-					ReaderConfig: redis_config.ReaderConfig{
-						RedisConfig: redis_config.RedisConfig{
-							InitAddress:  []string{"localhost:6379"},
-							DisableCache: true,
-						},
-					},
-					Streams: map[string]resp_streams.StreamConf{
-						"stream": {
-							StartID:       ">",
-							GroupCreateID: "$",
-						},
-					},
-					Group: resp_streams.GroupConf{
-						Name:     "fujin",
-						Consumer: "fujin",
-					},
-				},
-			},
-		},
-		Writers: map[string]writer_config.Config{
-			"pub": {
-				Protocol: "resp_streams",
-				Settings: &resp_streams.WriterConfig{
-					WriterConfig: redis_config.WriterConfig{
-						RedisConfig: redis_config.RedisConfig{
-							InitAddress:  []string{"localhost:6379"},
-							DisableCache: true,
-						},
-						BatchSize: 1000,
-						Linger:    5 * time.Millisecond,
-					},
-					Stream: "stream",
-				},
-			},
-		},
-	},
+	// Connectors: connectors.Config{
+	// 	Readers: map[string]reader_config.Config{
+	// 		"sub": {
+	// 			Protocol: "resp_streams",
+	// 			Settings: resp_streams.ReaderConfig{
+	// 				ReaderConfig: redis_config.ReaderConfig{
+	// 					RedisConfig: redis_config.RedisConfig{
+	// 						InitAddress:  []string{"localhost:6379"},
+	// 						DisableCache: true,
+	// 					},
+	// 				},
+	// 				Streams: map[string]resp_streams.StreamConf{
+	// 					"stream": {
+	// 						StartID:       ">",
+	// 						GroupCreateID: "$",
+	// 					},
+	// 				},
+	// 				Group: resp_streams.GroupConf{
+	// 					Name:     "fujin",
+	// 					Consumer: "fujin",
+	// 				},
+	// 			},
+	// 		},
+	// 	},
+	// 	Writers: map[string]writer_config.Config{
+	// 		"pub": {
+	// 			Protocol: "resp_streams",
+	// 			Settings: &resp_streams.WriterConfig{
+	// 				WriterConfig: redis_config.WriterConfig{
+	// 					RedisConfig: redis_config.RedisConfig{
+	// 						InitAddress:  []string{"localhost:6379"},
+	// 						DisableCache: true,
+	// 					},
+	// 					BatchSize: 1000,
+	// 					Linger:    5 * time.Millisecond,
+	// 				},
+	// 				Stream: "stream",
+	// 			},
+	// 		},
+	// 	},
+	// },
 }
 
 var DefaultTestConfigWithMQTT = config.Config{
 	Fujin: DefaultFujinServerTestConfig,
-	Connectors: connectors.Config{
-		Readers: map[string]reader_config.Config{
-			"sub": {
-				Protocol: "mqtt",
-				Settings: mqtt.MQTTConfig{
-					BrokerURL:         "tcp://localhost:1883",
-					ClientID:          "fujin_sub",
-					Topic:             "my_topic",
-					QoS:               0,
-					Retain:            false,
-					CleanSession:      true,
-					KeepAlive:         2 * time.Second,
-					DisconnectTimeout: 5 * time.Second,
-				},
-			},
-		},
-		Writers: map[string]writer_config.Config{
-			"pub": {
-				Protocol: "mqtt",
-				Settings: &mqtt.WriterConfig{
-					MQTTConfig: mqtt.MQTTConfig{
-						BrokerURL:         "tcp://localhost:1883",
-						ClientID:          "fujin_pub",
-						Topic:             "my_topic",
-						QoS:               0,
-						Retain:            false,
-						CleanSession:      true,
-						KeepAlive:         2 * time.Second,
-						DisconnectTimeout: 5 * time.Second,
-					},
-					Pool: mqtt.PoolConfig{
-						Size:           1000000,
-						PreAlloc:       true,
-						ReleaseTimeout: 5 * time.Second,
-					},
-				},
-			},
-		},
-	},
+	// Connectors: connectors.Config{
+	// 	Readers: map[string]reader_config.Config{
+	// 		"sub": {
+	// 			Protocol: "mqtt",
+	// 			Settings: mqtt.MQTTConfig{
+	// 				BrokerURL:         "tcp://localhost:1883",
+	// 				ClientID:          "fujin_sub",
+	// 				Topic:             "my_topic",
+	// 				QoS:               0,
+	// 				Retain:            false,
+	// 				CleanSession:      true,
+	// 				KeepAlive:         2 * time.Second,
+	// 				DisconnectTimeout: 5 * time.Second,
+	// 			},
+	// 		},
+	// 	},
+	// 	Writers: map[string]writer_config.Config{
+	// 		"pub": {
+	// 			Protocol: "mqtt",
+	// 			Settings: &mqtt.WriterConfig{
+	// 				MQTTConfig: mqtt.MQTTConfig{
+	// 					BrokerURL:         "tcp://localhost:1883",
+	// 					ClientID:          "fujin_pub",
+	// 					Topic:             "my_topic",
+	// 					QoS:               0,
+	// 					Retain:            false,
+	// 					CleanSession:      true,
+	// 					KeepAlive:         2 * time.Second,
+	// 					DisconnectTimeout: 5 * time.Second,
+	// 				},
+	// 				Pool: mqtt.PoolConfig{
+	// 					Size:           1000000,
+	// 					PreAlloc:       true,
+	// 					ReleaseTimeout: 5 * time.Second,
+	// 				},
+	// 			},
+	// 		},
+	// 	},
+	// },
 }
 
 var DefaultTestConfigWithNSQ = config.Config{
 	Fujin: DefaultFujinServerTestConfig,
-	Connectors: connectors.Config{
-		Readers: map[string]reader_config.Config{
-			"sub": {
-				Protocol: "nsq",
-				Settings: nsq.ReaderConfig{
-					Addresses:   []string{"localhost:4150"},
-					Topic:       "my_topic",
-					Channel:     "my_channel",
-					MaxInFlight: 1000000,
-				},
-			},
-		},
-		Writers: map[string]writer_config.Config{
-			"pub": {
-				Protocol: "nsq",
-				Settings: &nsq.WriterConfig{
-					Address: "localhost:4150",
-					Topic:   "my_topic",
-					Pool: nsq.PoolConfig{
-						Size:           1000000,
-						PreAlloc:       true,
-						ReleaseTimeout: 5 * time.Second,
-					},
-				},
-			},
-		},
-	},
+	// Connectors: connectors.Config{
+	// 	Readers: map[string]reader_config.Config{
+	// 		"sub": {
+	// 			Protocol: "nsq",
+	// 			Settings: nsq.ReaderConfig{
+	// 				Addresses:   []string{"localhost:4150"},
+	// 				Topic:       "my_topic",
+	// 				Channel:     "my_channel",
+	// 				MaxInFlight: 1000000,
+	// 			},
+	// 		},
+	// 	},
+	// 	Writers: map[string]writer_config.Config{
+	// 		"pub": {
+	// 			Protocol: "nsq",
+	// 			Settings: &nsq.WriterConfig{
+	// 				Address: "localhost:4150",
+	// 				Topic:   "my_topic",
+	// 				Pool: nsq.PoolConfig{
+	// 					Size:           1000000,
+	// 					PreAlloc:       true,
+	// 					ReleaseTimeout: 5 * time.Second,
+	// 				},
+	// 			},
+	// 		},
+	// 	},
+	// },
 }
 
 func RunDefaultServerWithKafka3Brokers(ctx context.Context) *server.Server {

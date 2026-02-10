@@ -5,49 +5,34 @@ fujin:
     server_cert_pem_path: /assets/certs/fujin.io.pem
     server_key_pem_path: /assets/certs/fujin.io-key.pem
 connectors:
-  writers:
-    pub:
-      protocol: amqp091
-      settings:
-        conn:
-          url: amqp://guest:guest@localhost
-        exchange:
-          name: events
-          kind: fanout
-        queue:
-          name: my_queue
-        queue_bind:
-          binding_key: my_routing_key
-        publish:
-          content_type: text/plain
-  readers:
-    sub:
-      protocol: amqp091
-      settings:
-        conn:
-          url: amqp://guest:guest@localhost
-        exchange:
-          name: events
-          kind: fanout
-        queue:
-          name: my_queue
-        queue_bind:
-          routing_key: my_routing_key
-        consume:
-          consumer: fujin
-        nack:
-          requeue: true
-observability:
-  metrics:
-    enabled: true
-    addr: ":9090"
-    path: "/metrics"
-  tracing:
-    enabled: true
-    otlp_endpoint: "otel-collector:4317"
-    insecure: true
-    sample_ratio: 0.1
-    resource:
-      service_name: "fujin"
-      service_version: "dev"
-      env: "dev"
+  amqp091_connector:
+    protocol: amqp091
+    settings:
+      common: {}
+      clients:
+        pub:
+          conn:
+            url: amqp://guest:guest@localhost
+          exchange:
+            name: events
+            kind: fanout
+          queue:
+            name: my_queue
+          queue_bind:
+            binding_key: my_routing_key
+          publish:
+            content_type: text/plain
+        sub:
+          conn:
+            url: amqp://guest:guest@localhost
+          exchange:
+            name: events
+            kind: fanout
+          queue:
+            name: my_queue
+          queue_bind:
+            routing_key: my_routing_key
+          consume:
+            consumer: fujin
+          nack:
+            requeue: true

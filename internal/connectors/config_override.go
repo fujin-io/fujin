@@ -6,188 +6,148 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fujin-io/fujin/public/connectors"
-	reader_pkg "github.com/fujin-io/fujin/public/connectors/reader"
-	reader_config "github.com/fujin-io/fujin/public/connectors/reader/config"
-	writer_pkg "github.com/fujin-io/fujin/public/connectors/writer"
-	writer_config "github.com/fujin-io/fujin/public/connectors/writer/config"
+	"github.com/fujin-io/fujin/public/plugins/connector"
+	"github.com/fujin-io/fujin/public/plugins/connector/config"
 	"gopkg.in/yaml.v3"
 )
 
-// ConfigPath represents a parsed configuration path
-type ConfigPath struct {
-	ConnectorName string // "pub" or "sub" (writer or reader name)
-	SettingPath   string // "transactional_id" or "linger" etc.
-	IsWriter      bool   // true for writers, false for readers
-}
-
-// ParseConfigPath parses a configuration path like "writer.pub.transactional_id" or "reader.sub.group"
-// Format: {type}.{connector_name}.{setting_path}
-// Returns connector name, setting path, and whether it's a writer
-func ParseConfigPath(path string) (ConfigPath, error) {
-	parts := strings.SplitN(path, ".", 3)
-	if len(parts) != 3 {
-		return ConfigPath{}, fmt.Errorf("invalid config path format: expected 'writer.connector.setting' or 'reader.connector.setting', got '%s'", path)
-	}
-
-	connectorKind := strings.ToLower(parts[0])
-	connectorName := parts[1]
-	settingPath := parts[2]
-
-	// Validate connector kind
-	var isWriter bool
-	switch connectorKind {
-	case "writer":
-		isWriter = true
-	case "reader":
-		isWriter = false
-	default:
-		return ConfigPath{}, fmt.Errorf("invalid connector type '%s': expected 'writer' or 'reader'", connectorKind)
-	}
-
-	if connectorName == "" {
-		return ConfigPath{}, fmt.Errorf("connector name cannot be empty in path '%s'", path)
-	}
-	if settingPath == "" {
-		return ConfigPath{}, fmt.Errorf("setting path cannot be empty in path '%s'", path)
-	}
-
-	return ConfigPath{
-		ConnectorName: connectorName,
-		SettingPath:   settingPath,
-		IsWriter:      isWriter,
-	}, nil
-}
-
 // DeepCopyConfig creates a deep copy of the connectors configuration
-func DeepCopyConfig(original connectors.Config) (connectors.Config, error) {
+func DeepCopyConfig(original config.ConnectorConfig) (config.ConnectorConfig, error) {
 	// Use YAML marshaling/unmarshaling for deep copy
 	// This works because all config types have YAML tags
 	data, err := yaml.Marshal(original)
 	if err != nil {
-		return connectors.Config{}, fmt.Errorf("marshal config for deep copy: %w", err)
+		return config.ConnectorConfig{}, fmt.Errorf("marshal config for deep copy: %w", err)
 	}
 
-	var copy connectors.Config
+	var copy config.ConnectorConfig
 	if err := yaml.Unmarshal(data, &copy); err != nil {
-		return connectors.Config{}, fmt.Errorf("unmarshal config for deep copy: %w", err)
+		return config.ConnectorConfig{}, fmt.Errorf("unmarshal config for deep copy: %w", err)
 	}
 
 	return copy, nil
 }
 
-// ApplyOverrides applies configuration overrides to a base configuration
-// Overrides format: "{type}.{connector_name}.{setting_path}" -> "value"
-// Example: "writer.pub.transactional_id" -> "my-tx-id-12345"
-// Example: "reader.sub.group" -> "my-consumer-group"
-func ApplyOverrides(baseConfig connectors.Config, overrides map[string]string) (connectors.Config, error) {
-
+// ApplyOverrides applies configuration overrides to a base configuration.
+// Overrides format: "{setting_path}" -> "value"
+//
+// Examples:
+//   - "clients.writer1.topic" -> "my-topic"
+//   - "clients.reader1.group" -> "my-group"
+//   - "common.servers" -> "host1:9092,host2:9092"
+//
+// Paths are validated against the Overridable whitelist in the config.
+// Wildcard (*) is supported in whitelist patterns:
+//   - "clients.*.topic" matches "clients.writer1.topic", "clients.reader1.topic", etc.
+//   - "common.*" matches any field under common
+//   - "*" (alone) allows ALL overrides (use with caution)
+func ApplyOverrides(baseConfig config.ConnectorConfig, overrides map[string]string) (config.ConnectorConfig, error) {
 	// Create a deep copy to avoid modifying the original
-	config, err := DeepCopyConfig(baseConfig)
+	cfg, err := DeepCopyConfig(baseConfig)
 	if err != nil {
-		return connectors.Config{}, fmt.Errorf("deep copy config: %w", err)
+		return config.ConnectorConfig{}, fmt.Errorf("deep copy config: %w", err)
 	}
 
 	// Process each override
 	for path, value := range overrides {
-		parsed, err := ParseConfigPath(path)
-		if err != nil {
-			return connectors.Config{}, fmt.Errorf("parse config path '%s': %w", path, err)
+		// Validate path against whitelist
+		if err := ValidateOverridePath(path, cfg.Overridable); err != nil {
+			return config.ConnectorConfig{}, err
 		}
 
-		// Apply based on explicitly specified type
-		if parsed.IsWriter {
-			writer, exists := config.Writers[parsed.ConnectorName]
-			if !exists {
-				return connectors.Config{}, fmt.Errorf("writer '%s' not found in config", parsed.ConnectorName)
-			}
-			if err := applySettingToWriter(&writer, parsed.SettingPath, value); err != nil {
-				return connectors.Config{}, fmt.Errorf("apply setting '%s' to writer '%s': %w", parsed.SettingPath, parsed.ConnectorName, err)
-			}
-			config.Writers[parsed.ConnectorName] = writer
-		} else {
-			reader, exists := config.Readers[parsed.ConnectorName]
-			if !exists {
-				return connectors.Config{}, fmt.Errorf("reader '%s' not found in config", parsed.ConnectorName)
-			}
-			if err := applySettingToReader(&reader, parsed.SettingPath, value); err != nil {
-				return connectors.Config{}, fmt.Errorf("apply setting '%s' to reader '%s': %w", parsed.SettingPath, parsed.ConnectorName, err)
-			}
-			config.Readers[parsed.ConnectorName] = reader
+		overridenSettings, err := applySetting(cfg.Protocol, cfg.Settings, path, value)
+		if err != nil {
+			return config.ConnectorConfig{}, fmt.Errorf("apply setting '%s': %w", path, err)
+		}
+
+		cfg.Settings = overridenSettings
+	}
+
+	return cfg, nil
+}
+
+// ValidateOverridePath checks if the given path is allowed by the whitelist.
+// Returns nil if allowed, error if not.
+// If whitelist is empty, no overrides are allowed.
+// Special case: if whitelist contains "*", all overrides are allowed.
+func ValidateOverridePath(path string, whitelist []string) error {
+	if len(whitelist) == 0 {
+		return fmt.Errorf("override path %q is not allowed: no overridable paths configured", path)
+	}
+
+	for _, pattern := range whitelist {
+		// Special case: "*" allows all overrides
+		if pattern == "*" {
+			return nil
+		}
+		if matchOverridePath(path, pattern) {
+			return nil
 		}
 	}
 
-	return config, nil
+	return fmt.Errorf("override path %q is not allowed", path)
 }
 
-// applySettingToWriter applies a setting value to a writer's settings
-func applySettingToWriter(writer *writer_config.Config, settingPath string, value string) error {
+// matchOverridePath checks if a path matches a pattern with wildcard support.
+// Wildcard (*) matches exactly one path segment.
+//
+// Examples:
+//   - matchOverridePath("a.b.c", "a.*.c") -> true
+//   - matchOverridePath("a.b.c", "a.b.c") -> true
+//   - matchOverridePath("a.b.c", "a.x.c") -> false
+//   - matchOverridePath("a.b", "a.*") -> true
+func matchOverridePath(path, pattern string) bool {
+	pathParts := strings.Split(path, ".")
+	patternParts := strings.Split(pattern, ".")
+
+	if len(pathParts) != len(patternParts) {
+		return false
+	}
+
+	for i := range patternParts {
+		if patternParts[i] == "*" {
+			// Wildcard matches any single segment
+			continue
+		}
+		if patternParts[i] != pathParts[i] {
+			return false
+		}
+	}
+
+	return true
+}
+
+func applySetting(protocol string, settings any, settingPath, value string) (any, error) {
 	// Convert Settings to map[string]any if it's not already
-	settingsMap, err := settingsToMap(writer.Settings)
+	settingsMap, err := settingsToMap(settings)
 	if err != nil {
-		return fmt.Errorf("convert settings to map: %w", err)
+		return nil, fmt.Errorf("convert settings to map: %w", err)
 	}
 
 	// Try to use protocol-specific converter if available
 	var convertedValue any
-	converter := writer_pkg.GetConfigValueConverter(writer.Protocol)
+	converter := connector.GetConfigValueConverter(protocol)
 	if converter != nil {
 		converted, err := converter(settingPath, value)
 		if err != nil {
-			return fmt.Errorf("convert value for setting '%s': %w", settingPath, err)
+			return nil, fmt.Errorf("convert value for setting '%s': %w", settingPath, err)
 		}
 		convertedValue = converted
 	} else {
 		// Fall back to generic conversion
 		converted, err := convertValue(value)
 		if err != nil {
-			return fmt.Errorf("convert value '%s': %w", value, err)
+			return nil, fmt.Errorf("convert value '%s': %w", value, err)
 		}
 		convertedValue = converted
 	}
 
 	// Apply the setting using dot notation (e.g., "transactional_id" or "conn.addr")
 	if err := setNestedValueWithValue(settingsMap, settingPath, convertedValue); err != nil {
-		return fmt.Errorf("set nested value: %w", err)
+		return nil, fmt.Errorf("set nested value: %w", err)
 	}
 
-	writer.Settings = settingsMap
-	return nil
-}
-
-// applySettingToReader applies a setting value to a reader's settings
-func applySettingToReader(reader *reader_config.Config, settingPath string, value string) error {
-	// Convert Settings to map[string]any if it's not already
-	settingsMap, err := settingsToMap(reader.Settings)
-	if err != nil {
-		return fmt.Errorf("convert settings to map: %w", err)
-	}
-
-	// Try to use protocol-specific converter if available
-	var convertedValue any
-	converter := reader_pkg.GetConfigValueConverter(reader.Protocol)
-	if converter != nil {
-		converted, err := converter(settingPath, value)
-		if err != nil {
-			return fmt.Errorf("convert value for setting '%s': %w", settingPath, err)
-		}
-		convertedValue = converted
-	} else {
-		// Fall back to generic conversion
-		converted, err := convertValue(value)
-		if err != nil {
-			return fmt.Errorf("convert value '%s': %w", value, err)
-		}
-		convertedValue = converted
-	}
-
-	// Apply the setting using dot notation (e.g., "group" or "conn.addr")
-	if err := setNestedValueWithValue(settingsMap, settingPath, convertedValue); err != nil {
-		return fmt.Errorf("set nested value: %w", err)
-	}
-
-	reader.Settings = settingsMap
-	return nil
+	return settingsMap, nil
 }
 
 // settingsToMap converts Settings (any) to map[string]any

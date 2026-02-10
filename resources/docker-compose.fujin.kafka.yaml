@@ -4,12 +4,14 @@ services:
     build:
       context: ..
       args:
-        GO_BUILD_TAGS: fujin,grpc,kafka,observability
+        GO_BUILD_TAGS: fujin,grpc
     container_name: fujin
+    environment:
+      FUJIN_CONFIGURATOR: file
+      FUJIN_CONFIGURATOR_FILE_PATHS: /assets/config/config-kafka.yaml
     ports:
       - "4848:4848/udp"
       - "4949:4949"
     volumes:
       - ./assets:/assets
-    command: /assets/config/config-kafka.yaml
     restart: always

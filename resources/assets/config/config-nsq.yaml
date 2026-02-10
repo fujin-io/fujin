@@ -1,40 +1,40 @@
 fujin:
   enabled: true
+  addr: :4848
+  ping_interval: 5s
+  ping_timeout: 10s
+  ping_stream: false
+  ping_max_retries: 5
+  write_deadline: 10s
+  force_terminate_timeout: 15s
   tls:
     enabled: true
     server_cert_pem_path: /assets/certs/fujin.io.pem
     server_key_pem_path: /assets/certs/fujin.io-key.pem
+  quic:
+    max_incoming_streams: 1000
+    max_idle_timeout: 5s
+    keepalive_period: 2s
+grpc:
+  enabled: true
+  addr: :4849
+  observability_enabled: false
 connectors:
-  writers:
-    pub:
-      protocol: nsq
-      settings:
-        address: "localhost:4150"
-        topic: my_topic
-        pool:
-          size: 10000
-          pre_alloc: true
-          release_timeout: 5s
-  readers:
-    sub:
-      protocol: nsq
-      settings:
-        addresses: ["localhost:4150"]
-        # lookupd_addresses: ["localhost:4161"]
-        topic: my_topic
-        channel: my_channel
-        max_in_flight: 1000000
-observability:
-  metrics:
-    enabled: true
-    addr: ":9090"
-    path: "/metrics"
-  tracing:
-    enabled: true
-    otlp_endpoint: "otel-collector:4317"
-    insecure: true
-    sample_ratio: 0.1
-    resource:
-      service_name: "fujin"
-      service_version: "dev"
-      env: "dev"
+  nsq_connector:
+    protocol: nsq
+    settings:
+      common: {}
+      clients:
+        pub:
+          address: "localhost:4150"
+          topic: my_topic
+          pool:
+            size: 10000
+            pre_alloc: true
+            release_timeout: 5s
+        sub:
+          addresses: ["localhost:4150"]
+          # lookupd_addresses: ["localhost:4161"]
+          topic: my_topic
+          channel: my_channel
+          max_in_flight: 1000000

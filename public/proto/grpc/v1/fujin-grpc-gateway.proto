@@ -6,22 +6,24 @@ option go_package = "github.com/fujin-io/fujin/api/grpc/v1;v1";
 
 import "google/api/annotations.proto";
 
-// Header
-message Header {
+// KV
+message KV {
   bytes key = 1;
   bytes value = 2;
 }
 
-// Init request - must be sent first to initialize the stream and configure connectors
+// Bind request - must be sent first to initialize the stream and configure connectors
 // Config overrides format: "writer.connector_name.setting_path" -> "value"
 // Example: "writer.pub.transactional_id" -> "my-tx-id-12345"
 // Example: "reader.sub.group" -> "my-consumer-group"
-message InitRequest {
-  map<string, string> config_overrides = 1;  // Configuration overrides for connectors
+message BindRequest {
+  string connector = 1; // Connector name
+  map<string, string> meta = 2; // Bind request meta (can be used in bind middleware plugins)
+  map<string, string> config_overrides = 3;  // Configuration overrides for connectors
 }
 
-// Init response
-message InitResponse {
+// Bind response
+message BindResponse {
   string error = 1;
 }
 
@@ -42,7 +44,7 @@ message ProduceResponse {
 message HProduceRequest {
   uint32 correlation_id = 1;
   string topic = 2;
-  repeated Header headers = 3;
+  repeated KV headers = 3;
   bytes message = 4;
 }
 
@@ -136,8 +138,8 @@ message Message {
 message HMessage {
   uint32 subscription_id = 1;
   bytes message_id = 2;
-  bytes payload = 3;
-  repeated Header headers = 4;
+  repeated KV headers = 3;
+  bytes payload = 4;
 }
 
 // FetchRequest - request a batch of messages (pull-based)
@@ -181,8 +183,8 @@ message HFetchResponse {
 // HFetchMessage - message with headers returned by HFetch
 message HFetchMessage {
   bytes message_id = 1;
-  bytes payload = 2;
-  repeated Header headers = 3;
+  repeated KV headers = 2;
+  bytes payload = 3;
 }
 
 // Ack request
@@ -228,15 +230,13 @@ message NackMessageResult {
 // Bidirectional streaming service for async request-response
 service FujinService {
   // Bidirectional stream for all operations
-  rpc Stream(stream FujinRequest) returns (stream FujinResponse) {
-    option (google.api.http) = {post: "/stream", body: "*"};
-  }
+  rpc Stream(stream FujinRequest) returns (stream FujinResponse);
 }
 
 // Union type for all requests
 message FujinRequest {
   oneof request {
-    InitRequest init = 1;
+    BindRequest bind = 1;
     ProduceRequest produce = 2;
     SubscribeRequest subscribe = 3;
     UnsubscribeRequest unsubscribe = 4;
@@ -255,7 +255,7 @@ message FujinRequest {
 // Union type for all responses
 message FujinResponse {
   oneof response {
-    InitResponse init = 1;
+    BindResponse bind = 1;
     ProduceResponse produce = 2;
     SubscribeResponse subscribe = 3;
     UnsubscribeResponse unsubscribe = 4;

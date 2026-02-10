@@ -8,20 +8,20 @@ import (
 	"log/slog"
 	"time"
 
-	public_connectors "github.com/fujin-io/fujin/public/connectors"
-	"github.com/fujin-io/fujin/public/server/config"
+	connectorconfig "github.com/fujin-io/fujin/public/plugins/connector/config"
+	serverconfig "github.com/fujin-io/fujin/public/server/config"
 )
 
 var ErrFujinNotCompiledIn = fmt.Errorf("fujin protocol is not compiled in")
 
 // FujinServer stub implementation when fujin protocol is disabled
 type FujinServer struct {
-	conf config.FujinServerConfig
+	conf serverconfig.FujinServerConfig
 	l    *slog.Logger
 }
 
 // NewFujinServer creates a stub Fujin server instance
-func NewFujinServer(conf config.FujinServerConfig, baseConfig public_connectors.Config, l *slog.Logger) *FujinServer {
+func NewFujinServer(conf serverconfig.FujinServerConfig, baseConfig connectorconfig.ConnectorsConfig, l *slog.Logger) *FujinServer {
 	return &FujinServer{
 		conf: conf,
 		l:    l.With("server", "fujin"),

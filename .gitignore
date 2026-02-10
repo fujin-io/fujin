@@ -32,8 +32,10 @@ tempo
 
 ## Dev configs
 config.dev.yaml
+bootstrap.dev.yaml
 .env
 
 ## test files and dirs
 # sandbox
 TEST_COVERAGE_PLAN.md
+PLUGIN_ROADMAP.md
