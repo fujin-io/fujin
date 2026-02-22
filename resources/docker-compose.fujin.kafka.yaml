@@ -6,7 +6,7 @@ services:
       dockerfile: Dockerfile
       args:
         FUJIN_CONNECTORS: github.com/fujin-io/fujin/public/plugins/connector/kafka
-        FUJIN_GO_TAGS: fujin
+        FUJIN_GO_TAGS: fujin,grpc
     container_name: fujin
     environment:
       FUJIN_CONFIGURATOR: file

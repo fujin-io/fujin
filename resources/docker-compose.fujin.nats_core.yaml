@@ -5,7 +5,7 @@ services:
       context: ..
       dockerfile: Dockerfile
       args:
-        FUJIN_CONNECTORS: nats/core
+        FUJIN_CONNECTORS: github.com/fujin-io/fujin/public/plugins/connector/nats/core
         FUJIN_GO_TAGS: fujin,grpc
     container_name: fujin
     environment:
