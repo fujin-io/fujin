@@ -1782,7 +1782,6 @@ func (h *handler) handle(buf []byte) error {
 				}
 			}
 		case OP_BIND_CONFIG_OVERRIDES_COUNT:
-			fmt.Println(h.ps.ba.meta)
 			// Parse config_overrides count (uint16)
 			h.ps.argBuf = append(h.ps.argBuf, b)
 			if len(h.ps.argBuf) >= v1.Uint16Len {
@@ -2300,7 +2299,6 @@ func (h *handler) fetch(topic string, autoCommit bool, n uint32) {
 			var err error
 			fetcher, err = h.cman.GetReader(topic, autoCommit)
 			if err != nil {
-				fmt.Println(err)
 				header[5] = v1.ERR_CODE_YES
 				h.out.EnqueueProtoMulti(header, errProtoBuf(err))
 				pool.Put(header)

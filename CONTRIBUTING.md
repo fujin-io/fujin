@@ -6,7 +6,7 @@ Thank you for considering contributing to Fujin! This document provides guidelin
 
 ### Prerequisites
 
-- **Go 1.24.2+** - Required for building
+- **Go 1.25+** - Required for building (see `go.mod`)
 - **Make** - Cross-platform build automation (Windows/Linux/macOS)
 - **Docker & Docker Compose** - For running message brokers locally
 - **protoc** - Protocol Buffer compiler (optional, for regenerating proto files)
@@ -30,16 +30,26 @@ make up-kafka
 
 ## Project Structure
 
+The project uses a single Go module at the root:
+
 ```
 fujin/
-├── server/          # Server implementation (separate Go module)
-│   ├── cmd/        # Main entry point
-│   ├── internal/   # Internal server packages
-│   └── public/     # Public API packages
-├── api/            # gRPC API (separate Go module)
-├── client/         # Client libraries
-├── examples/       # Example applications
-└── Makefile        # Cross-platform build commands
+├── cmd/             # Entry points
+│   ├── main.go      # Default server (all plugins)
+│   └── builder/     # Custom binary builder (selective plugins)
+├── public/          # Public API and plugins
+│   ├── plugins/    # Connectors, configurators, middlewares
+│   │   ├── connector/      # Kafka, NATS, AMQP, MQTT, NSQ, RESP...
+│   │   ├── configurator/   # File-based config loader
+│   │   └── middleware/    # Bind (auth_api_key) and connector (metrics, tracing)
+│   ├── proto/       # gRPC and Fujin protocol definitions
+│   ├── server/      # Server abstraction and config
+│   └── service/     # Core service (RunCLI)
+├── internal/        # Internal implementation (not exported)
+├── examples/        # Sample configs and runnable examples
+├── resources/       # Docker Compose, Grafana, example configs
+├── test/            # Benchmarks and test helpers
+└── Makefile         # Cross-platform build commands
 ```
 
 ## Building
@@ -49,41 +59,37 @@ fujin/
 The Makefile works on Windows, Linux, and macOS:
 
 ```bash
-# Default build (all features)
+# Default build (all connectors)
 make build
 
 # Minimal build (Kafka only)
-make build GO_BUILD_TAGS="kafka"
+make build CONNECTORS=kafka
 
-# With specific features
-make build GO_BUILD_TAGS="kafka,grpc,observability"
+# With specific connectors
+make build CONNECTORS="kafka,nats/core"
+
+# With observability
+make build GO_BUILD_TAGS="fujin,grpc,observability"
 ```
 
 ### Manual Build
 
-If you prefer not to use Make:
+If you prefer not to use Make, use the builder directly:
 
 ```bash
-cd server
-go build -tags="kafka,grpc,observability" -o ../bin/fujin ./cmd
+go run ./cmd/builder -local \
+  -configurator github.com/fujin-io/fujin/public/plugins/configurator/file \
+  -connector github.com/fujin-io/fujin/public/plugins/connector/kafka \
+  -bind-middleware github.com/fujin-io/fujin/public/plugins/middleware/bind/auth_api_key \
+  -connector-middleware github.com/fujin-io/fujin/public/plugins/middleware/connector/metrics \
+  -tags "fujin,grpc" \
+  -output ./bin/fujin
 ```
 
 ## Build Tags
 
 Fujin uses Go build tags for conditional compilation:
-
-### Connector Tags
-- `kafka` - Kafka support
-- `nats_core` - NATS Core support
-- `amqp091` - RabbitMQ (AMQP 0.9.1)
-- `amqp10` - ActiveMQ, Azure Service Bus (AMQP 1.0)
-- `resp_pubsub` - Redis PubSub
-- `resp_streams` - Redis Streams
-- `mqtt` - MQTT support
-- `nsq` - NSQ support
-
-### Feature Tags
-- `observability` - Prometheus metrics & OpenTelemetry tracing
+- `fujin` - Native protocol server support
 - `grpc` - gRPC server support
 
 ## Testing
@@ -93,8 +99,7 @@ Fujin uses Go build tags for conditional compilation:
 make test
 
 # Run tests for specific package
-cd server
-go test -v -tags="kafka,grpc" ./internal/...
+go test -v -tags="fujin,grpc" ./internal/...
 
 # Run benchmarks
 make bench
@@ -116,15 +121,16 @@ make bench BENCH_FUNC="BenchmarkMyFunction" BENCH_TIME="10s"
 
 To add support for a new message broker:
 
-1. Create new directory: `server/public/connectors/impl/yourbroker/`
-2. Implement `Reader` and `Writer` interfaces
-3. Add build tag stub file: `init_yourbroker_stub.go`
-4. Add actual implementation: `init_yourbroker.go` with build tag
-5. Update `ALL_TAGS` in Makefile
-6. Add tests
-7. Update documentation
+1. Create new directory: `public/plugins/connector/yourbroker/`
+2. Implement `Reader` and `Writer` interfaces from `public/plugins/connector`
+3. Add `init.go` that registers the connector via `connector.Register()`
+4. Add build tag stub file if using optional compilation: `init_yourbroker_stub.go`
+5. Add actual implementation: `init_yourbroker.go` with build tag (optional)
+6. Add to `public/plugins/connector/all/all.go` if it should be in the default build
+7. Add tests
+8. Update documentation
 
-See existing connectors (e.g., `kafka/`, `nats/`) for reference.
+See existing connectors (e.g., `kafka/`, `nats/core/`, `resp/pubsub/`) for reference.
 
 ## Generating Protocol Buffers
 
@@ -136,7 +142,7 @@ make generate
 
 Or manually:
 ```bash
-cd api
+cd public/proto
 protoc --go_out=. --go_opt=paths=source_relative \
        --go-grpc_out=. --go-grpc_opt=paths=source_relative \
        grpc/v1/fujin.proto
@@ -149,8 +155,7 @@ protoc --go_out=. --go_opt=paths=source_relative \
 make up-kafka
 
 # Run tests
-cd server
-go test -v -tags="kafka" ./test/...
+go test -v -tags="fujin,grpc" ./test/...
 
 # Clean up
 make down-kafka
@@ -160,7 +165,7 @@ make down-kafka
 
 - Update relevant `README.md` files
 - Add examples in `examples/` directory
-- Update `QUICKSTART.md` for user-facing changes
+- Update `protocol.md` for protocol changes
 - Comment complex code sections
 
 ## Pull Request Process
@@ -196,13 +201,6 @@ If you're developing on Windows but want to ensure Linux/macOS compatibility:
 - Avoid platform-specific APIs
 - Test with different Go versions
 - Use CI/CD results as reference
-
-## Getting Help
-
-- 💬 Open an issue for questions
-- 📧 Contact maintainers
-- 📖 Read existing documentation
-- 🔍 Search closed issues
 
 ## License
 

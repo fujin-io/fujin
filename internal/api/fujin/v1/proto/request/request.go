@@ -3,7 +3,7 @@ package request
 type OpCode byte
 
 const (
-	OP_CODE_CONNECT     OpCode = 1
+	OP_CODE_BIND        OpCode = 1
 	OP_CODE_PRODUCE     OpCode = 2
 	OP_CODE_HPRODUCE    OpCode = 3
 	OP_CODE_TX_BEGIN    OpCode = 4

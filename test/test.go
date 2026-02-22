@@ -404,7 +404,7 @@ func createClientConn(ctx context.Context, addr string) *quic.Conn {
 
 func doDefaultConnect(conn *quic.Conn) *quic.Stream {
 	req := []byte{
-		byte(request.OP_CODE_CONNECT),
+		byte(request.OP_CODE_BIND),
 		0, 0, 0, 0, // producer id is optional (for transactions)
 	}
 

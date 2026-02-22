@@ -5,14 +5,15 @@ services:
       context: ../..
       dockerfile: Dockerfile
       args:
-        GO_BUILD_TAGS: fujin,grpc
+        FUJIN_CONNECTORS: kafka
+        FUJIN_GO_TAGS: fujin,grpc
     container_name: fujin
     environment:
       FUJIN_CONFIGURATOR: file
       FUJIN_CONFIGURATOR_FILE_PATHS: ./config/config.yaml
     ports:
       - "4848:4848/udp"
-      - "4949:4949"
+      - "4849:4849"
     depends_on:
       - kafka1
       - kafka2

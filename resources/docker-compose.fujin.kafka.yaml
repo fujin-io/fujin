@@ -3,15 +3,17 @@ services:
     image: fujin:kafka-${BUILD_TAG}
     build:
       context: ..
+      dockerfile: Dockerfile
       args:
-        GO_BUILD_TAGS: fujin,grpc
+        FUJIN_CONNECTORS: github.com/fujin-io/fujin/public/plugins/connector/kafka
+        FUJIN_GO_TAGS: fujin
     container_name: fujin
     environment:
       FUJIN_CONFIGURATOR: file
       FUJIN_CONFIGURATOR_FILE_PATHS: /assets/config/config-kafka.yaml
     ports:
       - "4848:4848/udp"
-      - "4949:4949"
+      - "4849:4849"
     volumes:
       - ./assets:/assets
     restart: always
