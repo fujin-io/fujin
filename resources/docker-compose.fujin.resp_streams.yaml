@@ -5,7 +5,7 @@ services:
       context: ..
       dockerfile: Dockerfile
       args:
-        FUJIN_CONNECTORS: resp/streams
+        FUJIN_CONNECTORS: github.com/fujin-io/fujin/public/plugins/connector/resp/streams
         FUJIN_GO_TAGS: fujin,grpc
     container_name: fujin
     environment:

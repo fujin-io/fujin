@@ -5,7 +5,7 @@ services:
       context: ..
       dockerfile: Dockerfile
       args:
-        FUJIN_CONNECTORS: nsq
+        FUJIN_CONNECTORS: github.com/fujin-io/fujin/public/plugins/connector/nsq
         FUJIN_GO_TAGS: fujin,grpc
     container_name: fujin
     environment:
