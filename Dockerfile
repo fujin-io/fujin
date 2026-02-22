@@ -1,24 +1,39 @@
-ARG GO_VERSION=1.24
+# syntax=docker/dockerfile:1
+
+ARG GO_VERSION=1.25
 
 FROM golang:${GO_VERSION}-alpine AS builder
 
-ARG GO_BUILD_TAGS=fujin,grpc
+ARG FUJIN_CONFIGURATORS=github.com/fujin-io/fujin/public/plugins/configurator/all
+ARG FUJIN_CONNECTORS=github.com/fujin-io/fujin/public/plugins/connector/all
+ARG FUJIN_BIND_MIDDLEWARES
+ARG FUJIN_CONNECTOR_MIDDLEWARES
+ARG FUJIN_GO_TAGS=fujin,grpc
 
 WORKDIR /app
 
 COPY go.mod go.sum ./
-RUN go mod download && apk add git make
+RUN go mod download
 
 COPY . .
 
-RUN make build GO_BUILD_TAGS=${GO_BUILD_TAGS}
+RUN chmod +x build.sh
 
-FROM scratch
+RUN FUJIN_CONFIGURATORS="${FUJIN_CONFIGURATORS:-}" \
+    FUJIN_CONNECTORS="${FUJIN_CONNECTORS:-}" \
+    FUJIN_BIND_MIDDLEWARES="${FUJIN_BIND_MIDDLEWARES:-}" \
+    FUJIN_CONNECTOR_MIDDLEWARES="${FUJIN_CONNECTOR_MIDDLEWARES:-}" \
+    FUJIN_GO_TAGS="${FUJIN_GO_TAGS}" \
+    ./build.sh
+
+FROM scratch AS runtime
 
 WORKDIR /
 
-COPY --from=builder app/bin/fujin /fujin
+COPY --from=builder /app/bin/fujin /fujin
 
 STOPSIGNAL SIGTERM
+
+EXPOSE 8080
 
 ENTRYPOINT ["/fujin"]

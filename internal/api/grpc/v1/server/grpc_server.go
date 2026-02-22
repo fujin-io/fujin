@@ -295,7 +295,6 @@ func (s *streamSession) handleBind(req *pb.BindRequest) error {
 	// Convert bind middleware configs
 	bindMiddlewareConfigs := make([]bmwconfig.Config, 0, len(connectorConfig.BindMiddlewares))
 	for _, cfg := range connectorConfig.BindMiddlewares {
-		fmt.Printf("%+v\n", cfg)
 		bindMiddlewareConfigs = append(bindMiddlewareConfigs, cfg)
 	}
 
@@ -793,7 +792,6 @@ func (s *streamSession) handleHSubscribe(req *pb.HSubscribeRequest) error {
 
 	r, err := s.cman.GetReader(req.Topic, req.AutoCommit)
 	if err != nil {
-		fmt.Println(err.Error())
 		return s.sendResponse(&pb.FujinResponse{
 			Response: &pb.FujinResponse_Hsubscribe{
 				Hsubscribe: &pb.HSubscribeResponse{

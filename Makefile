@@ -3,9 +3,17 @@
 APP_NAME := fujin
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
+FUJIN_PKG := github.com/fujin-io/fujin
+
 ALL_TAGS = grpc,fujin
 
 GO_BUILD_TAGS ?= ${ALL_TAGS}
+
+# Full plugin set for default build.
+CONFIGURATORS ?= github.com/fujin-io/fujin/public/plugins/configurator/all
+CONNECTORS ?= github.com/fujin-io/fujin/public/plugins/connector/all
+BIND_MIDDLEWARES ?= github.com/fujin-io/fujin/public/plugins/middleware/bind/all
+CONNECTOR_MIDDLEWARES ?= github.com/fujin-io/fujin/public/plugins/middleware/connector/all
 
 BENCH_TIME ?= 1000000x
 BENCH_FUNC ?= Benchmark_Produce_1BPayload_RedisPubSub
@@ -35,10 +43,25 @@ BINARY := $(BIN_DIR)$(PATHSEP)$(APP_NAME)$(BINARY_EXT)
 .PHONY: all
 all: clean build run
 
+comma := ,
+# Build args (comma-separated)
+BUILDER_CONF_ARGS := $(foreach c,$(subst $(comma), ,$(CONFIGURATORS)),-configurator $(c))
+BUILDER_CONN_ARGS := $(foreach c,$(subst $(comma), ,$(CONNECTORS)),-connector $(c))
+BUILDER_BIND_M_ARGS := $(foreach c,$(subst $(comma), ,$(BIND_MIDDLEWARES)),-bind-middleware $(c))
+BUILDER_CONN_M_ARGS := $(foreach c,$(subst $(comma), ,$(CONNECTOR_MIDDLEWARES)),-connector-middleware $(c))
+
 .PHONY: build
 build:
-	@echo "==> Building ${APP_NAME} for ${DETECTED_OS} (Version: ${VERSION}, Tags: [${GO_BUILD_TAGS}])"
-	@go build -tags=${GO_BUILD_TAGS} -ldflags "-s -w -X main.Version=${VERSION}" -o ./$(BINARY) ./cmd/...
+	@echo "==> Building ${APP_NAME} for ${DETECTED_OS} (Version: ${VERSION}, Tags: [${GO_BUILD_TAGS}], Connectors: [${CONNECTORS}])"
+	@go run ./cmd/builder \
+		-local \
+		$(BUILDER_CONF_ARGS) \
+		$(BUILDER_CONN_ARGS) \
+		$(BUILDER_BIND_M_ARGS) \
+		$(BUILDER_CONN_M_ARGS) \
+		-tags "$(GO_BUILD_TAGS)" \
+		-ldflags "-X main.Version=$(VERSION)" \
+		-output ./$(BINARY)
 	@echo "==> Binary created: $(BINARY)"
 
 .PHONY: clean
@@ -63,7 +86,7 @@ generate:
 .PHONY: test
 test:
 	@echo "==> Running tests"
-	@cd server && go test -v -tags=${GO_BUILD_TAGS} ./...
+	@go test -v -tags=${GO_BUILD_TAGS} ./...
 
 .PHONY: help
 help:
@@ -83,7 +106,8 @@ help:
 	@echo ""
 	@echo "Variables:"
 	@echo "  VERSION (default: git describe || dev) Version tag for builds."
-	@echo "  GO_BUILD_TAGS (default: all features)  Comma-separated Go build tags."
+	@echo "  GO_BUILD_TAGS (default: $(ALL_TAGS))   Comma-separated Go build tags."
+	@echo "  CONNECTORS (default: all)              Comma-separated connector names for builder."
 	@echo "  BOOTSTRAP (optional)                   Path to bootstrap config file."
 	@echo "  FUJIN_CONFIGURATOR (optional)         Config loader type (e.g., vault, file)."
 	@echo "  FUJIN_BOOTSTRAP_CONFIG (optional)      Path to bootstrap config (env var)."
@@ -152,21 +176,23 @@ down-nsq:
 # Helper command to show all available broker commands
 broker-help:
 	@echo "Available broker commands:"
-	@echo "  make up-kafka       - Start Kafka cluster"
-	@echo "  make down-kafka     - Stop Kafka cluster"
-	@echo "  make up-nats_core   - Start NATS server"
-	@echo "  make down-nats_core - Stop NATS server"
-	@echo "  make up-rabbitmq    - Start RabbitMQ server"
-	@echo "  make down-rabbitmq  - Stop RabbitMQ server"
-	@echo "  make up-artemis     - Start ArtemisMQ server"
-	@echo "  make down-artemis   - Stop ArtemisMQ server"
-	@echo "  make up-emqx        - Start EMQX server"
-	@echo "  make down-emqx      - Stop EMQX server"
-	@echo "  make up-redis       - Start Redis server (ValKey)"
-	@echo "  make down-redis     - Stop Redis server (ValKey)"
-	@echo "  make up-nsq         - Start NSQ cluster"
-	@echo "  make down-nsq       - Stop NSQ cluster"
+	@echo "  make up-kafka         - Start Kafka cluster"
+	@echo "  make down-kafka       - Stop Kafka cluster"
+	@echo "  make up-nats_core     - Start NATS server"
+	@echo "  make down-nats_core   - Stop NATS server"
+	@echo "  make up-amqp091       - Start RabbitMQ (AMQP 0.9.1)"
+	@echo "  make down-amqp091     - Stop RabbitMQ"
+	@echo "  make up-amqp10        - Start ActiveMQ Artemis (AMQP 1.0)"
+	@echo "  make down-amqp10      - Stop Artemis"
+	@echo "  make up-mqtt          - Start EMQX (MQTT)"
+	@echo "  make down-mqtt       - Stop EMQX"
+	@echo "  make up-resp_pubsub   - Start ValKey (Redis PubSub)"
+	@echo "  make down-resp_pubsub - Stop ValKey"
+	@echo "  make up-resp_streams  - Start ValKey (Redis Streams)"
+	@echo "  make down-resp_streams - Stop ValKey"
+	@echo "  make up-nsq           - Start NSQ cluster"
+	@echo "  make down-nsq         - Stop NSQ cluster"
 
 .PHONY: bench
 bench:
-	@cd server && go test -bench=${BENCH_FUNC} -benchtime=${BENCH_TIME} -tags=${GO_BUILD_TAGS} ./test
+	@go test -bench=${BENCH_FUNC} -benchtime=${BENCH_TIME} -tags=${GO_BUILD_TAGS} ./test

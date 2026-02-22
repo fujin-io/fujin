@@ -1,0 +1,22 @@
+#!/bin/sh
+set -e
+
+CONFIG_ARGS=""
+[ -n "$FUJIN_CONFIGURATORS" ] && CONFIG_ARGS="-configurator $FUJIN_CONFIGURATORS"
+CONNECTOR_ARGS=""
+[ -n "$FUJIN_CONNECTORS" ] && CONNECTOR_ARGS="-connector $FUJIN_CONNECTORS"
+BIND_ARGS=""
+[ -n "$FUJIN_BIND_MIDDLEWARES" ] && BIND_ARGS="-bind-middleware $FUJIN_BIND_MIDDLEWARES"
+CONN_M_ARGS=""
+[ -n "$FUJIN_CONNECTOR_MIDDLEWARES" ] && CONN_M_ARGS="-connector-middleware $FUJIN_CONNECTOR_MIDDLEWARES"
+
+echo "ARGS: $CONFIG_ARGS $CONNECTOR_ARGS $BIND_ARGS $CONN_M_ARGS"
+
+go run ./cmd/builder \
+  -local \
+  $CONFIG_ARGS \
+  $CONNECTOR_ARGS \
+  $BIND_ARGS \
+  $CONN_M_ARGS \
+  -tags "$FUJIN_GO_TAGS" \
+  -output ./bin/fujin

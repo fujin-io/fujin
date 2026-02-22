@@ -3,15 +3,17 @@ services:
     image: fujin:mqtt-${BUILD_TAG}
     build:
       context: ..
+      dockerfile: Dockerfile
       args:
-        GO_BUILD_TAGS: fujin,grpc
+        FUJIN_CONNECTORS: mqtt
+        FUJIN_GO_TAGS: fujin,grpc
     container_name: fujin
     environment:
       FUJIN_CONFIGURATOR: file
       FUJIN_CONFIGURATOR_FILE_PATHS: /assets/config/config-mqtt.yaml
     ports:
       - "4848:4848/udp"
-      - "4949:4949"
+      - "4849:4849"
     volumes:
       - ./assets:/assets
     restart: always
