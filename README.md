@@ -1,6 +1,6 @@
 # Fujin
 
-Fujin is a blazingly fast broker connector that bridges your applications with any message broker through a unified, efficient protocol. It translates between a custom byte-based protocol and various messaging systems, aiming to provide a seamless experience regardless of the underlying broker.
+Fujin is a blazingly fast ([See Benchmarks](test/bench_test.txt)) broker connector that bridges your applications with any message broker through a unified, efficient protocol. It translates between a custom byte-based protocol and various messaging systems, aiming to provide a seamless experience regardless of the underlying broker.
 
 > **Note**: This project was created mostly for learning purposes, and it might not be usefull for anyone at all. Experimental. Not production ready.
 
