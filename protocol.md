@@ -77,11 +77,6 @@ The `BIND` command includes:
 - `meta`: Optional metadata key-value pairs that can be used by bind middleware plugins (e.g., for authentication)
 - `config_overrides`: Optional configuration overrides that allow dynamic modification of connector settings at runtime
 
-Configuration overrides format is: `{type}.{connector_name}.{setting_path}` where:
-- `type` is either `writer` or `reader`
-- `connector_name` is the name of the connector (e.g., `pub`, `sub`)
-- `setting_path` is the path to the setting (e.g., `transactional_id`, `linger`, `group`)
-
 ### Syntax
 ##### Request
  `[1, <connector_name>, <meta>, <config_overrides>]`  

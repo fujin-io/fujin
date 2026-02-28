@@ -2170,7 +2170,7 @@ func (h *handler) produce(msg []byte) {
 		func(err error) {
 			pool.Put(msg)
 			if err != nil {
-				h.l.Error("write", "err", err)
+				h.l.Error("produce", "err", err)
 
 				successResp[5] = v1.ERR_CODE_YES
 				errProtoBuf := errProtoBuf(err)
@@ -2195,7 +2195,7 @@ func (h *handler) hproduce(msg []byte) {
 		func(err error) {
 			pool.Put(msg)
 			if err != nil {
-				h.l.Error("produce", "err", err)
+				h.l.Error("hproduce", "err", err)
 				hdr[5] = v1.ERR_CODE_YES
 				errProto := errProtoBuf(err)
 				h.out.EnqueueProtoMulti(hdr, errProto)
@@ -2237,7 +2237,7 @@ func (h *handler) hproduceTx(msg []byte) {
 	h.currentTxWriter.HProduce(h.ctx, msg, h.ps.ha.headersKV, func(err error) {
 		pool.Put(msg)
 		if err != nil {
-			h.l.Error("write with headers", "err", err)
+			h.l.Error("hproduce", "err", err)
 			hdr[5] = v1.ERR_CODE_YES
 			errProto := errProtoBuf(err)
 			h.out.EnqueueProtoMulti(hdr, errProto)
