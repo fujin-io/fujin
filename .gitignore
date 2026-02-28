@@ -36,6 +36,6 @@ bootstrap.dev.yaml
 .env
 
 ## test files and dirs
-# sandbox
+sandbox
 TEST_COVERAGE_PLAN.md
 PLUGIN_ROADMAP.md

@@ -232,7 +232,7 @@ func Benchmark_Produce_32KBPayload_NSQ(b *testing.B) {
 	benchProduce(b, "nsq", "pub", sizedString(32*1024))
 }
 
-func benchProduce(b *testing.B, typ, pub, payload string) {
+func benchProduce(b *testing.B, typ, topic, payload string) {
 	ctx, cancel := context.WithCancel(b.Context())
 	defer cancel()
 
@@ -266,7 +266,7 @@ func benchProduce(b *testing.B, typ, pub, payload string) {
 	}()
 
 	c := createClientConn(ctx, PERF_ADDR)
-	p := doDefaultConnect(c)
+	p := doDefaultBind(c)
 
 	cmd := []byte{
 		byte(v1.OP_CODE_PRODUCE),
@@ -274,10 +274,10 @@ func benchProduce(b *testing.B, typ, pub, payload string) {
 	}
 
 	lenBuf := make([]byte, 4)
-	binary.BigEndian.PutUint32(lenBuf, uint32(len(pub)))
+	binary.BigEndian.PutUint32(lenBuf, uint32(len(topic)))
 
 	cmd = append(cmd, lenBuf...)
-	cmd = append(cmd, []byte(pub)...)
+	cmd = append(cmd, []byte(topic)...)
 
 	binary.BigEndian.PutUint32(lenBuf, uint32(len(payload)))
 
@@ -302,7 +302,7 @@ func benchProduce(b *testing.B, typ, pub, payload string) {
 	b.StopTimer()
 	p.Close()
 	_ = c.CloseWithError(0x0, "")
-	expected := b.N*6 + 1
+	expected := b.N*6 + 3
 	if res != expected {
 		panic(fmt.Errorf("Invalid number of bytes read: bytes: %d, expected: %d", res, expected))
 	}

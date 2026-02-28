@@ -16,7 +16,7 @@ BIND_MIDDLEWARES ?= github.com/fujin-io/fujin/public/plugins/middleware/bind/all
 CONNECTOR_MIDDLEWARES ?= github.com/fujin-io/fujin/public/plugins/middleware/connector/all
 
 BENCH_TIME ?= 1000000x
-BENCH_FUNC ?= Benchmark_Produce_1BPayload_RedisPubSub
+BENCH_FUNC ?= Benchmark_Produce_32KBPayload_Kafka_3Brokers
 
 # Detect OS
 ifeq ($(OS),Windows_NT)
@@ -94,23 +94,19 @@ help:
 	@echo ""
 	@echo "Usage:"
 	@echo "  make build [GO_BUILD_TAGS=\"tag1,tag2\"]  Build binary. Default GO_BUILD_TAGS=\"$(ALL_TAGS)\"."
-	@echo "  make run [BOOTSTRAP=\"path/to/bootstrap.yaml\"]  Run binary with bootstrap config."
-	@echo "  make clean                             Remove build artifacts."
-	@echo "  make test                              Run all tests."
-	@echo "  make bench                             Run benchmarks."
-	@echo ""
-	@echo "Config Loading Priority:"
-	@echo "  1. Environment variable FUJIN_CONFIGURATOR (if set)"
-	@echo "  2. BOOTSTRAP parameter or ./bootstrap.dev.yaml (default) or ./config.bootstrap.yaml or ./bootstrap.yaml (if exists)"
-	@echo "  3. Default file paths: ./config.yaml, conf/config.yaml, config/config.yaml"
+	@echo "  make run                                  Run binary."
+	@echo "  make clean                                Remove build artifacts."
+	@echo "  make test                                 Run all tests."
+	@echo "  make bench                                Run benchmarks."
 	@echo ""
 	@echo "Variables:"
 	@echo "  VERSION (default: git describe || dev) Version tag for builds."
 	@echo "  GO_BUILD_TAGS (default: $(ALL_TAGS))   Comma-separated Go build tags."
+	@echo "  CONFIGURATORS (default: all)           Comma-separated configurator names for builder."
 	@echo "  CONNECTORS (default: all)              Comma-separated connector names for builder."
-	@echo "  BOOTSTRAP (optional)                   Path to bootstrap config file."
-	@echo "  FUJIN_CONFIGURATOR (optional)         Config loader type (e.g., vault, file)."
-	@echo "  FUJIN_BOOTSTRAP_CONFIG (optional)      Path to bootstrap config (env var)."
+	@echo "  BIND_MIDDLEWARES (default: all)        Comma-separated bind middleware names for builder."
+	@echo "  CONNECTOR_MIDDLEWARES (default: all)   Comma-separated connector middleware names for builder."
+	@echo "  BOOTCONF (optional)                    Bootstrap config."
 	@echo ""
 	@echo "Platform: $(DETECTED_OS)"
 	@echo "Binary: $(BINARY)"
