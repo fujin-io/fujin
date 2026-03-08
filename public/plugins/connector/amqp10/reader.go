@@ -81,7 +81,7 @@ func NewReader(conf ConnectorConfig, autoCommit bool, l *slog.Logger) (*Reader, 
 
 func (r *Reader) Subscribe(ctx context.Context, h func(message []byte, topic string, args ...any)) error {
 	var handler func(msg *amqp.Message) error
-	if r.IsAutoCommit() {
+	if r.AutoCommit() {
 		handler = func(msg *amqp.Message) error {
 			h(msg.GetData(), r.conf.Receiver.Source)
 			return r.receiver.AcceptMessage(ctx, msg)
@@ -107,9 +107,9 @@ func (r *Reader) Subscribe(ctx context.Context, h func(message []byte, topic str
 	}
 }
 
-func (r *Reader) HSubscribe(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error {
+func (r *Reader) SubscribeWithHeaders(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error {
 	var handler func(msg *amqp.Message) error
-	if r.IsAutoCommit() {
+	if r.AutoCommit() {
 		handler = func(msg *amqp.Message) error {
 			var hs [][]byte
 			if msg.ApplicationProperties != nil {
@@ -175,7 +175,7 @@ func (r *Reader) Fetch(
 	fetchHandler(0, util.ErrNotSupported)
 }
 
-func (r *Reader) HFetch(
+func (r *Reader) FetchWithHeaders(
 	ctx context.Context, n uint32,
 	fetchHandler func(n uint32, err error),
 	msgHandler func(message []byte, topic string, hs [][]byte, args ...any),
@@ -225,11 +225,11 @@ func (r *Reader) EncodeMsgID(buf []byte, topic string, args ...any) []byte {
 	return binary.BigEndian.AppendUint32(buf, uint32(args[0].(int64)))
 }
 
-func (r *Reader) MsgIDStaticArgsLen() int {
+func (r *Reader) MsgIDArgsLen() int {
 	return 8
 }
 
-func (r *Reader) IsAutoCommit() bool {
+func (r *Reader) AutoCommit() bool {
 	return r.autoCommit
 }
 

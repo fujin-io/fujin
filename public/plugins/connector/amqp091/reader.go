@@ -123,7 +123,7 @@ func (r *Reader) Subscribe(ctx context.Context, h func(message []byte, topic str
 	}
 
 	var handler func(d amqp.Delivery)
-	if r.IsAutoCommit() {
+	if r.AutoCommit() {
 		handler = func(d amqp.Delivery) {
 			h(d.Body, d.Exchange)
 		}
@@ -152,7 +152,7 @@ func (r *Reader) Subscribe(ctx context.Context, h func(message []byte, topic str
 	return nil
 }
 
-func (r *Reader) HSubscribe(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error {
+func (r *Reader) SubscribeWithHeaders(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error {
 	r.mu.Lock()
 	if r.channel != nil {
 		return fmt.Errorf("amqp091: reader busy")
@@ -224,7 +224,7 @@ func (r *Reader) HSubscribe(ctx context.Context, h func(message []byte, topic st
 	}
 
 	var handler func(d amqp.Delivery)
-	if r.IsAutoCommit() {
+	if r.AutoCommit() {
 		handler = func(d amqp.Delivery) {
 			// Extract headers from d.Headers
 			var hs [][]byte
@@ -293,7 +293,7 @@ func (r *Reader) Fetch(
 	fetchHandler(0, util.ErrNotSupported)
 }
 
-func (r *Reader) HFetch(
+func (r *Reader) FetchWithHeaders(
 	ctx context.Context, n uint32,
 	fetchHandler func(n uint32, err error),
 	msgHandler func(message []byte, topic string, hs [][]byte, args ...any),
@@ -327,11 +327,11 @@ func (r *Reader) EncodeMsgID(buf []byte, topic string, args ...any) []byte {
 	return binary.BigEndian.AppendUint32(buf, uint32(args[0].(int64)))
 }
 
-func (r *Reader) MsgIDStaticArgsLen() int {
+func (r *Reader) MsgIDArgsLen() int {
 	return 8
 }
 
-func (r *Reader) IsAutoCommit() bool {
+func (r *Reader) AutoCommit() bool {
 	return r.autoCommit
 }
 

@@ -238,7 +238,7 @@ func (r *Reader) Subscribe(ctx context.Context, h func(msg []byte, topic string,
 	}
 }
 
-func (r *Reader) HSubscribe(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error {
+func (r *Reader) SubscribeWithHeaders(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -287,7 +287,7 @@ func (r *Reader) Fetch(
 	r.handler(resp, msgHandler)
 }
 
-func (r *Reader) HFetch(
+func (r *Reader) FetchWithHeaders(
 	ctx context.Context, n uint32,
 	fetchHandler func(n uint32, err error),
 	msgHandler func(message []byte, topic string, hs [][]byte, args ...any),
@@ -352,11 +352,11 @@ func (r *Reader) EncodeMsgID(buf []byte, stream string, args ...any) []byte {
 	return append(buf, stream...)
 }
 
-func (r *Reader) MsgIDStaticArgsLen() int {
+func (r *Reader) MsgIDArgsLen() int {
 	return 8
 }
 
-func (r *Reader) IsAutoCommit() bool {
+func (r *Reader) AutoCommit() bool {
 	return r.autoCommit
 }
 

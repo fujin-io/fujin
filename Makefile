@@ -112,7 +112,7 @@ help:
 	@echo "Binary: $(BINARY)"
 
 # Broker management commands
-.PHONY: up-kafka down-kafka up-nats down-nats up-rabbitmq down-rabbitmq up-artemis down-artemis up-emqx down-emqx up-nsq down-nsq
+.PHONY: up-kafka down-kafka up-nats down-nats up-rabbitmq down-rabbitmq up-artemis down-artemis up-emqx down-emqx up-nsq down-nsq up-zeromq down-zeromq
 
 # Kafka
 up-kafka:
@@ -169,6 +169,13 @@ up-nsq:
 down-nsq:
 	docker compose -f resources/docker-compose.fujin.nsq.yaml -f resources/docker-compose.nsq.yaml -f resources/docker-compose.observability.yaml down
 
+# ZeroMQ
+up-zeromq:
+	docker compose -f resources/docker-compose.fujin.zeromq.yaml -f resources/docker-compose.zeromq.yaml -f resources/docker-compose.observability.yaml up -d
+
+down-zeromq:
+	docker compose -f resources/docker-compose.fujin.zeromq.yaml -f resources/docker-compose.zeromq.yaml -f resources/docker-compose.observability.yaml down
+
 # Helper command to show all available broker commands
 broker-help:
 	@echo "Available broker commands:"
@@ -188,6 +195,8 @@ broker-help:
 	@echo "  make down-resp_streams - Stop ValKey"
 	@echo "  make up-nsq           - Start NSQ cluster"
 	@echo "  make down-nsq         - Stop NSQ cluster"
+	@echo "  make up-zeromq        - Start Fujin and ZeroMQ socket"
+	@echo "  make down-zeromq      - Stop Fujin and ZeroMQ socket"
 
 .PHONY: bench
 bench:

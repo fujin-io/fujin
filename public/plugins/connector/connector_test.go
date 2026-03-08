@@ -39,14 +39,14 @@ func (m *mockReader) Subscribe(ctx context.Context, h func(message []byte, topic
 	return nil
 }
 
-func (m *mockReader) HSubscribe(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error {
+func (m *mockReader) SubscribeWithHeaders(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error {
 	return nil
 }
 
 func (m *mockReader) Fetch(ctx context.Context, n uint32, fetchResponseHandler func(n uint32, err error), msgHandler func(message []byte, topic string, args ...any)) {
 }
 
-func (m *mockReader) HFetch(ctx context.Context, n uint32, fetchResponseHandler func(n uint32, err error), msgHandler func(message []byte, topic string, hs [][]byte, args ...any)) {
+func (m *mockReader) FetchWithHeaders(ctx context.Context, n uint32, fetchResponseHandler func(n uint32, err error), msgHandler func(message []byte, topic string, hs [][]byte, args ...any)) {
 }
 
 func (m *mockReader) Ack(ctx context.Context, msgIDs [][]byte, ackHandler func(error), ackMsgHandler func([]byte, error)) {
@@ -55,7 +55,7 @@ func (m *mockReader) Ack(ctx context.Context, msgIDs [][]byte, ackHandler func(e
 func (m *mockReader) Nack(ctx context.Context, msgIDs [][]byte, nackHandler func(error), nackMsgHandler func([]byte, error)) {
 }
 
-func (m *mockReader) MsgIDStaticArgsLen() int {
+func (m *mockReader) MsgIDArgsLen() int {
 	return 0
 }
 
@@ -63,7 +63,7 @@ func (m *mockReader) EncodeMsgID(buf []byte, topic string, args ...any) []byte {
 	return buf
 }
 
-func (m *mockReader) IsAutoCommit() bool {
+func (m *mockReader) AutoCommit() bool {
 	return false
 }
 

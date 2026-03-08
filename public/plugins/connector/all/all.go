@@ -9,6 +9,8 @@ import (
 	_ "github.com/fujin-io/fujin/public/plugins/connector/amqp10"
 	// AMQP091 connector plugin
 	_ "github.com/fujin-io/fujin/public/plugins/connector/amqp091"
+	// ZeroMQ connector plugin
+	_ "github.com/fujin-io/fujin/public/plugins/connector/zeromq"
 	// Kafka connector plugin
 	_ "github.com/fujin-io/fujin/public/plugins/connector/kafka"
 	// MQTT connector plugin

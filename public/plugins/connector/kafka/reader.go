@@ -39,7 +39,7 @@ func (c *Connector) Subscribe(ctx context.Context, h func(message []byte, topic 
 	}
 }
 
-func (c *Connector) HSubscribe(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error {
+func (c *Connector) SubscribeWithHeaders(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error {
 	pingCtx, cancel := context.WithTimeout(ctx, c.conf.PingTimeout)
 	defer cancel()
 
@@ -108,7 +108,7 @@ func (c *Connector) Fetch(
 	}
 }
 
-func (c *Connector) HFetch(
+func (c *Connector) FetchWithHeaders(
 	ctx context.Context, n uint32,
 	fetchHandler func(n uint32, err error),
 	msgHandler func(message []byte, topic string, hs [][]byte, args ...any),
@@ -219,10 +219,10 @@ func (c *Connector) EncodeMsgID(buf []byte, topic string, args ...any) []byte {
 	return append(buf, topic...)
 }
 
-func (c *Connector) MsgIDStaticArgsLen() int {
+func (c *Connector) MsgIDArgsLen() int {
 	return 8
 }
 
-func (c *Connector) IsAutoCommit() bool {
+func (c *Connector) AutoCommit() bool {
 	return c.autoCommit
 }

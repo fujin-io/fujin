@@ -2153,7 +2153,7 @@ func (h *handler) hsubscribe(ctx context.Context, subID byte, r connector.ReadCl
 		case <-ctx.Done():
 			return
 		default:
-			err := r.HSubscribe(ctx, msgHandler)
+			err := r.SubscribeWithHeaders(ctx, msgHandler)
 			if err != nil {
 				h.l.Error("subscribe with headers", "err", err)
 				time.Sleep(1 * time.Second)
@@ -2314,7 +2314,7 @@ func (h *handler) fetch(topic string, autoCommit bool, n uint32) {
 		h.sMu.Unlock()
 
 		if headered {
-			fetcher.HFetch(h.ctx, n,
+			fetcher.FetchWithHeaders(h.ctx, n,
 				func(n uint32, err error) {
 					h.out.Lock()
 					if err != nil {
@@ -2634,13 +2634,13 @@ func enqueueUnsubscribeSuccess(out *Outbound, cID []byte) {
 func (h *handler) subEnqueueMsgFunc(
 	out *Outbound, subID byte, r connector.ReadCloser,
 ) func(message []byte, topic string, args ...any) {
-	staticArgsLen := r.MsgIDStaticArgsLen()
+	staticArgsLen := r.MsgIDArgsLen()
 	constBufLen := staticArgsLen + 6 // cmd(1) + subID(1) + msgLen(4)
-	if !r.IsAutoCommit() {
+	if !r.AutoCommit() {
 		constBufLen += 4 // msgIDLen(4)
 	}
 
-	if r.IsAutoCommit() {
+	if r.AutoCommit() {
 		return func(message []byte, topic string, args ...any) {
 			resp := v1.RESP_CODE_MSG
 			buf := pool.Get(len(message) + constBufLen)
@@ -2670,13 +2670,13 @@ func (h *handler) subEnqueueMsgFunc(
 func (h *handler) subEnqueueMsgFuncWithHeaders(
 	out *Outbound, subID byte, r connector.ReadCloser,
 ) func(message []byte, topic string, hs [][]byte, args ...any) {
-	staticArgsLen := r.MsgIDStaticArgsLen()
+	staticArgsLen := r.MsgIDArgsLen()
 	constBufLen := staticArgsLen + 8 // cmd(1) + subID(1) + headersLen(2) + msgLen(4)
-	if !r.IsAutoCommit() {
+	if !r.AutoCommit() {
 		constBufLen += 4
 	}
 
-	if r.IsAutoCommit() {
+	if r.AutoCommit() {
 		return func(message []byte, topic string, hs [][]byte, args ...any) {
 			resp := v1.RESP_CODE_HMSG
 			headersCount := uint16(len(hs))
@@ -2726,7 +2726,7 @@ func (h *handler) subEnqueueMsgFuncWithHeaders(
 func (h *handler) fetchEnqueueMsgFunc(
 	out *Outbound, r connector.ReadCloser, topic string, autoCommit bool,
 ) func(message []byte, topic string, args ...any) {
-	staticArgsLen := r.MsgIDStaticArgsLen()
+	staticArgsLen := r.MsgIDArgsLen()
 	constBufLen := staticArgsLen + 4 // msgLen(4)
 	if !autoCommit {
 		constBufLen += 4
@@ -2776,7 +2776,7 @@ func (h *handler) fetchEnqueueMsgFunc(
 func (h *handler) fetchEnqueueMsgFuncWithHeaders(
 	out *Outbound, r connector.ReadCloser, topic string, autoCommit bool,
 ) func(message []byte, topic string, hs [][]byte, args ...any) {
-	staticArgsLen := r.MsgIDStaticArgsLen()
+	staticArgsLen := r.MsgIDArgsLen()
 	constBufLen := staticArgsLen + 6 // headersLen(2) + msgLen(4)
 	if !autoCommit {
 		constBufLen += 4

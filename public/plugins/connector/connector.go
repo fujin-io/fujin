@@ -22,13 +22,13 @@ import (
 // Reader is the interface for message readers.
 type Reader interface {
 	Subscribe(ctx context.Context, h func(message []byte, topic string, args ...any)) error
-	HSubscribe(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error
+	SubscribeWithHeaders(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error
 	Fetch(
 		ctx context.Context, n uint32,
 		fetchResponseHandler func(n uint32, err error),
 		msgHandler func(message []byte, topic string, args ...any),
 	)
-	HFetch(
+	FetchWithHeaders(
 		ctx context.Context, n uint32,
 		fetchResponseHandler func(n uint32, err error),
 		msgHandler func(message []byte, topic string, hs [][]byte, args ...any),
@@ -43,9 +43,9 @@ type Reader interface {
 		nackHandler func(error),
 		nackMsgHandler func([]byte, error),
 	)
-	MsgIDStaticArgsLen() int
+	MsgIDArgsLen() int
 	EncodeMsgID(buf []byte, topic string, args ...any) []byte
-	IsAutoCommit() bool
+	AutoCommit() bool
 }
 
 // Writer is the interface for message writers.

@@ -283,9 +283,9 @@ func (d *metricsReaderWrapper) Subscribe(ctx context.Context, h func(message []b
 	)
 }
 
-func (d *metricsReaderWrapper) HSubscribe(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error {
+func (d *metricsReaderWrapper) SubscribeWithHeaders(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error {
 	IncOp("hsubscribe", d.connectorName)
-	return d.r.HSubscribe(
+	return d.r.SubscribeWithHeaders(
 		ctx,
 		func(message []byte, topic string, hs [][]byte, args ...any) {
 			IncOp("hmsg", d.connectorName)
@@ -305,7 +305,7 @@ func (d *metricsReaderWrapper) Fetch(ctx context.Context, n uint32, fetchRespons
 	d.r.Fetch(ctx, n, frh, msgHandler)
 }
 
-func (d *metricsReaderWrapper) HFetch(ctx context.Context, n uint32, fetchResponseHandler func(n uint32, err error), msgHandler func(message []byte, topic string, hs [][]byte, args ...any)) {
+func (d *metricsReaderWrapper) FetchWithHeaders(ctx context.Context, n uint32, fetchResponseHandler func(n uint32, err error), msgHandler func(message []byte, topic string, hs [][]byte, args ...any)) {
 	frh := func(n uint32, err error) {
 		IncOp("hfetch", d.connectorName)
 		if err != nil {
@@ -313,7 +313,7 @@ func (d *metricsReaderWrapper) HFetch(ctx context.Context, n uint32, fetchRespon
 		}
 		fetchResponseHandler(n, err)
 	}
-	d.r.HFetch(ctx, n, frh, msgHandler)
+	d.r.FetchWithHeaders(ctx, n, frh, msgHandler)
 }
 
 func (d *metricsReaderWrapper) Ack(ctx context.Context, msgIDs [][]byte, ackHandler func(error), ackMsgHandler func([]byte, error)) {
@@ -354,16 +354,16 @@ func (d *metricsReaderWrapper) Nack(ctx context.Context, msgIDs [][]byte, nackHa
 	)
 }
 
-func (d *metricsReaderWrapper) MsgIDStaticArgsLen() int {
-	return d.r.MsgIDStaticArgsLen()
+func (d *metricsReaderWrapper) MsgIDArgsLen() int {
+	return d.r.MsgIDArgsLen()
 }
 
 func (d *metricsReaderWrapper) EncodeMsgID(buf []byte, topic string, args ...any) []byte {
 	return d.r.EncodeMsgID(buf, topic, args...)
 }
 
-func (d *metricsReaderWrapper) IsAutoCommit() bool {
-	return d.r.IsAutoCommit()
+func (d *metricsReaderWrapper) AutoCommit() bool {
+	return d.r.AutoCommit()
 }
 
 func (d *metricsReaderWrapper) Close() error {

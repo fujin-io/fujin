@@ -211,7 +211,7 @@ func (r *Reader) Subscribe(ctx context.Context, h func(message []byte, topic str
 	return nil
 }
 
-func (r *Reader) HSubscribe(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error {
+func (r *Reader) SubscribeWithHeaders(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error {
 	r.handlerMu.Lock()
 	r.hMsgHandler = h
 	r.isHSubscribe = true
@@ -241,7 +241,7 @@ func (r *Reader) Fetch(
 	fetchHandler(0, util.ErrNotSupported)
 }
 
-func (r *Reader) HFetch(
+func (r *Reader) FetchWithHeaders(
 	ctx context.Context, n uint32,
 	fetchHandler func(n uint32, err error),
 	msgHandler func(message []byte, topic string, hs [][]byte, args ...any),
@@ -301,11 +301,11 @@ func (r *Reader) EncodeMsgID(buf []byte, topic string, args ...any) []byte {
 	return binary.BigEndian.AppendUint16(buf, args[0].(uint16))
 }
 
-func (r *Reader) MsgIDStaticArgsLen() int {
+func (r *Reader) MsgIDArgsLen() int {
 	return 2
 }
 
-func (r *Reader) IsAutoCommit() bool {
+func (r *Reader) AutoCommit() bool {
 	return r.autoAck
 }
 

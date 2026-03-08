@@ -911,7 +911,7 @@ func (s *streamSession) handleFetch(req *pb.FetchRequest) error {
 	var messages []*pb.FetchMessage
 	var msgIDBuf []byte
 	if !req.AutoCommit {
-		msgIDBuf = make([]byte, state.reader.MsgIDStaticArgsLen())
+		msgIDBuf = make([]byte, state.reader.MsgIDArgsLen())
 	}
 
 	fetchErr := make(chan error, 1)
@@ -1030,7 +1030,7 @@ func (s *streamSession) handleHFetch(req *pb.HFetchRequest) error {
 	var messages []*pb.HFetchMessage
 	var msgIDBuf []byte
 	if !req.AutoCommit {
-		msgIDBuf = make([]byte, state.reader.MsgIDStaticArgsLen())
+		msgIDBuf = make([]byte, state.reader.MsgIDArgsLen())
 	}
 
 	fetchErr := make(chan error, 1)
@@ -1066,7 +1066,7 @@ func (s *streamSession) handleHFetch(req *pb.HFetchRequest) error {
 		fetchErr <- err
 	}
 
-	state.reader.HFetch(s.ctx, req.BatchSize, fetchResponseHandler, hmsgHandler)
+	state.reader.FetchWithHeaders(s.ctx, req.BatchSize, fetchResponseHandler, hmsgHandler)
 	err := <-fetchErr
 
 	var errMsg string
@@ -1150,7 +1150,7 @@ func (s *streamSession) subscribeLoop(ctx context.Context, subID byte, state *re
 
 	var msgIDBuf []byte
 	if !state.autoCommit {
-		msgIDBuf = make([]byte, state.reader.MsgIDStaticArgsLen())
+		msgIDBuf = make([]byte, state.reader.MsgIDArgsLen())
 	}
 
 	if state.withHeaders {
@@ -1192,7 +1192,7 @@ func (s *streamSession) subscribeLoop(ctx context.Context, subID byte, state *re
 			case <-ctx.Done():
 				return
 			default:
-				err := state.reader.HSubscribe(ctx, hmsgHandler)
+				err := state.reader.SubscribeWithHeaders(ctx, hmsgHandler)
 				if err != nil && ctx.Err() == nil {
 					s.l.Error("hsubscribe error", "sub_id", subID, "err", err)
 				}
