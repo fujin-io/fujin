@@ -7,8 +7,8 @@ fujin:
 grpc:
   enabled: true
 connectors:
-  nsq_connector:
-    protocol: nsq
+  connector:
+    type: nsq
     settings:
       common: {}
       clients:

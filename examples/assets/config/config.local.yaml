@@ -29,161 +29,66 @@ grpc:
     max_connection_age: 30m
     max_connection_age_grace: 5s
   client_keepalive:
-    min_time: 5m
+    min_time: 20s
     permit_without_stream: false
+  observability_enabled: false
 connectors:
   kafka_connector:
-    protocol: kafka
+    type: kafka_franz
+    # Whitelist of paths that clients can override via BIND command
+    # Supports wildcards: clients.*.field matches clients.client1.field, clients.client2.field, etc.
+    overridable:
+      - clients.*.produce_topic
+      - clients.*.consume_topics
+      - clients.*.group
+      - clients.*.transactional_id
+    # Bind middlewares are applied to the bind request
+    # They are particularly useful for authentication and authorization for example
+    # Available middlewares:
+    #   - auth_api_key: API key authentication
+    # Each bind middleware can be disabled via config:
+    #   - name: example_middleware
+    #     disabled: true
+    bind_middlewares:
+      - name: auth_api_key
+        api_key: supersecretkey
+        disabled: true
+    # Connector middlewares are applied to the connector
+    # Available middlewares:
+    #   - metrics: Prometheus metrics collection
+    #   - tracing: OpenTelemetry distributed tracing
+    # Each connector middleware can be disabled via config:
+    #   - name: metrics
+    #     disabled: true
+    connector_middlewares:
+      - name: metrics
+      - name: tracing
     settings:
       common:
+        # broker settings
         brokers: [localhost:9092, localhost:9093, localhost:9094]
+        tls:
+          enabled: false
+          server_cert_pem_path: ./examples/assets/certs/fujin.io.pem
+          server_key_pem_path: ./examples/assets/certs/fujin.io-key.pem
       clients:
-        pub:
+        client1:
+          # writer settings
           allow_auto_topic_creation: true
           produce_topic: my_pub_topic
-          linger: 10ms
-          max_buffered_records: 10000
+          linger: 10ms # batching delay
+          # transactional_id: fujin
           disable_idempotent_write: false
-        sub:
+          max_buffered_records: 10000 # maximum buffered records
+          ping_timeout: 5s # ping timeout
+        client2:
+          # reader settings
           consume_topics: [my_pub_topic]
-          group: fujin
-          allow_auto_topic_creation: true
-          max_poll_records: 10000
-          auto_commit_interval: 5s
-          auto_commit_marks: false
-          block_rebalance_on_poll: false
-          balancers: [round_robin] # sticky/cooperative_sticky/range/round_robin (defaults to cooperative_sticky)
-          fetch_isolation_level: read_commited # read_commited/read_uncommited (defaults to read_uncommited)
-    # pub:
-    #   protocol: resp_pubsub
-    #   settings:
-    #     init_address: ["localhost:6379"]
-    #     channel: example-channel
-    #     batch_size: 1000
-    #     linger: 10ms
-    # pub:
-    #   protocol: resp_pubsub
-    #   settings:
-    #     init_address: ["localhost:6379"]
-    #     channel: example-channel
-    #     batch_size: 1000
-    #     linger: 10ms
-    # pub:
-    #   protocol: nats
-    #   nats:
-    #     url: nats://localhost:4222
-    #     subject: my_subject
-    # pub:
-    #   protocol: amqp091
-    #   settings:
-    #     conn:
-    #       url: amqp://guest:guest@localhost
-    #     exchange:
-    #       name: events
-    #       kind: fanout
-    #     queue:
-    #       name: my_queue
-    #     queue_bind:
-    #       binding_key: my_routing_key
-    #     publish:
-    #       content_type: text/plain
-    # pub:
-    #   protocol: amqp10
-    #   settings:
-    #     conn:
-    #       addr: amqp://artemis:artemis@localhost:61616
-    #     sender:
-    #       target: exchange
-    # pub:
-    #   protocol: resp_streams
-    #   settings:
-    #     init_address: ["localhost:6379"]
-    #     stream: stream
-    #     batch_size: 1000
-    #     linger: 10ms
-    #     # parse_msg_protocol: json
-    # pub:
-    #   protocol: mqtt
-    #   settings:
-    #     broker_url: tcp://localhost:1883
-    #     client_id: fujin_pub
-    #     topic: my_topic
-    #     qos: 0
-    #     retain: false
-    #     clean_session: true
-    #     keep_alive: 2s
-    #     disconnect_timeout: 5s
-    # pub:
-    #   protocol: nsq
-    #   settings:
-    #     address: "localhost:4150"
-    #     topic: my_topic
-    #     pool:
-    #       size: 10000
-    #       pre_alloc: true
-    #       release_timeout: 5s
-    # sub:
-    #   protocol: nats
-    #   nats:
-    #     url: nats://localhost:4222
-    #     subject: my_subject
-    # sub:
-    #   protocol: amqp091
-    #   settings:
-    #     conn:
-    #       url: amqp://guest:guest@localhost
-    #     exchange:
-    #       name: events
-    #       kind: fanout
-    #     queue:
-    #       name: my_queue
-    #     queue_bind:
-    #       routing_key: my_routing_key
-    #     consume:
-    #       consumer: fujin
-    #     nack:
-    #       requeue: true
-    # sub:
-    #   protocol: amqp10
-    #   settings:
-    #     conn:
-    #       addr: amqp://artemis:artemis@localhost:61616
-    #     receiver:
-    #       source: exchange
-    # sub:
-    #   protocol: resp_pubsub
-    #   settings:
-    #     init_address: ["localhost:6379"]
-    #     channels: [example-channel]
-    # sub:
-    #   protocol: resp_streams
-    #   settings:
-    #     init_address: ["localhost:6379"]
-    #     group:
-    #       name: fujin
-    #       consumer: fujin
-    #     streams:
-    #       stream:
-    #         group_create_id: $
-    #         start_id: ">"
-    #     block: 3s
-    #     # parse_msg_protocol: json
-    # sub:
-    #   protocol: mqtt
-    #   settings:
-    #     broker_url: tcp://localhost:1883
-    #     client_id: fujin_sub
-    #     topic: my_topic
-    #     qos: 0
-    #     retain: false
-    #     clean_session: true
-    #     keep_alive: 2s
-    #     disconnect_timeout: 5s
-    # sub:
-    #   protocol: nsq
-    #   settings:
-    #     addresses: ["localhost:4150"]
-    #     # lookupd_addresses: ["localhost:4161"]
-    #     topic: my_topic
-    #     channel: my_channel
-    #     max_in_flight: 1000000
+          group: fujin2
+          max_poll_records: 10000 # maximum poll records
+          auto_commit_interval: 5s # auto commit interval
+          auto_commit_marks: false # auto commit marks
+          block_rebalance_on_poll: false # block rebalance on poll
+          balancers: [cooperative_sticky] # balancers
+          fetch_isolation_level: read_uncommited # fetch isolation level
+          disable_auto_commit: true

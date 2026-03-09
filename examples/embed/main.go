@@ -38,7 +38,7 @@ var DefaultTestConfigWithNats = config.Config{
 	GRPC:  DefaultGRPCServerTestConfig,
 	Connectors: cconfig.ConnectorsConfig{
 		"nats_core_connector": {
-			Protocol: "nats_core",
+			Type: "nats_core",
 			Settings: nats_core.Config{
 				Common: nats_core.CommonSettings{
 					URL: "nats://localhost:4222",

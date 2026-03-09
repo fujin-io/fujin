@@ -9,8 +9,8 @@ services:
         FUJIN_GO_TAGS: fujin,grpc
     container_name: fujin
     environment:
-      FUJIN_CONFIGURATOR: file
-      FUJIN_CONFIGURATOR_FILE_PATHS: /assets/config/config-nsq.yaml
+      FUJIN_CONFIGURATOR: yaml
+      FUJIN_CONFIGURATOR_YAML_PATHS: /assets/config/config-nsq.yaml
     ports:
       - "4848:4848/udp"
       - "4849:4849"

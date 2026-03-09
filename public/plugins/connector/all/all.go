@@ -5,23 +5,21 @@
 package all
 
 import (
-	// AMQP10 connector plugin
-	_ "github.com/fujin-io/fujin/public/plugins/connector/amqp10"
-	// AMQP091 connector plugin
-	_ "github.com/fujin-io/fujin/public/plugins/connector/amqp091"
+	// Azure AMQP1.0 connector plugin
+	_ "github.com/fujin-io/fujin/public/plugins/connector/azure/amqp1"
+	// RabbitMQ AMQP0.9.1 connector plugin
+	_ "github.com/fujin-io/fujin/public/plugins/connector/rabbitmq/amqp09"
 	// ZeroMQ connector plugin
-	_ "github.com/fujin-io/fujin/public/plugins/connector/zeromq"
-	// Kafka connector plugin
-	_ "github.com/fujin-io/fujin/public/plugins/connector/kafka"
-	// MQTT connector plugin
-	_ "github.com/fujin-io/fujin/public/plugins/connector/mqtt"
+	// Kafka franz-go connector plugin
+	_ "github.com/fujin-io/fujin/public/plugins/connector/kafka/franz"
+	// MQTT Paho connector plugin
+	_ "github.com/fujin-io/fujin/public/plugins/connector/mqtt/paho"
 	// NATS Core connector plugin
 	_ "github.com/fujin-io/fujin/public/plugins/connector/nats/core"
 	// NSQ connector plugin
 	_ "github.com/fujin-io/fujin/public/plugins/connector/nsq"
-	// Redis PubSub connector plugin
-	_ "github.com/fujin-io/fujin/public/plugins/connector/resp/pubsub"
-	// Redis Streams connector plugin
-	_ "github.com/fujin-io/fujin/public/plugins/connector/resp/streams"
+	// Redis Rueidis PubSub connector plugin
+	_ "github.com/fujin-io/fujin/public/plugins/connector/redis/rueidis/pubsub"
+	// Redis Rueidis Streams connector plugin
+	_ "github.com/fujin-io/fujin/public/plugins/connector/redis/rueidis/streams"
 )
-

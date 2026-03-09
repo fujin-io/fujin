@@ -8,7 +8,7 @@ grpc:
   enabled: true
 connectors:
   kafka_connector:
-    protocol: kafka
+    type: kafka_franz
     settings:
       common:
         brokers: [kafka1:19092, kafka2:19093, kafka3:19094]

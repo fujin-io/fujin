@@ -1,0 +1,19 @@
+services:
+  fujin:
+    image: fujin:mqtt_paho-${BUILD_TAG}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        FUJIN_CONNECTORS: github.com/fujin-io/fujin/public/plugins/connector/mqtt/paho
+        FUJIN_GO_TAGS: fujin,grpc
+    container_name: fujin
+    environment:
+      FUJIN_CONFIGURATOR: yaml
+      FUJIN_CONFIGURATOR_YAML_PATHS: /assets/config/config-mqtt_paho.yaml
+    ports:
+      - "4848:4848/udp"
+      - "4849:4849"
+    volumes:
+      - ./assets:/assets
+    restart: always

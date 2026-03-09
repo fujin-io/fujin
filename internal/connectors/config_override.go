@@ -55,7 +55,7 @@ func ApplyOverrides(baseConfig config.ConnectorConfig, overrides map[string]stri
 			return config.ConnectorConfig{}, err
 		}
 
-		overridenSettings, err := applySetting(cfg.Protocol, cfg.Settings, path, value)
+		overridenSettings, err := applySetting(cfg.Type, cfg.Settings, path, value)
 		if err != nil {
 			return config.ConnectorConfig{}, fmt.Errorf("apply setting '%s': %w", path, err)
 		}

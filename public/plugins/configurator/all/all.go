@@ -6,5 +6,5 @@ package all
 
 import (
 	// File configurator plugin
-	_ "github.com/fujin-io/fujin/public/plugins/configurator/file"
+	_ "github.com/fujin-io/fujin/public/plugins/configurator/yaml"
 )

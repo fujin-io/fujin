@@ -3,6 +3,36 @@ goarch: arm64
 pkg: github.com/fujin-io/fujin/test
 cpu: Apple M2
 
+--- No op ---
+
+--- 1B Payload ---
+
+Benchmark_Produce_1BPayload_Nop-8          10000               104.2 ns/op       163.21 MB/s
+PASS
+ok      github.com/fujin-io/fujin/test  0.437s
+
+Benchmark_Produce_1BPayload_Nop-8         100000               224.9 ns/op        75.58 MB/s
+PASS
+ok      github.com/fujin-io/fujin/test  0.467s
+
+Benchmark_Produce_1BPayload_Nop-8        1000000               308.6 ns/op        55.09 MB/s
+PASS
+ok      github.com/fujin-io/fujin/test  0.739s
+
+--- 32KB Payload ---
+
+Benchmark_Produce_32KBPayload_Nop-8        10000            122571 ns/op         267.47 MB/s
+PASS
+ok      github.com/fujin-io/fujin/test  1.662s
+
+Benchmark_Produce_32KBPayload_Nop-8       100000            121276 ns/op         270.33 MB/s
+PASS
+ok      github.com/fujin-io/fujin/test  12.654s
+
+Benchmark_Produce_32KBPayload_Nop-8      1000000            122672 ns/op         267.25 MB/s
+PASS
+ok      github.com/fujin-io/fujin/test  123.321s
+
 --- Kafka ---
 
 --- 1B Payload ---

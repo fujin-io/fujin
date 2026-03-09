@@ -79,7 +79,7 @@ If you prefer not to use Make, use the builder directly:
 ```bash
 go run ./cmd/builder -local \
   -configurator github.com/fujin-io/fujin/public/plugins/configurator/file \
-  -connector github.com/fujin-io/fujin/public/plugins/connector/kafka \
+  -connector github.com/fujin-io/fujin/public/plugins/connector/kafka/franz \
   -bind-middleware github.com/fujin-io/fujin/public/plugins/middleware/bind/auth_api_key \
   -connector-middleware github.com/fujin-io/fujin/public/plugins/middleware/connector/metrics \
   -tags "fujin,grpc" \

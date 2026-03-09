@@ -18,7 +18,7 @@ fujin:
   observability_enabled: false
 connectors:
   faker_connector:
-    protocol: faker
+    type: faker
     connector_middlewares:
       - name: ratelimit
         config:

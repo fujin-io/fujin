@@ -19,16 +19,16 @@ import (
 	"github.com/fujin-io/fujin/internal/api/fujin/v1/proto/request"
 	"github.com/fujin-io/fujin/internal/api/fujin/v1/proto/response"
 	"github.com/fujin-io/fujin/internal/api/fujin/v1/version"
-	"github.com/fujin-io/fujin/public/plugins/connector/amqp091"
-	"github.com/fujin-io/fujin/public/plugins/connector/amqp10"
+	"github.com/fujin-io/fujin/public/plugins/connector/azure/amqp1"
 	connector_config "github.com/fujin-io/fujin/public/plugins/connector/config"
-	"github.com/fujin-io/fujin/public/plugins/connector/kafka"
-	"github.com/fujin-io/fujin/public/plugins/connector/mqtt"
+	kafka "github.com/fujin-io/fujin/public/plugins/connector/kafka/franz"
+	mqtt "github.com/fujin-io/fujin/public/plugins/connector/mqtt/paho"
 	"github.com/fujin-io/fujin/public/plugins/connector/nats/core"
 	"github.com/fujin-io/fujin/public/plugins/connector/nsq"
-	respconfig "github.com/fujin-io/fujin/public/plugins/connector/resp/config"
-	"github.com/fujin-io/fujin/public/plugins/connector/resp/pubsub"
-	"github.com/fujin-io/fujin/public/plugins/connector/resp/streams"
+	"github.com/fujin-io/fujin/public/plugins/connector/rabbitmq/amqp09"
+	redis_config "github.com/fujin-io/fujin/public/plugins/connector/redis/rueidis/config"
+	"github.com/fujin-io/fujin/public/plugins/connector/redis/rueidis/pubsub"
+	"github.com/fujin-io/fujin/public/plugins/connector/redis/rueidis/streams"
 	v1 "github.com/fujin-io/fujin/public/proto/fujin/v1"
 	"github.com/fujin-io/fujin/public/server"
 	"github.com/fujin-io/fujin/public/server/config"
@@ -46,11 +46,20 @@ var DefaultFujinServerTestConfig = config.FujinServerConfig{
 	TLS:     generateTLSConfig(),
 }
 
+var DefaultTestConfigWithNop = config.Config{
+	Fujin: DefaultFujinServerTestConfig,
+	Connectors: connector_config.ConnectorsConfig{
+		"connector": {
+			Type: "nop",
+		},
+	},
+}
+
 var DefaultTestConfigWithKafka3Brokers = config.Config{
 	Fujin: DefaultFujinServerTestConfig,
 	Connectors: connector_config.ConnectorsConfig{
 		"connector": {
-			Protocol: "kafka",
+			Type: "kafka_franz",
 			Settings: kafka.Config{
 				Common: kafka.CommonSettings{
 					Brokers: []string{"localhost:9092", "localhost:9093", "localhost:9094"},
@@ -76,7 +85,7 @@ var DefaultTestConfigWithNats = config.Config{
 	Fujin: DefaultFujinServerTestConfig,
 	Connectors: connector_config.ConnectorsConfig{
 		"connector": {
-			Protocol: "nats_core",
+			Type: "nats_core",
 			Settings: core.Config{
 				Common: core.CommonSettings{
 					URL: "nats://localhost:4222",
@@ -98,42 +107,42 @@ var DefaultTestConfigWithAMQP091 = config.Config{
 	Fujin: DefaultFujinServerTestConfig,
 	Connectors: connector_config.ConnectorsConfig{
 		"connector": {
-			Protocol: "amqp091",
-			Settings: amqp091.Config{
-				Clients: map[string]amqp091.ClientSpecificSettings{
+			Type: "rabbitmq_amqp09",
+			Settings: amqp09.Config{
+				Clients: map[string]amqp09.ClientSpecificSettings{
 					"pub": {
-						Conn: amqp091.ConnConfig{
+						Conn: amqp09.ConnConfig{
 							URL: "amqp://guest:guest@localhost",
 						},
-						Exchange: amqp091.ExchangeConfig{
+						Exchange: amqp09.ExchangeConfig{
 							Name: "events",
 							Kind: "fanout",
 						},
-						Queue: amqp091.QueueConfig{
+						Queue: amqp09.QueueConfig{
 							Name: "my_queue",
 						},
-						QueueBind: amqp091.QueueBindConfig{
+						QueueBind: amqp09.QueueBindConfig{
 							RoutingKey: "my_routing_key",
 						},
-						Publish: &amqp091.PublishConfig{
+						Publish: &amqp09.PublishConfig{
 							ContentType: "text/plain",
 						},
 					},
 					"sub": {
-						Conn: amqp091.ConnConfig{
+						Conn: amqp09.ConnConfig{
 							URL: "amqp://guest:guest@localhost",
 						},
-						Exchange: amqp091.ExchangeConfig{
+						Exchange: amqp09.ExchangeConfig{
 							Name: "events",
 							Kind: "fanout",
 						},
-						Queue: amqp091.QueueConfig{
+						Queue: amqp09.QueueConfig{
 							Name: "my_queue",
 						},
-						QueueBind: amqp091.QueueBindConfig{
+						QueueBind: amqp09.QueueBindConfig{
 							RoutingKey: "my_routing_key",
 						},
-						Consume: &amqp091.ConsumeConfig{
+						Consume: &amqp09.ConsumeConfig{
 							Consumer: "fujin",
 						},
 					},
@@ -147,22 +156,22 @@ var DefaultTestConfigWithAMQP10 = config.Config{
 	Fujin: DefaultFujinServerTestConfig,
 	Connectors: connector_config.ConnectorsConfig{
 		"connector": {
-			Protocol: "amqp10",
-			Settings: amqp10.Config{
-				Clients: map[string]amqp10.ClientSpecificSettings{
+			Type: "azure_amqp1",
+			Settings: amqp1.Config{
+				Clients: map[string]amqp1.ClientSpecificSettings{
 					"pub": {
-						Conn: amqp10.ConnConfig{
+						Conn: amqp1.ConnConfig{
 							Addr: "amqp://artemis:artemis@localhost:61616",
 						},
-						Sender: &amqp10.SenderConfig{
+						Sender: &amqp1.SenderConfig{
 							Target: "queue",
 						},
 					},
 					"sub": {
-						Conn: amqp10.ConnConfig{
+						Conn: amqp1.ConnConfig{
 							Addr: "amqp://artemis:artemis@localhost:61616",
 						},
-						Receiver: &amqp10.ReceiverConfig{
+						Receiver: &amqp1.ReceiverConfig{
 							Source: "queue",
 						},
 					},
@@ -175,14 +184,14 @@ var DefaultTestConfigWithRedisPubSub = config.Config{
 	Fujin: DefaultFujinServerTestConfig,
 	Connectors: connector_config.ConnectorsConfig{
 		"connector": {
-			Protocol: "resp_pubsub",
+			Type: "redis_rueidis_pubsub",
 			Settings: pubsub.Config{
 				Common: pubsub.CommonSettings{
-					RedisConfig: respconfig.RedisConfig{
+					RedisConfig: redis_config.RedisConfig{
 						InitAddress:  []string{"localhost:6379"},
 						DisableCache: true,
 					},
-					WriterBatchConfig: respconfig.WriterBatchConfig{
+					WriterBatchConfig: redis_config.WriterBatchConfig{
 						BatchSize: 1000,
 						Linger:    5 * time.Millisecond,
 					},
@@ -204,14 +213,14 @@ var DefaultTestConfigWithRedisStreams = config.Config{
 	Fujin: DefaultFujinServerTestConfig,
 	Connectors: connector_config.ConnectorsConfig{
 		"connector": connector_config.ConnectorConfig{
-			Protocol: "resp_streams",
+			Type: "redis_rueidis_streams",
 			Settings: streams.Config{
 				Common: streams.CommonSettings{
-					RedisConfig: respconfig.RedisConfig{
+					RedisConfig: redis_config.RedisConfig{
 						InitAddress:  []string{"localhost:6379"},
 						DisableCache: true,
 					},
-					WriterBatchConfig: respconfig.WriterBatchConfig{
+					WriterBatchConfig: redis_config.WriterBatchConfig{
 						BatchSize: 1000,
 						Linger:    5 * time.Millisecond,
 					},
@@ -242,7 +251,7 @@ var DefaultTestConfigWithMQTT = config.Config{
 	Fujin: DefaultFujinServerTestConfig,
 	Connectors: connector_config.ConnectorsConfig{
 		"connector": {
-			Protocol: "mqtt",
+			Type: "mqtt_paho",
 			Settings: mqtt.Config{
 				Common: mqtt.CommonSettings{
 					BrokerURL:         "tcp://localhost:1883",
@@ -284,7 +293,7 @@ var DefaultTestConfigWithNSQ = config.Config{
 	Fujin: DefaultFujinServerTestConfig,
 	Connectors: connector_config.ConnectorsConfig{
 		"connector": {
-			Protocol: "nsq",
+			Type: "nsq",
 			Settings: nsq.Config{
 				Common: nsq.CommonSettings{
 					Address:   "localhost:4150",
@@ -308,6 +317,10 @@ var DefaultTestConfigWithNSQ = config.Config{
 			},
 		},
 	},
+}
+
+func RunDefaultServerWithNop(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithNop)
 }
 
 func RunDefaultServerWithKafka3Brokers(ctx context.Context) *server.Server {

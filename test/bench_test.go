@@ -16,6 +16,39 @@ const (
 	PERF_ADDR = "localhost:4848"
 )
 
+// No op benchmarks
+func Benchmark_Produce_1BPayload_Nop(b *testing.B) {
+	benchProduce(b, "nop", "pub", sizedString(1))
+}
+
+func Benchmark_Produce_32BPayload_Nop(b *testing.B) {
+	benchProduce(b, "nop", "pub", sizedString(32))
+}
+
+func Benchmark_Produce_128BPayload_Nop(b *testing.B) {
+	benchProduce(b, "nop", "pub", sizedString(128))
+}
+
+func Benchmark_Produce_256BPayload_Nop(b *testing.B) {
+	benchProduce(b, "nop", "pub", sizedString(256))
+}
+
+func Benchmark_Produce_1KBPayload_Nop(b *testing.B) {
+	benchProduce(b, "nop", "pub", sizedString(1024))
+}
+
+func Benchmark_Produce_4KBPayload_Nop(b *testing.B) {
+	benchProduce(b, "nop", "pub", sizedString(4*1024))
+}
+
+func Benchmark_Produce_8KBPayload_Nop(b *testing.B) {
+	benchProduce(b, "nop", "pub", sizedString(8*1024))
+}
+
+func Benchmark_Produce_32KBPayload_Nop(b *testing.B) {
+	benchProduce(b, "nop", "pub", sizedString(32*1024))
+}
+
 // Kafka benchmarks
 func Benchmark_Produce_1BPayload_Kafka_3Brokers(b *testing.B) {
 	benchProduce(b, "kafka3", "pub", sizedString(1))
@@ -133,37 +166,37 @@ func Benchmark_Produce_32KBPayload_RedisPubSub(b *testing.B) {
 	benchProduce(b, "resp_pubsub", "pub", sizedString(32*1024))
 }
 
-// Redis Streams benchmarks
+// Redis Rueidis Streams benchmarks
 func Benchmark_Produce_1BPayload_RedisStreams(b *testing.B) {
-	benchProduce(b, "resp_streams", "pub", sizedString(1))
+	benchProduce(b, "redis_rueidis_streams", "pub", sizedString(1))
 }
 
 func Benchmark_Produce_32BPayload_RedisStreams(b *testing.B) {
-	benchProduce(b, "resp_streams", "pub", sizedString(32))
+	benchProduce(b, "redis_rueidis_streams", "pub", sizedString(32))
 }
 
 func Benchmark_Produce_128BPayload_RedisStreams(b *testing.B) {
-	benchProduce(b, "resp_streams", "pub", sizedString(128))
+	benchProduce(b, "redis_rueidis_streams", "pub", sizedString(128))
 }
 
 func Benchmark_Produce_256BPayload_RedisStreams(b *testing.B) {
-	benchProduce(b, "resp_streams", "pub", sizedString(256))
+	benchProduce(b, "redis_rueidis_streams", "pub", sizedString(256))
 }
 
 func Benchmark_Produce_1KBPayload_RedisStreams(b *testing.B) {
-	benchProduce(b, "resp_streams", "pub", sizedString(1024))
+	benchProduce(b, "redis_rueidis_streams", "pub", sizedString(1024))
 }
 
 func Benchmark_Produce_4KBPayload_RedisStreams(b *testing.B) {
-	benchProduce(b, "resp_streams", "pub", sizedString(4*1024))
+	benchProduce(b, "redis_rueidis_streams", "pub", sizedString(4*1024))
 }
 
 func Benchmark_Produce_8KBPayload_RedisStreams(b *testing.B) {
-	benchProduce(b, "resp_streams", "pub", sizedString(8*1024))
+	benchProduce(b, "redis_rueidis_streams", "pub", sizedString(8*1024))
 }
 
 func Benchmark_Produce_32KBPayload_RedisStreams(b *testing.B) {
-	benchProduce(b, "resp_streams", "pub", sizedString(32*1024))
+	benchProduce(b, "redis_rueidis_streams", "pub", sizedString(32*1024))
 }
 
 // MQTT benchmarks
@@ -240,6 +273,8 @@ func benchProduce(b *testing.B, typ, topic, payload string) {
 
 	b.StopTimer()
 	switch typ {
+	case "nop":
+		s = RunDefaultServerWithNop(ctx)
 	case "kafka3":
 		s = RunDefaultServerWithKafka3Brokers(ctx)
 	case "nats":
@@ -250,7 +285,7 @@ func benchProduce(b *testing.B, typ, topic, payload string) {
 		s = RunDefaultServerWithAMQP10(ctx)
 	case "resp_pubsub":
 		s = RunDefaultServerWithRedisPubSub(ctx)
-	case "resp_streams":
+	case "redis_rueidis_streams":
 		s = RunDefaultServerWithRedisStreams(ctx)
 	case "mqtt":
 		s = RunDefaultServerWithMQTT(ctx)

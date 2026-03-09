@@ -1,0 +1,24 @@
+fujin:
+  enabled: true
+  tls:
+    enabled: true
+    server_cert_pem_path: /assets/certs/fujin.io.pem
+    server_key_pem_path: /assets/certs/fujin.io-key.pem
+grpc:
+  enabled: true
+connectors:
+  connector:
+    type: azure_amqp1
+    settings:
+      common: {}
+      clients:
+        pub:
+          conn:
+            addr: amqp://artemis:artemis@localhost:61616
+          sender:
+            target: exchange
+        sub:
+          conn:
+            addr: amqp://artemis:artemis@localhost:61616
+          receiver:
+            source: exchange

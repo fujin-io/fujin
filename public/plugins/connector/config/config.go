@@ -10,9 +10,9 @@ type ConnectorsConfig map[string]ConnectorConfig
 
 // ConnectorConfig represents the configuration for a single connector
 type ConnectorConfig struct {
-	Protocol             string             `yaml:"protocol"`
+	Type                 string             `yaml:"type"`
 	Overridable          []string           `yaml:"overridable,omitempty"`           // Whitelist of paths that clients can override
-	BindMiddlewares      []bmwconfig.Config `yaml:"bind_middlewares,omitempty"`     // Middlewares to apply to BIND requests
+	BindMiddlewares      []bmwconfig.Config `yaml:"bind_middlewares,omitempty"`      // Middlewares to apply to BIND requests
 	ConnectorMiddlewares []cmwconfig.Config `yaml:"connector_middlewares,omitempty"` // Middlewares to apply to this connector
 	Settings             any                `yaml:"settings"`
 }

@@ -109,10 +109,10 @@ The Makefile uses the [Custom Binary Builder](#custom-binary-builder) to build F
 make build
 
 # Build minimal (Kafka only)
-make build CONNECTORS=github.com/fujin-io/fujin/public/plugins/connector/kafka
+make build CONNECTORS=github.com/fujin-io/fujin/public/plugins/connector/kafka/franz
 
 # Build with selected connectors
-make build CONNECTORS="github.com/fujin-io/fujin/public/plugins/connector/kafka,github.com/fujin-io/fujin/public/plugins/connector/nats/core"
+make build CONNECTORS="github.com/fujin-io/fujin/public/plugins/connector/kafka/franz,github.com/fujin-io/fujin/public/plugins/connector/nats/core"
 
 # Custom protocols (default: fujin,grpc)
 make build GO_BUILD_TAGS="fujin,grpc"
@@ -136,7 +136,7 @@ The `cmd/builder` tool builds a **minimal Fujin binary** containing only the plu
 ```bash
 go run ./cmd/builder \
   -configurator github.com/fujin-io/fujin/public/plugins/configurator/file \
-  -connector github.com/fujin-io/fujin/public/plugins/connector/kafka \
+  -connector github.com/fujin-io/fujin/public/plugins/connector/kafka/franz \
   -connector github.com/fujin-io/fujin/public/plugins/connector/nats/core \
   -bind-middleware github.com/fujin-io/fujin/public/plugins/middleware/bind/auth_api_key \
   -connector-middleware github.com/fujin-io/fujin/public/plugins/middleware/connector/metrics \
@@ -157,11 +157,11 @@ go run ./cmd/builder \
 
 **Available default plugins:**
 - Configurators: `public/plugins/configurator/file`
-- Connectors: `kafka`, `nats/core`, `amqp091`, `amqp10`, `resp/pubsub`, `resp/streams`, `mqtt`, `nsq`
+- Connectors: `kafka`, `nats/core`, `rabbitmq_amqp09`, `azure_amqp1`, `resp/pubsub`, `resp/streams`, `mqtt`, `nsq`
 - Bind middlewares: `auth_api_key`
 - Connector middlewares: `metrics`, `tracing`
 
-Use full package paths, e.g. `github.com/fujin-io/fujin/public/plugins/connector/kafka`.
+Use full package paths, e.g. `github.com/fujin-io/fujin/public/plugins/connector/kafka/franz`.
 
 ## Contributing
 

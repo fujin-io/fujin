@@ -9,7 +9,7 @@ import (
 
 func TestDeepCopyConfig(t *testing.T) {
 	original := config.ConnectorConfig{
-		Protocol: "test",
+		Type: "test",
 		Settings: map[string]any{
 			"nested": map[string]any{
 				"nested1": map[string]any{
@@ -35,7 +35,7 @@ func TestDeepCopyConfig(t *testing.T) {
 
 func TestApplyOverrides_Generic(t *testing.T) {
 	originalConfig := config.ConnectorConfig{
-		Protocol:    "test",
+		Type:        "test",
 		Overridable: []string{"key"}, // Allow override
 		Settings: map[string]any{
 			"key": "value",
@@ -60,7 +60,7 @@ func TestApplyOverrides_Generic(t *testing.T) {
 
 func TestApplyOverrides_NestedPath(t *testing.T) {
 	originalConfig := config.ConnectorConfig{
-		Protocol:    "test",
+		Type:        "test",
 		Overridable: []string{"nested.key", "nested.key2"}, // Allow specific nested paths
 		Settings: map[string]any{
 			"nested": map[string]any{
@@ -220,7 +220,7 @@ func TestMatchOverridePath(t *testing.T) {
 
 func TestApplyOverrides_NotAllowed(t *testing.T) {
 	originalConfig := config.ConnectorConfig{
-		Protocol:    "test",
+		Type:        "test",
 		Overridable: []string{"clients.*.topic"}, // Only allow topic
 		Settings: map[string]any{
 			"common": map[string]any{
