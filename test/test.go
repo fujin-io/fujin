@@ -36,8 +36,8 @@ import (
 )
 
 const (
-	defaultSendBufSize = 32768
-	defaultRecvBufSize = 32768
+	defaultSendBufSize = 512 * 1024
+	defaultRecvBufSize = 512 * 1024
 )
 
 var DefaultFujinServerTestConfig = config.FujinServerConfig{

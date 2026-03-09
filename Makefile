@@ -16,7 +16,7 @@ BIND_MIDDLEWARES ?= github.com/fujin-io/fujin/public/plugins/middleware/bind/all
 CONNECTOR_MIDDLEWARES ?= github.com/fujin-io/fujin/public/plugins/middleware/connector/all
 
 BENCH_TIME ?= 1000000x
-BENCH_FUNC ?= Benchmark_Produce_32KBPayload_Nop
+BENCH_FUNC ?= Benchmark_Produce_1BPayload_Nop
 
 # Detect OS
 ifeq ($(OS),Windows_NT)
@@ -26,7 +26,7 @@ ifeq ($(OS),Windows_NT)
     RMDIR := rmdir /S /Q
     MKDIR := mkdir
     PATHSEP := \\
-	BOOTCONF := setx FUJIN_CONFIGURATOR "file" && setx FUJIN_CONFIGURATOR_YAML_PATHS "./config.dev.yaml"
+	BOOTCONF := set "FUJIN_CONFIGURATOR=yaml" && set "FUJIN_CONFIGURATOR_YAML_PATHS=./examples/assets/config/config.local.yaml"
 else
     DETECTED_OS := $(shell uname -s)
     BINARY_EXT :=
@@ -34,7 +34,7 @@ else
     RMDIR := rm -rf
     MKDIR := mkdir -p
     PATHSEP := /
-	BOOTCONF := export FUJIN_CONFIGURATOR=file && export FUJIN_CONFIGURATOR_YAML_PATHS=./config.dev.yaml
+	BOOTCONF := export FUJIN_CONFIGURATOR=yaml && export FUJIN_CONFIGURATOR_YAML_PATHS=./examples/assets/config/config.local.yaml
 endif
 
 BIN_DIR := bin

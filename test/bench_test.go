@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/rand"
 	"testing"
+	"time"
 
 	v1 "github.com/fujin-io/fujin/public/proto/fujin/v1"
 	"github.com/fujin-io/fujin/public/server"
@@ -327,9 +328,13 @@ func benchProduce(b *testing.B, typ, topic, payload string) {
 	go drainStream(b, p, bytes)
 
 	b.StartTimer()
+
+	startTime := time.Now()
 	for b.Loop() {
 		bw.Write(cmd)
 	}
+	elapsed := time.Since(startTime)
+	fmt.Println("seconds to write full buf to quic stream:", elapsed.Seconds())
 	bw.Write([]byte{byte(v1.OP_CODE_DISCONNECT)})
 
 	bw.Flush()
