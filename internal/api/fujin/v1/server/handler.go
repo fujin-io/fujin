@@ -282,7 +282,6 @@ func newHandler(
 	h := &handler{
 		ctx:                         ctx,
 		baseConfig:                  baseConfig,
-		cman:                        nil, // Will be created during BIND
 		pingInterval:                pingInterval,
 		pingTimeout:                 pingTimeout,
 		subIDPool:                   pool2.NewBytePool(),
@@ -297,7 +296,6 @@ func newHandler(
 		ps:                          &parseState{},
 		disconnect:                  func() {},
 		sessionState:                STREAM_STATE_BIND,
-		connected:                   false,
 		closed:                      make(chan struct{}),
 	}
 
@@ -477,7 +475,21 @@ func (h *handler) handle(buf []byte) error {
 				continue
 			}
 
-			h.ps.argBuf = append(h.ps.argBuf, b)
+			toCopy := v1.Uint32Len - len(h.ps.argBuf)
+			avail := len(buf) - i
+
+			if avail < toCopy {
+				toCopy = avail
+			}
+
+			if toCopy > 0 {
+				start := len(h.ps.argBuf)
+				h.ps.argBuf = h.ps.argBuf[:start+toCopy]
+				copy(h.ps.argBuf[start:], buf[i:i+toCopy])
+				i = (i + toCopy) - 1
+			} else {
+				h.ps.argBuf = append(h.ps.argBuf, b)
+			}
 
 			if len(h.ps.argBuf) >= v1.Uint32Len {
 				if h.ps.pa.topicLen == 0 {
@@ -626,7 +638,23 @@ func (h *handler) handle(buf []byte) error {
 				}
 				continue
 			}
-			h.ps.argBuf = append(h.ps.argBuf, b)
+
+			toCopy := v1.Uint32Len - len(h.ps.argBuf)
+			avail := len(buf) - i
+
+			if avail < toCopy {
+				toCopy = avail
+			}
+
+			if toCopy > 0 {
+				start := len(h.ps.argBuf)
+				h.ps.argBuf = h.ps.argBuf[:start+toCopy]
+				copy(h.ps.argBuf[start:], buf[i:i+toCopy])
+				i = (i + toCopy) - 1
+			} else {
+				h.ps.argBuf = append(h.ps.argBuf, b)
+			}
+
 			if len(h.ps.argBuf) >= v1.Uint32Len {
 				if h.ps.pa.topicLen == 0 {
 					if err := h.parseWriteTopicLenArg(); err != nil {

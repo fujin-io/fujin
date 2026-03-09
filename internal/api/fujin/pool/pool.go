@@ -8,8 +8,8 @@ const SIZE_BYTE = 1   // for single byte op protocol allocs
 const SIZE_4_BYTE = 4 // for uint32 protocol allocs
 const SIZE_TINY = 256
 const SIZE_SMALL = 512
-const SIZE_MEDIUM = 4096
-const SIZE_LARGE = 65536
+const SIZE_MEDIUM = 4 * 1024
+const SIZE_LARGE = 64 * 1024
 
 var poolByte = &sync.Pool{
 	New: func() any {

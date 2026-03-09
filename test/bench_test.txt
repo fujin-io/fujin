@@ -1,3 +1,6 @@
+This benchmark is not optimized yet for big payloads. According to my calculations, 32KB payload copying for 1000000 messages took ~3,5 seconds.
+So, read throughput for 32KB payloads should be:  1B payloads throughput time + 3,5 seconds
+
 goos: darwin
 goarch: arm64
 pkg: github.com/fujin-io/fujin/test
