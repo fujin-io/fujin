@@ -1,5 +1,3 @@
-//go:build fujin
-
 package fujin
 
 import (
@@ -9,8 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/fujin-io/fujin/internal/api/fujin/pool"
-	"github.com/quic-go/quic-go"
+	"github.com/fujin-io/fujin/internal/protocol/fujin/pool"
 )
 
 const (
@@ -25,13 +22,13 @@ type Outbound struct {
 	wdl    time.Duration // write deadline
 	c      *sync.Cond
 	pb     int64        // pending bytes
-	str    *quic.Stream // current quic stream
+	str    Stream
 	closed atomic.Bool
 	l      *slog.Logger
 }
 
 func NewOutbound(
-	str *quic.Stream, wdl time.Duration,
+	str Stream, wdl time.Duration,
 	l *slog.Logger) *Outbound {
 	o := &Outbound{
 		str: str,
@@ -207,6 +204,13 @@ func (o *Outbound) QueueOutboundNoLock(data []byte) {
 		o.v = append(o.v, new[:n])
 		toBuffer = toBuffer[n:]
 	}
+}
+
+func (o *Outbound) QueueOutboundByteNoLock(data byte) {
+	o.pb += 1
+	new := pool.Get(1)[:1]
+	new[0] = data
+	o.v = append(o.v, new)
 }
 
 func (o *Outbound) IsClosed() bool {

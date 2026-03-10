@@ -5,8 +5,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/fujin-io/fujin/internal/api/fujin/v1/server"
-	grpc_server "github.com/fujin-io/fujin/internal/api/grpc/v1/server"
+	grpc_server "github.com/fujin-io/fujin/internal/transport/grpc/v1/server"
+	quicserver "github.com/fujin-io/fujin/internal/transport/quic"
+	tcpserver "github.com/fujin-io/fujin/internal/transport/tcp"
 	"github.com/fujin-io/fujin/public/server/config"
 	"golang.org/x/sync/errgroup"
 )
@@ -14,14 +15,15 @@ import (
 type Server struct {
 	conf config.Config
 
-	fujinServer FujinServer
-	grpcServer  GRPCServer
+	quicServer TransportServer
+	tcpServer  TransportServer
+	grpcServer GRPCServer
 
 	l *slog.Logger
 }
 
-// FujinServer interface for optional Fujin server
-type FujinServer interface {
+// TransportServer is the common interface for fujin-protocol transports (QUIC, TCP).
+type TransportServer interface {
 	ListenAndServe(ctx context.Context) error
 	ReadyForConnections(timeout time.Duration) bool
 	Done() <-chan struct{}
@@ -42,11 +44,14 @@ func NewServer(conf config.Config, l *slog.Logger) (*Server, error) {
 		l:    l,
 	}
 
-	if conf.Fujin.Enabled {
-		s.fujinServer = server.NewFujinServer(s.conf.Fujin, s.conf.Connectors, s.l)
+	if conf.QUIC.Enabled {
+		s.quicServer = quicserver.NewFujinServer(s.conf.QUIC, s.conf.Connectors, s.l)
 	}
 
-	// Initialize gRPC server if enabled
+	if conf.TCP.Enabled {
+		s.tcpServer = tcpserver.NewServer(s.conf.TCP, s.conf.Connectors, s.l)
+	}
+
 	if conf.GRPC.Enabled {
 		s.grpcServer = grpc_server.NewGRPCServerWrapper(s.conf.GRPC, s.conf.Connectors, s.l)
 	}
@@ -57,9 +62,15 @@ func NewServer(conf config.Config, l *slog.Logger) (*Server, error) {
 func (s *Server) ListenAndServe(ctx context.Context) error {
 	eg, eCtx := errgroup.WithContext(ctx)
 
-	if s.fujinServer != nil {
+	if s.quicServer != nil {
 		eg.Go(func() error {
-			return s.fujinServer.ListenAndServe(eCtx)
+			return s.quicServer.ListenAndServe(eCtx)
+		})
+	}
+
+	if s.tcpServer != nil {
+		eg.Go(func() error {
+			return s.tcpServer.ListenAndServe(eCtx)
 		})
 	}
 
@@ -75,8 +86,13 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 func (s *Server) ReadyForConnections(timeout time.Duration) bool {
 	ready := make(chan struct{})
 	go func() {
-		if s.fujinServer != nil {
-			if !s.fujinServer.ReadyForConnections(timeout) {
+		if s.quicServer != nil {
+			if !s.quicServer.ReadyForConnections(timeout) {
+				return
+			}
+		}
+		if s.tcpServer != nil {
+			if !s.tcpServer.ReadyForConnections(timeout) {
 				return
 			}
 		}
@@ -92,10 +108,12 @@ func (s *Server) ReadyForConnections(timeout time.Duration) bool {
 }
 
 func (s *Server) Done() <-chan struct{} {
-	if s.fujinServer != nil {
-		return s.fujinServer.Done()
+	if s.quicServer != nil {
+		return s.quicServer.Done()
 	}
-	// Return a closed channel if no fujin server
+	if s.tcpServer != nil {
+		return s.tcpServer.Done()
+	}
 	done := make(chan struct{})
 	close(done)
 	return done

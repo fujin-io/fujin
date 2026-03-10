@@ -12,13 +12,11 @@ import (
 	"io"
 	"log/slog"
 	"math/big"
+	"net"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/fujin-io/fujin/internal/api/fujin/v1/proto/request"
-	"github.com/fujin-io/fujin/internal/api/fujin/v1/proto/response"
-	"github.com/fujin-io/fujin/internal/api/fujin/v1/version"
 	"github.com/fujin-io/fujin/public/plugins/connector/azure/amqp1"
 	connector_config "github.com/fujin-io/fujin/public/plugins/connector/config"
 	kafka "github.com/fujin-io/fujin/public/plugins/connector/kafka/franz"
@@ -38,16 +36,17 @@ import (
 const (
 	defaultSendBufSize = 512 * 1024
 	defaultRecvBufSize = 512 * 1024
+	PERF_TCP_ADDR      = "localhost:4850"
 )
 
-var DefaultFujinServerTestConfig = config.FujinServerConfig{
+var DefaultQUICServerTestConfig = config.QUICServerConfig{
 	Enabled: true,
 	Addr:    ":4848",
 	TLS:     generateTLSConfig(),
 }
 
-var DefaultTestConfigWithNop = config.Config{
-	Fujin: DefaultFujinServerTestConfig,
+var DefaultTestConfigWithNopQUIC = config.Config{
+	QUIC: DefaultQUICServerTestConfig,
 	Connectors: connector_config.ConnectorsConfig{
 		"connector": {
 			Type: "nop",
@@ -55,8 +54,8 @@ var DefaultTestConfigWithNop = config.Config{
 	},
 }
 
-var DefaultTestConfigWithKafka3Brokers = config.Config{
-	Fujin: DefaultFujinServerTestConfig,
+var DefaultTestConfigWithKafka3BrokersQUIC = config.Config{
+	QUIC: DefaultQUICServerTestConfig,
 	Connectors: connector_config.ConnectorsConfig{
 		"connector": {
 			Type: "kafka_franz",
@@ -81,8 +80,8 @@ var DefaultTestConfigWithKafka3Brokers = config.Config{
 	},
 }
 
-var DefaultTestConfigWithNats = config.Config{
-	Fujin: DefaultFujinServerTestConfig,
+var DefaultTestConfigWithNatsQUIC = config.Config{
+	QUIC: DefaultQUICServerTestConfig,
 	Connectors: connector_config.ConnectorsConfig{
 		"connector": {
 			Type: "nats_core",
@@ -103,8 +102,8 @@ var DefaultTestConfigWithNats = config.Config{
 	},
 }
 
-var DefaultTestConfigWithAMQP091 = config.Config{
-	Fujin: DefaultFujinServerTestConfig,
+var DefaultTestConfigWithAMQP091QUIC = config.Config{
+	QUIC: DefaultQUICServerTestConfig,
 	Connectors: connector_config.ConnectorsConfig{
 		"connector": {
 			Type: "rabbitmq_amqp09",
@@ -152,8 +151,8 @@ var DefaultTestConfigWithAMQP091 = config.Config{
 	},
 }
 
-var DefaultTestConfigWithAMQP10 = config.Config{
-	Fujin: DefaultFujinServerTestConfig,
+var DefaultTestConfigWithAMQP10QUIC = config.Config{
+	QUIC: DefaultQUICServerTestConfig,
 	Connectors: connector_config.ConnectorsConfig{
 		"connector": {
 			Type: "azure_amqp1",
@@ -180,8 +179,8 @@ var DefaultTestConfigWithAMQP10 = config.Config{
 		},
 	},
 }
-var DefaultTestConfigWithRedisPubSub = config.Config{
-	Fujin: DefaultFujinServerTestConfig,
+var DefaultTestConfigWithRedisPubSubQUIC = config.Config{
+	QUIC: DefaultQUICServerTestConfig,
 	Connectors: connector_config.ConnectorsConfig{
 		"connector": {
 			Type: "redis_rueidis_pubsub",
@@ -209,8 +208,8 @@ var DefaultTestConfigWithRedisPubSub = config.Config{
 	},
 }
 
-var DefaultTestConfigWithRedisStreams = config.Config{
-	Fujin: DefaultFujinServerTestConfig,
+var DefaultTestConfigWithRedisStreamsQUIC = config.Config{
+	QUIC: DefaultQUICServerTestConfig,
 	Connectors: connector_config.ConnectorsConfig{
 		"connector": connector_config.ConnectorConfig{
 			Type: "redis_rueidis_streams",
@@ -247,8 +246,8 @@ var DefaultTestConfigWithRedisStreams = config.Config{
 	},
 }
 
-var DefaultTestConfigWithMQTT = config.Config{
-	Fujin: DefaultFujinServerTestConfig,
+var DefaultTestConfigWithMQTTQUIC = config.Config{
+	QUIC: DefaultQUICServerTestConfig,
 	Connectors: connector_config.ConnectorsConfig{
 		"connector": {
 			Type: "mqtt_paho",
@@ -289,8 +288,8 @@ var DefaultTestConfigWithMQTT = config.Config{
 	},
 }
 
-var DefaultTestConfigWithNSQ = config.Config{
-	Fujin: DefaultFujinServerTestConfig,
+var DefaultTestConfigWithNSQQUIC = config.Config{
+	QUIC: DefaultQUICServerTestConfig,
 	Connectors: connector_config.ConnectorsConfig{
 		"connector": {
 			Type: "nsq",
@@ -319,40 +318,127 @@ var DefaultTestConfigWithNSQ = config.Config{
 	},
 }
 
-func RunDefaultServerWithNop(ctx context.Context) *server.Server {
-	return RunServer(ctx, DefaultTestConfigWithNop)
+func RunDefaultServerWithNopQUIC(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithNopQUIC)
 }
 
-func RunDefaultServerWithKafka3Brokers(ctx context.Context) *server.Server {
-	return RunServer(ctx, DefaultTestConfigWithKafka3Brokers)
+func RunDefaultServerWithKafka3BrokersQUIC(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithKafka3BrokersQUIC)
 }
 
-func RunDefaultServerWithNats(ctx context.Context) *server.Server {
-	return RunServer(ctx, DefaultTestConfigWithNats)
+func RunDefaultServerWithNatsQUIC(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithNatsQUIC)
 }
 
-func RunDefaultServerWithAMQP091(ctx context.Context) *server.Server {
-	return RunServer(ctx, DefaultTestConfigWithAMQP091)
+func RunDefaultServerWithAMQP091QUIC(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithAMQP091QUIC)
 }
 
-func RunDefaultServerWithAMQP10(ctx context.Context) *server.Server {
-	return RunServer(ctx, DefaultTestConfigWithAMQP10)
+func RunDefaultServerWithAMQP10QUIC(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithAMQP10QUIC)
 }
 
-func RunDefaultServerWithRedisPubSub(ctx context.Context) *server.Server {
-	return RunServer(ctx, DefaultTestConfigWithRedisPubSub)
+func RunDefaultServerWithRedisPubSubQUIC(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithRedisPubSubQUIC)
 }
 
-func RunDefaultServerWithRedisStreams(ctx context.Context) *server.Server {
-	return RunServer(ctx, DefaultTestConfigWithRedisStreams)
+func RunDefaultServerWithRedisStreamsQUIC(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithRedisStreamsQUIC)
 }
 
-func RunDefaultServerWithMQTT(ctx context.Context) *server.Server {
-	return RunServer(ctx, DefaultTestConfigWithMQTT)
+func RunDefaultServerWithMQTTQUIC(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithMQTTQUIC)
 }
 
-func RunDefaultServerWithNSQ(ctx context.Context) *server.Server {
-	return RunServer(ctx, DefaultTestConfigWithNSQ)
+func RunDefaultServerWithNSQQUIC(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithNSQQUIC)
+}
+
+// --- TCP test configs ---
+
+var DefaultTCPServerTestConfig = config.TCPServerConfig{
+	Enabled: true,
+	Addr:    ":4850",
+}
+
+var DefaultTestConfigWithNopTCP = config.Config{
+	TCP: DefaultTCPServerTestConfig,
+	Connectors: connector_config.ConnectorsConfig{
+		"connector": {
+			Type: "nop",
+		},
+	},
+}
+
+var DefaultTestConfigWithKafka3BrokersTCP = config.Config{
+	TCP: DefaultTCPServerTestConfig,
+	Connectors: connector_config.ConnectorsConfig{
+		"connector": {
+			Type: "kafka_franz",
+			Settings: kafka.Config{
+				Common: kafka.CommonSettings{
+					Brokers: []string{"localhost:9092", "localhost:9093", "localhost:9094"},
+				},
+				Clients: map[string]kafka.ClientSpecificSettings{
+					"sub": {
+						ConsumeTopics:          []string{"my_pub_topic"},
+						Group:                  "fujin",
+						AllowAutoTopicCreation: true,
+					},
+					"pub": {
+						ProduceTopic:           "my_pub_topic",
+						AllowAutoTopicCreation: true,
+						Linger:                 10 * time.Millisecond,
+					},
+				},
+			},
+		},
+	},
+}
+
+func RunDefaultServerWithNopTCP(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithNopTCP)
+}
+
+func RunDefaultServerWithKafka3BrokersTCP(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithKafka3BrokersTCP)
+}
+
+func createTCPClientConn(addr string) net.Conn {
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		panic(fmt.Errorf("dial tcp: %w", err))
+	}
+	if tc, ok := conn.(*net.TCPConn); ok {
+		_ = tc.SetNoDelay(true)
+	}
+	return conn
+}
+
+func doDefaultBindTCP(conn net.Conn) {
+	req := bindCmd("connector", nil, nil)
+	if _, err := conn.Write(req); err != nil {
+		panic(fmt.Errorf("write bind request: %w", err))
+	}
+}
+
+func drainTCPConn(b *testing.B, conn net.Conn, ch chan int) {
+	buf := make([]byte, defaultRecvBufSize)
+	bytes := 0
+
+	for {
+		conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+		n, err := conn.Read(buf)
+		bytes += n
+		if err != nil {
+			if !errors.Is(err, io.EOF) {
+				b.Errorf("Error on read: %v\n", err)
+			}
+			break
+		}
+	}
+
+	ch <- bytes
 }
 
 func RunServer(ctx context.Context, conf config.Config) *server.Server {
@@ -444,11 +530,11 @@ func handlePing(str *quic.Stream) {
 	n, err := str.Read(pingBuf[:])
 	if err == io.EOF {
 		if n != 0 {
-			if pingBuf[0] != byte(request.OP_CODE_PING) {
+			if pingBuf[0] != byte(v1.OP_CODE_PING) {
 				return
 			}
 		}
-		pingBuf[0] = byte(response.RESP_CODE_PONG)
+		pingBuf[0] = byte(v1.RESP_CODE_PONG)
 		if _, err := str.Write(pingBuf[:]); err != nil {
 			return
 		}
@@ -467,7 +553,7 @@ func generateTLSConfig() *tls.Config {
 		Certificate: [][]byte{cert},
 		PrivateKey:  key,
 	}
-	return &tls.Config{Certificates: []tls.Certificate{tlsCert}, InsecureSkipVerify: true, NextProtos: []string{version.Fujin1}}
+	return &tls.Config{Certificates: []tls.Certificate{tlsCert}, InsecureSkipVerify: true, NextProtos: []string{v1.Version}}
 }
 
 func bindCmd(connector string, meta, configOverrides map[string]string) []byte {

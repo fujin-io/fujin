@@ -34,22 +34,24 @@ The project uses a single Go module at the root:
 
 ```
 fujin/
-├── cmd/             # Entry points
-│   ├── main.go      # Default server (all plugins)
-│   └── builder/     # Custom binary builder (selective plugins)
-├── public/          # Public API and plugins
-│   ├── plugins/    # Connectors, configurators, middlewares
-│   │   ├── connector/      # Kafka, NATS, AMQP, MQTT, NSQ, RESP...
-│   │   ├── configurator/   # File-based config loader
-│   │   └── middleware/    # Bind (auth_api_key) and connector (metrics, tracing)
-│   ├── proto/       # gRPC and Fujin protocol definitions
-│   ├── server/      # Server abstraction and config
-│   └── service/     # Core service (RunCLI)
-├── internal/        # Internal implementation (not exported)
-├── examples/        # Sample configs and runnable examples
-├── resources/       # Docker Compose, Grafana, example configs
-├── test/            # Benchmarks and test helpers
-└── Makefile         # Cross-platform build commands
+├── cmd/                        # Entry points
+│   ├── main.go                 # Default server (all plugins)
+│   └── builder/                # Custom binary builder (selective plugins)
+├── public/                     # Public API and plugins
+│   ├── plugins/                # Connectors, configurators, middlewares
+│   │   ├── connector/          # Kafka, NATS, AMQP, MQTT, NSQ, RESP...
+│   │   ├── configurator/       # File-based config loader
+│   │   └── middleware/         # Bind (auth_api_key) and connector (metrics, tracing)
+│   ├── proto/                  # gRPC and Fujin protocol definitions
+│   ├── server/                 # Server abstraction and config
+│   └── service/                # Core service (RunCLI)
+├── internal/                   # Internal implementation (not exported)
+│   ├── protocol/fujin/         # Fujin binary protocol (transport-agnostic)
+│   └── transport/              # Transport implementations (quic/, tcp/, grpc/)
+├── examples/                   # Sample configs and runnable examples
+├── resources/                  # Docker Compose, Grafana, example configs
+├── test/                       # Benchmarks and test helpers
+└── Makefile                    # Cross-platform build commands
 ```
 
 ## Building
@@ -68,8 +70,8 @@ make build CONNECTORS=kafka
 # With specific connectors
 make build CONNECTORS="kafka,nats/core"
 
-# With observability
-make build GO_BUILD_TAGS="fujin,grpc,observability"
+# With specific transports
+make build GO_BUILD_TAGS="quic,tcp,grpc"
 ```
 
 ### Manual Build
@@ -82,15 +84,18 @@ go run ./cmd/builder -local \
   -connector github.com/fujin-io/fujin/public/plugins/connector/kafka/franz \
   -bind-middleware github.com/fujin-io/fujin/public/plugins/middleware/bind/auth_api_key \
   -connector-middleware github.com/fujin-io/fujin/public/plugins/middleware/connector/metrics \
-  -tags "fujin,grpc" \
+  -tags "quic,tcp,grpc" \
   -output ./bin/fujin
 ```
 
 ## Build Tags
 
 Fujin uses Go build tags for conditional compilation:
-- `fujin` - Native protocol server support
+- `quic` - QUIC transport for the Fujin protocol (multiplexed, built-in TLS)
+- `tcp` - TCP transport for the Fujin protocol (raw throughput)
 - `grpc` - gRPC server support
+
+The Fujin protocol code (`internal/protocol/fujin/`) compiles when any dependent transport tag is enabled (`quic` or `tcp`).
 
 ## Testing
 
@@ -99,7 +104,7 @@ Fujin uses Go build tags for conditional compilation:
 make test
 
 # Run tests for specific package
-go test -v -tags="fujin,grpc" ./internal/...
+go test -v -tags="quic,tcp,grpc" ./internal/...
 
 # Run benchmarks
 make bench
@@ -155,7 +160,7 @@ protoc --go_out=. --go_opt=paths=source_relative \
 make up-kafka
 
 # Run tests
-go test -v -tags="fujin,grpc" ./test/...
+go test -v -tags="quic,tcp,grpc" ./test/...
 
 # Clean up
 make down-kafka

@@ -1,6 +1,6 @@
-//go:build fujin
+//go:build quic
 
-package server
+package quic
 
 import (
 	"context"
@@ -13,11 +13,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fujin-io/fujin/internal/api/fujin/pool"
+	fujin "github.com/fujin-io/fujin/internal/protocol/fujin"
+	"github.com/fujin-io/fujin/internal/protocol/fujin/pool"
 	connectorconfig "github.com/fujin-io/fujin/public/plugins/connector/config"
 	v1 "github.com/fujin-io/fujin/public/proto/fujin/v1"
 	serverconfig "github.com/fujin-io/fujin/public/server/config"
-	"github.com/quic-go/quic-go"
+	quicgo "github.com/quic-go/quic-go"
 )
 
 var (
@@ -25,7 +26,7 @@ var (
 )
 
 type FujinServer struct {
-	conf       serverconfig.FujinServerConfig
+	conf       serverconfig.QUICServerConfig
 	baseConfig connectorconfig.ConnectorsConfig
 
 	ready chan struct{}
@@ -34,7 +35,7 @@ type FujinServer struct {
 	l *slog.Logger
 }
 
-func NewFujinServer(conf serverconfig.FujinServerConfig, baseConfig connectorconfig.ConnectorsConfig, l *slog.Logger) *FujinServer {
+func NewFujinServer(conf serverconfig.QUICServerConfig, baseConfig connectorconfig.ConnectorsConfig, l *slog.Logger) *FujinServer {
 	return &FujinServer{
 		conf:       conf,
 		baseConfig: baseConfig,
@@ -54,7 +55,7 @@ func (s *FujinServer) ListenAndServe(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("listen udp: %w", err)
 	}
-	tr := &quic.Transport{
+	tr := &quicgo.Transport{
 		Conn: conn,
 	}
 
@@ -143,7 +144,7 @@ func (s *FujinServer) ListenAndServe(ctx context.Context) error {
 			connWg.Add(1)
 			go func() {
 				retryCount := 0
-				t := time.NewTicker(s.conf.PingInterval)
+				t := time.NewTicker(s.conf.Fujin.PingInterval)
 				defer func() {
 					t.Stop()
 					cancel()
@@ -163,7 +164,7 @@ func (s *FujinServer) ListenAndServe(ctx context.Context) error {
 						if err != nil {
 							retryCount++
 							s.l.Error("open ping stream error", "err", err, "retry", retryCount)
-							if retryCount >= s.conf.PingMaxRetries {
+							if retryCount >= s.conf.Fujin.PingMaxRetries {
 								if err := conn.CloseWithError(v1.PingErr, "open stream failed after retries: "+err.Error()); err != nil {
 									s.l.Error("close with error", "err", err)
 								}
@@ -178,7 +179,7 @@ func (s *FujinServer) ListenAndServe(ctx context.Context) error {
 							retryCount++
 							s.l.Error("write ping error", "err", err, "retry", retryCount)
 							_ = str.Close()
-							if retryCount >= s.conf.PingMaxRetries {
+							if retryCount >= s.conf.Fujin.PingMaxRetries {
 								if err := conn.CloseWithError(v1.PingErr, "write failed after retries: "+err.Error()); err != nil {
 									s.l.Error("close with error", "err", err)
 								}
@@ -191,7 +192,7 @@ func (s *FujinServer) ListenAndServe(ctx context.Context) error {
 							s.l.Error("close ping stream error", "err", err)
 						}
 
-						err = str.SetDeadline(time.Now().Add(s.conf.PingTimeout))
+						err = str.SetDeadline(time.Now().Add(s.conf.Fujin.PingTimeout))
 						if err != nil {
 							s.l.Error("set read deadline error", "err", err)
 						}
@@ -200,7 +201,7 @@ func (s *FujinServer) ListenAndServe(ctx context.Context) error {
 						if err != nil {
 							retryCount++
 							s.l.Error("read ping response error", "err", err, "retry", retryCount)
-							if retryCount >= s.conf.PingMaxRetries {
+							if retryCount >= s.conf.Fujin.PingMaxRetries {
 								if err := conn.CloseWithError(v1.PingErr, "read failed after retries: "+err.Error()); err != nil {
 									s.l.Error("close with error", "err", err)
 								}
@@ -227,13 +228,17 @@ func (s *FujinServer) ListenAndServe(ctx context.Context) error {
 
 					connWg.Add(1)
 					go func() {
-						out := NewOutbound(str, s.conf.WriteDeadline, s.l)
-						h := newHandler(ctx,
-							s.conf.PingInterval, s.conf.PingTimeout, s.conf.PingStream,
-							s.baseConfig, out, str, s.l)
-						in := newInbound(str, s.conf.ForceTerminateTimeout, h, s.l)
-						go in.readLoop(ctx)
-						out.WriteLoop()
+						fujin.HandleStream(ctx, str, fujin.StreamOptions{
+							BaseConfig:            s.baseConfig,
+							PingInterval:          s.conf.Fujin.PingInterval,
+							PingTimeout:           s.conf.Fujin.PingTimeout,
+							PingStream:            s.conf.Fujin.PingStream,
+							WriteDeadline:         s.conf.Fujin.WriteDeadline,
+							ForceTerminateTimeout: s.conf.Fujin.ForceTerminateTimeout,
+							AbortRead:             func() { str.CancelRead(v1.ConnErr) },
+							CloseRead:             func() { str.CancelRead(v1.NoErr) },
+							Logger:                s.l,
+						})
 						str.Close()
 						connWg.Done()
 					}()

@@ -27,22 +27,37 @@ var (
 )
 
 type Config struct {
-	Fujin      FujinConfig                      `yaml:"fujin"`
+	QUIC       QUICTransportConfig              `yaml:"quic"`
+	TCP        TCPTransportConfig               `yaml:"tcp"`
 	GRPC       GRPCConfig                       `yaml:"grpc"`
 	Connectors connectorconfig.ConnectorsConfig `yaml:"connectors"`
 }
 
-type FujinConfig struct {
-	Enabled               bool              `yaml:"enabled"`
-	Addr                  string            `yaml:"addr"`
-	WriteDeadline         time.Duration     `yaml:"write_deadline"`
-	ForceTerminateTimeout time.Duration     `yaml:"force_terminate_timeout"`
-	PingInterval          time.Duration     `yaml:"ping_interval"`
-	PingTimeout           time.Duration     `yaml:"ping_timeout"`
-	PingStream            bool              `yaml:"ping_stream"`
-	PingMaxRetries        int               `yaml:"ping_max_retries"`
-	TLS                   pconfig.TLSConfig `yaml:"tls"`
-	QUIC                  QUICConfig        `yaml:"quic"`
+type QUICTransportConfig struct {
+	Enabled              bool                `yaml:"enabled"`
+	Addr                 string              `yaml:"addr"`
+	TLS                  pconfig.TLSConfig   `yaml:"tls"`
+	MaxIncomingStreams    int64               `yaml:"max_incoming_streams"`
+	KeepAlivePeriod      time.Duration       `yaml:"keepalive_period"`
+	HandshakeIdleTimeout time.Duration       `yaml:"handshake_idle_timeout"`
+	MaxIdleTimeout       time.Duration       `yaml:"max_idle_timeout"`
+	Fujin                FujinProtocolConfig  `yaml:"fujin"`
+}
+
+type FujinProtocolConfig struct {
+	PingInterval          time.Duration `yaml:"ping_interval"`
+	PingTimeout           time.Duration `yaml:"ping_timeout"`
+	PingStream            bool          `yaml:"ping_stream"`
+	PingMaxRetries        int           `yaml:"ping_max_retries"`
+	WriteDeadline         time.Duration `yaml:"write_deadline"`
+	ForceTerminateTimeout time.Duration `yaml:"force_terminate_timeout"`
+}
+
+type TCPTransportConfig struct {
+	Enabled bool              `yaml:"enabled"`
+	Addr    string            `yaml:"addr"`
+	TLS     pconfig.TLSConfig `yaml:"tls"`
+	Fujin   FujinProtocolConfig `yaml:"fujin"`
 }
 
 type GRPCConfig struct {
@@ -73,69 +88,94 @@ type ClientKeepAliveConfig struct {
 	PermitWithoutStream bool          `yaml:"permit_without_stream"`
 }
 
-type QUICConfig struct {
-	MaxIncomingStreams   int64         `yaml:"max_incoming_streams"`
-	KeepAlivePeriod      time.Duration `yaml:"keepalive_period"`
-	HandshakeIdleTimeout time.Duration `yaml:"handshake_idle_timeout"`
-	MaxIdleTimeout       time.Duration `yaml:"max_idle_timeout"`
-}
-
 func (c *Config) parse() (serverconfig.Config, error) {
-	var (
-		fujinConf serverconfig.FujinServerConfig
-		grpcConf  serverconfig.GRPCServerConfig
-		err       error
-	)
-
-	fujinConf, err = c.parseFujinServerConfig()
+	quicConf, err := c.parseQUICServerConfig()
 	if err != nil {
-		return serverconfig.Config{}, fmt.Errorf("parse fujin server config: %w", err)
+		return serverconfig.Config{}, fmt.Errorf("parse quic server config: %w", err)
 	}
 
-	grpcConf, err = c.parseGRPCConfig()
+	tcpConf, err := c.parseTCPServerConfig()
+	if err != nil {
+		return serverconfig.Config{}, fmt.Errorf("parse tcp server config: %w", err)
+	}
+
+	grpcConf, err := c.parseGRPCConfig()
 	if err != nil {
 		return serverconfig.Config{}, fmt.Errorf("parse grpc server config: %w", err)
 	}
 
-	// TODO: Validate connectors config
-	// if err := c.Connectors.Validate(); err != nil {
-	// 	return serverconfig.Config{}, fmt.Errorf("validate connectors config: %w", err)
-	// }
-
 	return serverconfig.Config{
-		Fujin:      fujinConf,
+		QUIC:       quicConf,
+		TCP:        tcpConf,
 		GRPC:       grpcConf,
 		Connectors: c.Connectors,
 	}, nil
 }
 
-func (c *Config) parseFujinServerConfig() (serverconfig.FujinServerConfig, error) {
+func (c *Config) parseQUICServerConfig() (serverconfig.QUICServerConfig, error) {
 	if c == nil {
-		return serverconfig.FujinServerConfig{}, ErrNilConfig
+		return serverconfig.QUICServerConfig{}, ErrNilConfig
 	}
 
-	if !c.Fujin.Enabled {
-		return serverconfig.FujinServerConfig{
-			Enabled: c.Fujin.Enabled,
+	if !c.QUIC.Enabled {
+		return serverconfig.QUICServerConfig{
+			Enabled: c.QUIC.Enabled,
 		}, nil
 	}
 
-	err := c.Fujin.TLS.Parse()
+	err := c.QUIC.TLS.Parse()
 	if err != nil {
-		return serverconfig.FujinServerConfig{}, fmt.Errorf("parse tls conf: %w", err)
+		return serverconfig.QUICServerConfig{}, fmt.Errorf("parse tls conf: %w", err)
 	}
 
-	return serverconfig.FujinServerConfig{
-		Enabled:               c.Fujin.Enabled,
-		Addr:                  c.Fujin.Addr,
-		WriteDeadline:         c.Fujin.WriteDeadline,
-		ForceTerminateTimeout: c.Fujin.ForceTerminateTimeout,
-		PingInterval:          c.Fujin.PingInterval,
-		PingTimeout:           c.Fujin.PingTimeout,
-		PingStream:            c.Fujin.PingStream,
-		PingMaxRetries:        c.Fujin.PingMaxRetries,
-		TLS:                   c.Fujin.TLS.Config,
-		QUIC:                  c.Fujin.QUIC.parse(),
+	return serverconfig.QUICServerConfig{
+		Enabled: c.QUIC.Enabled,
+		Addr:    c.QUIC.Addr,
+		TLS:     c.QUIC.TLS.Config,
+		QUIC: &quic.Config{
+			MaxIncomingStreams:    c.QUIC.MaxIncomingStreams,
+			KeepAlivePeriod:      c.QUIC.KeepAlivePeriod,
+			HandshakeIdleTimeout: c.QUIC.HandshakeIdleTimeout,
+			MaxIdleTimeout:       c.QUIC.MaxIdleTimeout,
+		},
+		Fujin: serverconfig.FujinProtocolConfig{
+			PingInterval:          c.QUIC.Fujin.PingInterval,
+			PingTimeout:           c.QUIC.Fujin.PingTimeout,
+			PingStream:            c.QUIC.Fujin.PingStream,
+			PingMaxRetries:        c.QUIC.Fujin.PingMaxRetries,
+			WriteDeadline:         c.QUIC.Fujin.WriteDeadline,
+			ForceTerminateTimeout: c.QUIC.Fujin.ForceTerminateTimeout,
+		},
+	}, nil
+}
+
+func (c *Config) parseTCPServerConfig() (serverconfig.TCPServerConfig, error) {
+	if c == nil {
+		return serverconfig.TCPServerConfig{}, ErrNilConfig
+	}
+
+	if !c.TCP.Enabled {
+		return serverconfig.TCPServerConfig{
+			Enabled: c.TCP.Enabled,
+		}, nil
+	}
+
+	if err := c.TCP.TLS.Parse(); err != nil {
+		return serverconfig.TCPServerConfig{}, fmt.Errorf("parse tls conf: %w", err)
+	}
+
+	return serverconfig.TCPServerConfig{
+		Enabled: c.TCP.Enabled,
+		Addr:    c.TCP.Addr,
+		TLS:     c.TCP.TLS.Config,
+		Fujin: serverconfig.FujinProtocolConfig{
+			PingInterval:          c.TCP.Fujin.PingInterval,
+			PingTimeout:           c.TCP.Fujin.PingTimeout,
+			PingStream:            false,
+			PingMaxRetries:        c.TCP.Fujin.PingMaxRetries,
+			WriteDeadline:         c.TCP.Fujin.WriteDeadline,
+			ForceTerminateTimeout: c.TCP.Fujin.ForceTerminateTimeout,
+		},
 	}, nil
 }
 
@@ -185,15 +225,6 @@ func (c *ClientKeepAliveConfig) parse() serverconfig.ClientKeepAliveConfig {
 	return serverconfig.ClientKeepAliveConfig{
 		MinTime:             c.MinTime,
 		PermitWithoutStream: c.PermitWithoutStream,
-	}
-}
-
-func (c *QUICConfig) parse() *quic.Config {
-	return &quic.Config{
-		MaxIncomingStreams:   c.MaxIncomingStreams,
-		KeepAlivePeriod:      c.KeepAlivePeriod,
-		HandshakeIdleTimeout: c.HandshakeIdleTimeout,
-		MaxIdleTimeout:       c.MaxIdleTimeout,
 	}
 }
 

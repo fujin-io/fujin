@@ -5,7 +5,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev
 
 FUJIN_PKG := github.com/fujin-io/fujin
 
-ALL_TAGS = grpc,fujin
+ALL_TAGS = grpc,quic,tcp
 
 GO_BUILD_TAGS ?= ${ALL_TAGS}
 
@@ -16,7 +16,7 @@ BIND_MIDDLEWARES ?= github.com/fujin-io/fujin/public/plugins/middleware/bind/all
 CONNECTOR_MIDDLEWARES ?= github.com/fujin-io/fujin/public/plugins/middleware/connector/all
 
 BENCH_TIME ?= 1000000x
-BENCH_FUNC ?= Benchmark_Produce_1BPayload_Nop
+BENCH_FUNC ?= Benchmark_Produce_1BPayload_Nop_TCP
 
 # Detect OS
 ifeq ($(OS),Windows_NT)

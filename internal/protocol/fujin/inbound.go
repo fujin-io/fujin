@@ -1,4 +1,4 @@
-package server
+package fujin
 
 import (
 	"context"
@@ -7,10 +7,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/fujin-io/fujin/internal/api/fujin/pool"
+	"github.com/fujin-io/fujin/internal/protocol/fujin/pool"
 	"github.com/fujin-io/fujin/internal/common/assert"
-	v1 "github.com/fujin-io/fujin/public/proto/fujin/v1"
-	"github.com/quic-go/quic-go"
 )
 
 var (
@@ -22,23 +20,25 @@ const (
 )
 
 type inbound struct {
-	str *quic.Stream
-	h   *handler
-
-	ftt time.Duration // force terminate timeout
-
-	l *slog.Logger
+	str       Stream
+	h         *handler
+	ftt       time.Duration // force terminate timeout
+	abortRead func()        // transport-specific: abort read with error (QUIC: CancelRead(ConnErr))
+	closeRead func()        // transport-specific: close read cleanly (QUIC: CancelRead(NoErr))
+	l         *slog.Logger
 }
 
-func newInbound(str *quic.Stream, ftt time.Duration, h *handler, l *slog.Logger) *inbound {
+func newInbound(str Stream, ftt time.Duration, h *handler, l *slog.Logger, abortRead, closeRead func()) *inbound {
 	assert.NotNil(h)
 	assert.NotNil(l)
 
 	return &inbound{
-		str: str,
-		h:   h,
-		ftt: ftt,
-		l:   l,
+		str:       str,
+		h:         h,
+		ftt:       ftt,
+		abortRead: abortRead,
+		closeRead: closeRead,
+		l:         l,
 	}
 }
 
@@ -73,7 +73,7 @@ func (i *inbound) readLoop(ctx context.Context) {
 			if errors.Is(err, io.EOF) {
 				break
 			}
-			i.str.CancelRead(v1.ConnErr)
+			i.abortRead()
 			i.l.Error("read stream", "err", err)
 			break
 		}
@@ -82,14 +82,14 @@ func (i *inbound) readLoop(ctx context.Context) {
 		if err != nil {
 			if !errors.Is(err, ErrClose) {
 				i.l.Error("handle buf", "err", err)
-				i.str.CancelRead(v1.ConnErr)
+				i.abortRead()
 			}
 			break
 		}
 		buf = buf[:0]
 
 		if i.h.stopRead {
-			i.str.CancelRead(v1.NoErr)
+			i.closeRead()
 			break
 		}
 	}
@@ -103,7 +103,7 @@ func (i *inbound) waitAndDisconnect() {
 }
 
 func (i *inbound) close() {
-	i.str.CancelRead(v1.NoErr)
+	i.closeRead()
 	i.h.wg.Wait()
 	i.h.out.Close()
 	<-i.h.closed

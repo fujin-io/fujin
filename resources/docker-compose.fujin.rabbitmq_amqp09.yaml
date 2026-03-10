@@ -6,7 +6,7 @@ services:
       dockerfile: Dockerfile
       args:
         FUJIN_CONNECTORS: github.com/fujin-io/fujin/public/plugins/connector/rabbitmq/amqp09
-        FUJIN_GO_TAGS: fujin,grpc
+        FUJIN_GO_TAGS: quic,tcp,grpc
     container_name: fujin
     environment:
       FUJIN_CONFIGURATOR: yaml

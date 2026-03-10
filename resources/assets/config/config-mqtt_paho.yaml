@@ -1,4 +1,4 @@
-fujin:
+quic:
   enabled: true
   tls:
     enabled: true

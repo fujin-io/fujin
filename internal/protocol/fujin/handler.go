@@ -1,4 +1,4 @@
-package server
+package fujin
 
 import (
 	"context"
@@ -11,8 +11,8 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/fujin-io/fujin/internal/api/fujin/pool"
-	"github.com/fujin-io/fujin/internal/api/fujin/v1/proto/response/server"
+	"github.com/fujin-io/fujin/internal/protocol/fujin/pool"
+	"github.com/fujin-io/fujin/internal/protocol/fujin/proto/response/server"
 	pool2 "github.com/fujin-io/fujin/internal/common/pool"
 	"github.com/fujin-io/fujin/internal/connectors"
 	"github.com/fujin-io/fujin/public/plugins/connector"
@@ -20,7 +20,6 @@ import (
 	bmw "github.com/fujin-io/fujin/public/plugins/middleware/bind"
 	bmwconfig "github.com/fujin-io/fujin/public/plugins/middleware/bind/config"
 	v1 "github.com/fujin-io/fujin/public/proto/fujin/v1"
-	"github.com/quic-go/quic-go"
 )
 
 const (
@@ -232,7 +231,7 @@ type headerArgs struct {
 type handler struct {
 	ctx             context.Context
 	out             *Outbound
-	str             *quic.Stream
+	str             Stream
 	baseConfig      config.ConnectorsConfig
 	connectorConfig config.ConnectorConfig
 	cman            *connectors.ManagerV2 // Created during BIND
@@ -277,7 +276,7 @@ func newHandler(
 	ctx context.Context,
 	pingInterval time.Duration, pingTimeout time.Duration, pingStream bool,
 	baseConfig config.ConnectorsConfig,
-	out *Outbound, str *quic.Stream, l *slog.Logger,
+	out *Outbound, str Stream, l *slog.Logger,
 ) *handler {
 	h := &handler{
 		ctx:                         ctx,

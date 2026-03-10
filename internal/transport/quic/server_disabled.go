@@ -1,6 +1,6 @@
-//go:build !fujin
+//go:build !quic
 
-package server
+package quic
 
 import (
 	"context"
@@ -12,29 +12,25 @@ import (
 	serverconfig "github.com/fujin-io/fujin/public/server/config"
 )
 
-var ErrFujinNotCompiledIn = fmt.Errorf("fujin protocol is not compiled in")
+var ErrQUICNotCompiledIn = fmt.Errorf("QUIC transport is not compiled in")
 
-// FujinServer stub implementation when fujin protocol is disabled
 type FujinServer struct {
-	conf serverconfig.FujinServerConfig
+	conf serverconfig.QUICServerConfig
 	l    *slog.Logger
 }
 
-// NewFujinServer creates a stub Fujin server instance
-func NewFujinServer(conf serverconfig.FujinServerConfig, baseConfig connectorconfig.ConnectorsConfig, l *slog.Logger) *FujinServer {
+func NewFujinServer(conf serverconfig.QUICServerConfig, baseConfig connectorconfig.ConnectorsConfig, l *slog.Logger) *FujinServer {
 	return &FujinServer{
 		conf: conf,
 		l:    l.With("server", "fujin"),
 	}
 }
 
-// ListenAndServe returns an error indicating fujin protocol is not compiled in
 func (s *FujinServer) ListenAndServe(ctx context.Context) error {
 	if s.conf.Enabled {
-		s.l.Error("Fujin (QUIC) server is enabled but not compiled in - rebuild with 'fujin' build tag")
-		return ErrFujinNotCompiledIn
+		s.l.Error("QUIC transport is enabled but not compiled in - rebuild with 'quic' build tag")
+		return ErrQUICNotCompiledIn
 	}
-	// If not enabled, just wait for context cancellation
 	<-ctx.Done()
 	return nil
 }

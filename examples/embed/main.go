@@ -21,7 +21,7 @@ import (
 	nats_server "github.com/nats-io/nats-server/v2/server"
 )
 
-var DefaultFujinServerTestConfig = config.FujinServerConfig{
+var DefaultQUICServerTestConfig = config.QUICServerConfig{
 	Enabled: true,
 	Addr:    ":4848",
 	TLS:     generateTLSConfig(),
@@ -34,8 +34,8 @@ var DefaultGRPCServerTestConfig = config.GRPCServerConfig{
 }
 
 var DefaultTestConfigWithNats = config.Config{
-	Fujin: DefaultFujinServerTestConfig,
-	GRPC:  DefaultGRPCServerTestConfig,
+	QUIC: DefaultQUICServerTestConfig,
+	GRPC: DefaultGRPCServerTestConfig,
 	Connectors: cconfig.ConnectorsConfig{
 		"nats_core_connector": {
 			Type: "nats_core",
@@ -61,7 +61,7 @@ var DefaultTestConfigWithNats = config.Config{
 // To run this example:
 // 1. Import the nats/core plugin
 // 2. Build with the "nats_core" tag
-// 3. Run from repo root: go run -tags fujin,grpc ./examples/embed/main.go
+// 3. Run from repo root: go run -tags quic,grpc ./examples/embed/main.go
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	defer cancel()
