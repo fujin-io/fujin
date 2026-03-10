@@ -7,7 +7,7 @@
 //
 //	connectors:
 //	  my_connector:
-//	    protocol: kafka
+//	    type: kafka_franz
 //	    bind_middlewares:
 //	      - name: auth_api_key
 //	        config:

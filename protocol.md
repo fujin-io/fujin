@@ -1,6 +1,6 @@
 # Fujin protocol
 
-This document provides a brief description of the native Fujin protocol, used for communication between the Fujin server and client. It is a byte-based protocol that supports various patterns. The Fujin server operates as a QUIC server.
+This document provides a brief description of the native Fujin protocol, used for communication between the Fujin server and client. It is a byte-based protocol that supports various patterns. The protocol layer is transport-agnostic — the same binary protocol runs over QUIC or TCP.
 
 The Fujin server implements a [zero allocation byte parser](https://youtu.be/ylRKac5kSOk?t=10m46s), inspired by the NATS server, ensuring high speed and efficiency.
 
@@ -37,9 +37,16 @@ For convenience, some type aliases are introduced.
 | hmessage   | type{[uint32]byte??, string, [uint16]byte??, string} |
 | ackres     | type{[uint32]byte, bool}                             |
 
+## Transports
+
+The Fujin protocol is transport-agnostic. The same byte stream runs over any supported transport:
+
+- **QUIC** — Multiplexed streams over UDP with built-in TLS. Each command session runs on a separate QUIC stream. PING uses a dedicated control stream.
+- **TCP** — Plain TCP (with optional TLS). One connection carries a single command session. PING is in-band on the same connection.
+
 ## Versioning
 
-Fujin uses protocol versioning at the QUIC/TLS layer via ALPN.
+Over QUIC, Fujin uses protocol versioning at the TLS layer via ALPN.
 
 - Current protocol version: "fujin/1" (v1)
 - The server only accepts connections with supported ALPN versions and rejects others.
@@ -49,14 +56,18 @@ Compatibility rules:
 - Future versions will use a new ALPN value (e.g., "fujin/2"). Clients may provide multiple values to negotiate the highest mutually supported version.
 - Header semantics may evolve in future versions without changing the opcodes.
 
+Over TCP, the protocol version is implicitly v1 (no ALPN negotiation).
+
 ## PING
 ### Direction
 Server -> Client
 ### Description
-`PING` and `PONG` implement a simple keep-alive mechanism between the client and server. Once a client establishes a connection to the Fujin server, the server continuously opens a QUIC stream and sends `PING` messages at a configurable interval. If the client fails to respond with a `PONG` message within the configured response interval, the server will terminate its connection. If a connection remains idle for too long, it will be closed.
-Additionaly, server can be configured to ping opened streams. This helps to determine broken protocol writes, and close such streams.
+`PING` and `PONG` implement a simple keep-alive mechanism between the client and server. Once a client establishes a connection, the server sends `PING` messages at a configurable interval. If the client fails to respond with a `PONG` message within the configured response interval, the server will terminate its connection. If a connection remains idle for too long, it will be closed.
+Additionally, the server can be configured to ping opened streams. This helps to determine broken protocol writes, and close such streams.
 
-Since the QUIC protocol supports multiplexing, `PING` messages are sent over a dedicated control streams, separated from messaging ones.
+**Transport-specific behavior:**
+- **QUIC**: `PING` messages are sent over dedicated control streams, separated from messaging ones (QUIC supports multiplexing).
+- **TCP**: `PING` is sent in-band on the same connection as other commands. TCP keepalive is also enabled at the transport level.
 ### Syntax
 ##### Request
 `[99]`
@@ -70,7 +81,7 @@ Since the QUIC protocol supports multiplexing, `PING` messages are sent over a d
 ### Direction
 Client -> Server
 ### Description
-Before producing messages, the client must open a QUIC stream and send a `BIND` command to the server. This command binds the session to a connector and optionally applies configuration overrides to connector settings. The `BIND` command must be sent before any other commands (except `PING`/`PONG`).
+Before producing messages, the client must open a stream (QUIC stream or TCP connection) and send a `BIND` command to the server. This command binds the session to a connector and optionally applies configuration overrides to connector settings. The `BIND` command must be sent before any other commands (except `PING`/`PONG`).
 
 The `BIND` command includes:
 - `connector_name`: The name of the connector to bind to (e.g., `kafka_connector`)
@@ -104,7 +115,7 @@ Where `meta` and `config_overrides` are arrays of key-value pairs, each pair rep
 ### Direction
 Client -> Server
 ### Description
-Sends a message to the specified topic. This must be sent in the same QUIC stream where the `BIND` command was previously issued.
+Sends a message to the specified topic. This must be sent on the same stream where the `BIND` command was previously issued.
 ### Syntax
 ##### Request
 `[2, <correlation id>, <topic>, <message>]`  
@@ -129,7 +140,7 @@ where:
 ### Direction
 Client -> Server
 ### Description
-Sends a message to the specified topic. This must be sent in the same QUIC stream where the `BIND` command was previously issued.
+Sends a message with headers to the specified topic. This must be sent on the same stream where the `BIND` command was previously issued.
 ### Syntax
 ##### Request
 `[3, <correlation id>, <topic>, <headers>, <message>]`  
@@ -156,7 +167,7 @@ where:
 Client -> Server
 
 ### Description
-Begins transaction. Must be sent in a QUIC stream where `BIND` command was sent previously. For Kafka transactions, `transactional_id` should be configured via `BIND` command's config overrides (e.g., `writer.pub.transactional_id`).
+Begins transaction. Must be sent on the same stream where the `BIND` command was sent previously. For Kafka transactions, `transactional_id` should be configured via `BIND` command's config overrides (e.g., `clients.client1.transactional_id`).
 
 ### Syntax
 ##### Request
@@ -181,7 +192,7 @@ where:
 Client -> Server
 
 ### Description
-Commits transaction. Must be sent in a QUIC stream where `BIND` command was sent previously.
+Commits transaction. Must be sent on the same stream where the `BIND` command was sent previously.
 
 ### Syntax
 ##### Request
@@ -206,7 +217,7 @@ where:
 Client -> Server
 
 ### Description
-Rolls back transaction. Must be sent in a QUIC stream where `BIND` command was sent previously.
+Rolls back transaction. Must be sent on the same stream where the `BIND` command was sent previously.
 
 ### Syntax
 ##### Request
@@ -231,7 +242,7 @@ where:
 ### Direction
 Client -> Server
 ### Description
-Client initiates a subscription to a topic. Messages will be sent by the server in a stream opened by the client previously. Message distribution is handled by the underlying broker.
+Client initiates a subscription to a topic. Messages will be sent by the server on the same stream opened by the client. Message distribution is handled by the underlying broker.
 
 ### Syntax
 ##### Request
@@ -258,7 +269,7 @@ where:
 ### Direction
 Server -> Client
 ### Description
-A message propagated by the server in a client-opened QUIC stream after issuing `SUBSCRIBE` command.
+A message propagated by the server on the client's stream after issuing `SUBSCRIBE` command.
 ### Syntax
 `[8, <subscription id>, <message>]`
 where:
@@ -274,7 +285,7 @@ where:
 ### Direction
 Server -> Client
 ### Description
-A message with headers propagated by the server in a client-opened QUIC stream after issuing `SUBSCRIBE` command.
+A message with headers propagated by the server on the client's stream after issuing `SUBSCRIBE` command.
 ### Syntax
 `[9, <subscription id>, <hmessage>]`  
 where:
@@ -411,7 +422,7 @@ where:
 ### Direction
 Client -> Server
 ### Description
-The client should send `DISCONNECT` request to the server and receive response before closing QUIC streams and connection. `DISCONNECT` should be sent both in writer and reader streams. Server will close QUIC stream after receiving `DISCONNECT` response.
+The client should send `DISCONNECT` request to the server and receive response before closing the stream/connection. Over QUIC, `DISCONNECT` should be sent on each open stream; over TCP, on the connection. The server will close the stream after sending the `DISCONNECT` response.
 ### Syntax
 ##### Request
 `[14]`

@@ -1,4 +1,4 @@
-fujin:
+quic:
   enabled: true
   tls:
     enabled: true
@@ -7,8 +7,8 @@ fujin:
 grpc:
   enabled: true
 connectors:
-  nats_core_connector:
-    protocol: nats_core
+  connector:
+    type: nats_core
     settings:
       common:
         url: nats://localhost:4222

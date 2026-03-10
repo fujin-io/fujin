@@ -4,7 +4,7 @@
 //
 // To register a connector, import it in your main package:
 //
-//	import _ "github.com/fujin-io/fujin/public/plugins/connector/kafka"
+//	import _ "github.com/fujin-io/fujin/public/plugins/connector/kafka/franz"
 //
 // The connector will register itself automatically via init().
 package connector
@@ -22,13 +22,13 @@ import (
 // Reader is the interface for message readers.
 type Reader interface {
 	Subscribe(ctx context.Context, h func(message []byte, topic string, args ...any)) error
-	HSubscribe(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error
+	SubscribeWithHeaders(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error
 	Fetch(
 		ctx context.Context, n uint32,
 		fetchResponseHandler func(n uint32, err error),
 		msgHandler func(message []byte, topic string, args ...any),
 	)
-	HFetch(
+	FetchWithHeaders(
 		ctx context.Context, n uint32,
 		fetchResponseHandler func(n uint32, err error),
 		msgHandler func(message []byte, topic string, hs [][]byte, args ...any),
@@ -43,9 +43,9 @@ type Reader interface {
 		nackHandler func(error),
 		nackMsgHandler func([]byte, error),
 	)
-	MsgIDStaticArgsLen() int
+	MsgIDArgsLen() int
 	EncodeMsgID(buf []byte, topic string, args ...any) []byte
-	IsAutoCommit() bool
+	AutoCommit() bool
 }
 
 // Writer is the interface for message writers.
@@ -159,9 +159,9 @@ func List() []string {
 
 // NewWriter creates a new writer using the registered factory for the protocol.
 func NewWriter(conf config.ConnectorConfig, name string, l *slog.Logger) (WriteCloser, error) {
-	factory, ok := Get(conf.Protocol)
+	factory, ok := Get(conf.Type)
 	if !ok {
-		return nil, fmt.Errorf("unsupported protocol: %q (is it compiled in?)", conf.Protocol)
+		return nil, fmt.Errorf("unsupported protocol: %q (is it compiled in?)", conf.Type)
 	}
 
 	conn, err := factory(conf.Settings, l)
@@ -176,9 +176,9 @@ func NewWriter(conf config.ConnectorConfig, name string, l *slog.Logger) (WriteC
 func NewReader(
 	conf config.ConnectorConfig, name string, autoCommit bool, l *slog.Logger,
 ) (ReadCloser, error) {
-	factory, ok := Get(conf.Protocol)
+	factory, ok := Get(conf.Type)
 	if !ok {
-		return nil, fmt.Errorf("unsupported protocol: %q (is it compiled in?)", conf.Protocol)
+		return nil, fmt.Errorf("unsupported protocol: %q (is it compiled in?)", conf.Type)
 	}
 
 	conn, err := factory(conf.Settings, l)

@@ -1,14 +1,23 @@
-fujin:
+quic:
   enabled: true
   tls:
     enabled: true
     server_cert_pem_path: ./examples/assets/certs/fujin.io.pem
     server_key_pem_path: ./examples/assets/certs/fujin.io-key.pem
+  fujin:
+    ping_interval: 5s
+    ping_timeout: 10s
+tcp:
+  enabled: false
+  addr: :4850
+  fujin:
+    ping_interval: 5s
+    ping_timeout: 10s
 grpc:
   enabled: true
 connectors:
   kafka_connector:
-    protocol: kafka
+    type: kafka_franz
     settings:
       common:
         brokers: [kafka1:19092, kafka2:19093, kafka3:19094]

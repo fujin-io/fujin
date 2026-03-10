@@ -39,14 +39,14 @@ func (m *mockReader) Subscribe(ctx context.Context, h func(message []byte, topic
 	return nil
 }
 
-func (m *mockReader) HSubscribe(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error {
+func (m *mockReader) SubscribeWithHeaders(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error {
 	return nil
 }
 
 func (m *mockReader) Fetch(ctx context.Context, n uint32, fetchResponseHandler func(n uint32, err error), msgHandler func(message []byte, topic string, args ...any)) {
 }
 
-func (m *mockReader) HFetch(ctx context.Context, n uint32, fetchResponseHandler func(n uint32, err error), msgHandler func(message []byte, topic string, hs [][]byte, args ...any)) {
+func (m *mockReader) FetchWithHeaders(ctx context.Context, n uint32, fetchResponseHandler func(n uint32, err error), msgHandler func(message []byte, topic string, hs [][]byte, args ...any)) {
 }
 
 func (m *mockReader) Ack(ctx context.Context, msgIDs [][]byte, ackHandler func(error), ackMsgHandler func([]byte, error)) {
@@ -55,7 +55,7 @@ func (m *mockReader) Ack(ctx context.Context, msgIDs [][]byte, ackHandler func(e
 func (m *mockReader) Nack(ctx context.Context, msgIDs [][]byte, nackHandler func(error), nackMsgHandler func([]byte, error)) {
 }
 
-func (m *mockReader) MsgIDStaticArgsLen() int {
+func (m *mockReader) MsgIDArgsLen() int {
 	return 0
 }
 
@@ -63,7 +63,7 @@ func (m *mockReader) EncodeMsgID(buf []byte, topic string, args ...any) []byte {
 	return buf
 }
 
-func (m *mockReader) IsAutoCommit() bool {
+func (m *mockReader) AutoCommit() bool {
 	return false
 }
 
@@ -156,7 +156,7 @@ func TestNewWriter(t *testing.T) {
 
 	// Test NewWriter with registered protocol
 	conf := config.ConnectorConfig{
-		Protocol: "test_new_writer",
+		Type:     "test_new_writer",
 		Settings: "test_settings",
 	}
 
@@ -174,7 +174,7 @@ func TestNewWriter(t *testing.T) {
 	}
 
 	// Test NewWriter with unregistered protocol
-	conf.Protocol = "nonexistent"
+	conf.Type = "nonexistent"
 	_, err = NewWriter(conf, "test_name", l)
 	if err == nil {
 		t.Fatal("NewWriter() should return error for unregistered protocol")
@@ -191,7 +191,7 @@ func TestNewReader(t *testing.T) {
 
 	// Test NewReader with registered protocol
 	conf := config.ConnectorConfig{
-		Protocol: "test_new_reader",
+		Type:     "test_new_reader",
 		Settings: "test_settings",
 	}
 
@@ -218,7 +218,7 @@ func TestNewReader(t *testing.T) {
 	}
 
 	// Test NewReader with unregistered protocol
-	conf.Protocol = "nonexistent"
+	conf.Type = "nonexistent"
 	_, err = NewReader(conf, "test_name", false, l)
 	if err == nil {
 		t.Fatal("NewReader() should return error for unregistered protocol")
@@ -230,7 +230,7 @@ func TestNewReader_WithError(t *testing.T) {
 
 	// Test with non-existent protocol
 	conf := config.ConnectorConfig{
-		Protocol: "nonexistent_reader",
+		Type:     "nonexistent_reader",
 		Settings: "test_config",
 	}
 	_, err := NewReader(conf, "test_name", false, l)
@@ -243,7 +243,7 @@ func TestNewReader_WithError(t *testing.T) {
 		return nil, errors.New("factory error")
 	})
 
-	conf.Protocol = "error_factory_reader"
+	conf.Type = "error_factory_reader"
 	_, err = NewReader(conf, "test_name", false, l)
 	if err == nil {
 		t.Fatal("NewReader() should return error when factory fails")
@@ -255,7 +255,7 @@ func TestNewWriter_WithError(t *testing.T) {
 
 	// Test with non-existent protocol
 	conf := config.ConnectorConfig{
-		Protocol: "nonexistent_writer",
+		Type:     "nonexistent_writer",
 		Settings: "test_config",
 	}
 	_, err := NewWriter(conf, "test_name", l)
@@ -268,7 +268,7 @@ func TestNewWriter_WithError(t *testing.T) {
 		return nil, errors.New("factory error")
 	})
 
-	conf.Protocol = "error_factory"
+	conf.Type = "error_factory"
 	_, err = NewWriter(conf, "test_name", l)
 	if err == nil {
 		t.Fatal("NewWriter() should return error when factory fails")
@@ -278,13 +278,13 @@ func TestNewWriter_WithError(t *testing.T) {
 func TestConnectorConfig(t *testing.T) {
 	// Test config.ConnectorConfig structure
 	conf := config.ConnectorConfig{
-		Protocol:    "test",
+		Type:        "test",
 		Overridable: []string{"path1", "path2"},
 		Settings:    map[string]any{"key": "value"},
 	}
 
-	if conf.Protocol != "test" {
-		t.Errorf("Protocol = %v, want test", conf.Protocol)
+	if conf.Type != "test" {
+		t.Errorf("Protocol = %v, want test", conf.Type)
 	}
 	if len(conf.Overridable) != 2 {
 		t.Errorf("Overridable length = %v, want 2", len(conf.Overridable))
@@ -298,11 +298,11 @@ func TestConnectorsConfig(t *testing.T) {
 	// Test config.ConnectorsConfig map
 	configs := config.ConnectorsConfig{
 		"connector1": config.ConnectorConfig{
-			Protocol: "protocol1",
+			Type:     "protocol1",
 			Settings: "settings1",
 		},
 		"connector2": config.ConnectorConfig{
-			Protocol: "protocol2",
+			Type:     "protocol2",
 			Settings: "settings2",
 		},
 	}
@@ -311,8 +311,8 @@ func TestConnectorsConfig(t *testing.T) {
 		t.Errorf("config.ConnectorsConfig length = %v, want 2", len(configs))
 	}
 
-	if configs["connector1"].Protocol != "protocol1" {
-		t.Errorf("connector1.Protocol = %v, want protocol1", configs["connector1"].Protocol)
+	if configs["connector1"].Type != "protocol1" {
+		t.Errorf("connector1.Protocol = %v, want protocol1", configs["connector1"].Type)
 	}
 }
 
@@ -411,7 +411,7 @@ func TestNewReaderWithConnector(t *testing.T) {
 
 	// Test creating a reader using the connector interface
 	conf := config.ConnectorConfig{
-		Protocol: "test_connector_reader",
+		Type:     "test_connector_reader",
 		Settings: "test_config",
 	}
 
@@ -434,7 +434,7 @@ func TestNewWriterWithConnector(t *testing.T) {
 
 	// Test creating a writer using the connector interface
 	conf := config.ConnectorConfig{
-		Protocol: "test_connector_writer",
+		Type:     "test_connector_writer",
 		Settings: "test_config",
 	}
 

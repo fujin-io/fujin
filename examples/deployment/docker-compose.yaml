@@ -6,11 +6,11 @@ services:
       dockerfile: Dockerfile
       args:
         FUJIN_CONNECTORS: kafka
-        FUJIN_GO_TAGS: fujin,grpc
+        FUJIN_GO_TAGS: quic,tcp,grpc
     container_name: fujin
     environment:
-      FUJIN_CONFIGURATOR: file
-      FUJIN_CONFIGURATOR_FILE_PATHS: ./config/config.yaml
+      FUJIN_CONFIGURATOR: yaml
+      FUJIN_CONFIGURATOR_YAML_PATHS: ./config/config.yaml
     ports:
       - "4848:4848/udp"
       - "4849:4849"

@@ -52,7 +52,7 @@ func (r *Reader) Subscribe(ctx context.Context, h func(message []byte, topic str
 	return nil
 }
 
-func (r *Reader) HSubscribe(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error {
+func (r *Reader) SubscribeWithHeaders(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error {
 	sub, err := r.nc.Subscribe(r.conf.Subject, func(msg *nats.Msg) {
 		var hs [][]byte
 		for k, headers := range msg.Header {
@@ -87,7 +87,7 @@ func (r *Reader) Fetch(
 	fetchHandler(0, util.ErrNotSupported)
 }
 
-func (r *Reader) HFetch(
+func (r *Reader) FetchWithHeaders(
 	ctx context.Context, n uint32,
 	fetchHandler func(n uint32, err error),
 	msgHandler func(message []byte, topic string, hs [][]byte, args ...any),
@@ -117,11 +117,11 @@ func (r *Reader) EncodeMsgID(buf []byte, topic string, args ...any) []byte {
 	return buf
 }
 
-func (r *Reader) MsgIDStaticArgsLen() int {
+func (r *Reader) MsgIDArgsLen() int {
 	return 0
 }
 
-func (r *Reader) IsAutoCommit() bool {
+func (r *Reader) AutoCommit() bool {
 	return r.autoCommit
 }
 

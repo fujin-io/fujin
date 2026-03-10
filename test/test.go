@@ -12,23 +12,21 @@ import (
 	"io"
 	"log/slog"
 	"math/big"
+	"net"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/fujin-io/fujin/internal/api/fujin/v1/proto/request"
-	"github.com/fujin-io/fujin/internal/api/fujin/v1/proto/response"
-	"github.com/fujin-io/fujin/internal/api/fujin/v1/version"
-	"github.com/fujin-io/fujin/public/plugins/connector/amqp091"
-	"github.com/fujin-io/fujin/public/plugins/connector/amqp10"
+	"github.com/fujin-io/fujin/public/plugins/connector/azure/amqp1"
 	connector_config "github.com/fujin-io/fujin/public/plugins/connector/config"
-	"github.com/fujin-io/fujin/public/plugins/connector/kafka"
-	"github.com/fujin-io/fujin/public/plugins/connector/mqtt"
+	kafka "github.com/fujin-io/fujin/public/plugins/connector/kafka/franz"
+	mqtt "github.com/fujin-io/fujin/public/plugins/connector/mqtt/paho"
 	"github.com/fujin-io/fujin/public/plugins/connector/nats/core"
 	"github.com/fujin-io/fujin/public/plugins/connector/nsq"
-	respconfig "github.com/fujin-io/fujin/public/plugins/connector/resp/config"
-	"github.com/fujin-io/fujin/public/plugins/connector/resp/pubsub"
-	"github.com/fujin-io/fujin/public/plugins/connector/resp/streams"
+	"github.com/fujin-io/fujin/public/plugins/connector/rabbitmq/amqp09"
+	redis_config "github.com/fujin-io/fujin/public/plugins/connector/redis/rueidis/config"
+	"github.com/fujin-io/fujin/public/plugins/connector/redis/rueidis/pubsub"
+	"github.com/fujin-io/fujin/public/plugins/connector/redis/rueidis/streams"
 	v1 "github.com/fujin-io/fujin/public/proto/fujin/v1"
 	"github.com/fujin-io/fujin/public/server"
 	"github.com/fujin-io/fujin/public/server/config"
@@ -36,21 +34,31 @@ import (
 )
 
 const (
-	defaultSendBufSize = 32768
-	defaultRecvBufSize = 32768
+	defaultSendBufSize = 512 * 1024
+	defaultRecvBufSize = 512 * 1024
+	PERF_TCP_ADDR      = "localhost:4850"
 )
 
-var DefaultFujinServerTestConfig = config.FujinServerConfig{
+var DefaultQUICServerTestConfig = config.QUICServerConfig{
 	Enabled: true,
 	Addr:    ":4848",
 	TLS:     generateTLSConfig(),
 }
 
-var DefaultTestConfigWithKafka3Brokers = config.Config{
-	Fujin: DefaultFujinServerTestConfig,
+var DefaultTestConfigWithNopQUIC = config.Config{
+	QUIC: DefaultQUICServerTestConfig,
 	Connectors: connector_config.ConnectorsConfig{
 		"connector": {
-			Protocol: "kafka",
+			Type: "nop",
+		},
+	},
+}
+
+var DefaultTestConfigWithKafka3BrokersQUIC = config.Config{
+	QUIC: DefaultQUICServerTestConfig,
+	Connectors: connector_config.ConnectorsConfig{
+		"connector": {
+			Type: "kafka_franz",
 			Settings: kafka.Config{
 				Common: kafka.CommonSettings{
 					Brokers: []string{"localhost:9092", "localhost:9093", "localhost:9094"},
@@ -72,11 +80,11 @@ var DefaultTestConfigWithKafka3Brokers = config.Config{
 	},
 }
 
-var DefaultTestConfigWithNats = config.Config{
-	Fujin: DefaultFujinServerTestConfig,
+var DefaultTestConfigWithNatsQUIC = config.Config{
+	QUIC: DefaultQUICServerTestConfig,
 	Connectors: connector_config.ConnectorsConfig{
 		"connector": {
-			Protocol: "nats_core",
+			Type: "nats_core",
 			Settings: core.Config{
 				Common: core.CommonSettings{
 					URL: "nats://localhost:4222",
@@ -94,46 +102,46 @@ var DefaultTestConfigWithNats = config.Config{
 	},
 }
 
-var DefaultTestConfigWithAMQP091 = config.Config{
-	Fujin: DefaultFujinServerTestConfig,
+var DefaultTestConfigWithAMQP091QUIC = config.Config{
+	QUIC: DefaultQUICServerTestConfig,
 	Connectors: connector_config.ConnectorsConfig{
 		"connector": {
-			Protocol: "amqp091",
-			Settings: amqp091.Config{
-				Clients: map[string]amqp091.ClientSpecificSettings{
+			Type: "rabbitmq_amqp09",
+			Settings: amqp09.Config{
+				Clients: map[string]amqp09.ClientSpecificSettings{
 					"pub": {
-						Conn: amqp091.ConnConfig{
+						Conn: amqp09.ConnConfig{
 							URL: "amqp://guest:guest@localhost",
 						},
-						Exchange: amqp091.ExchangeConfig{
+						Exchange: amqp09.ExchangeConfig{
 							Name: "events",
 							Kind: "fanout",
 						},
-						Queue: amqp091.QueueConfig{
+						Queue: amqp09.QueueConfig{
 							Name: "my_queue",
 						},
-						QueueBind: amqp091.QueueBindConfig{
+						QueueBind: amqp09.QueueBindConfig{
 							RoutingKey: "my_routing_key",
 						},
-						Publish: &amqp091.PublishConfig{
+						Publish: &amqp09.PublishConfig{
 							ContentType: "text/plain",
 						},
 					},
 					"sub": {
-						Conn: amqp091.ConnConfig{
+						Conn: amqp09.ConnConfig{
 							URL: "amqp://guest:guest@localhost",
 						},
-						Exchange: amqp091.ExchangeConfig{
+						Exchange: amqp09.ExchangeConfig{
 							Name: "events",
 							Kind: "fanout",
 						},
-						Queue: amqp091.QueueConfig{
+						Queue: amqp09.QueueConfig{
 							Name: "my_queue",
 						},
-						QueueBind: amqp091.QueueBindConfig{
+						QueueBind: amqp09.QueueBindConfig{
 							RoutingKey: "my_routing_key",
 						},
-						Consume: &amqp091.ConsumeConfig{
+						Consume: &amqp09.ConsumeConfig{
 							Consumer: "fujin",
 						},
 					},
@@ -143,26 +151,26 @@ var DefaultTestConfigWithAMQP091 = config.Config{
 	},
 }
 
-var DefaultTestConfigWithAMQP10 = config.Config{
-	Fujin: DefaultFujinServerTestConfig,
+var DefaultTestConfigWithAMQP10QUIC = config.Config{
+	QUIC: DefaultQUICServerTestConfig,
 	Connectors: connector_config.ConnectorsConfig{
 		"connector": {
-			Protocol: "amqp10",
-			Settings: amqp10.Config{
-				Clients: map[string]amqp10.ClientSpecificSettings{
+			Type: "azure_amqp1",
+			Settings: amqp1.Config{
+				Clients: map[string]amqp1.ClientSpecificSettings{
 					"pub": {
-						Conn: amqp10.ConnConfig{
+						Conn: amqp1.ConnConfig{
 							Addr: "amqp://artemis:artemis@localhost:61616",
 						},
-						Sender: &amqp10.SenderConfig{
+						Sender: &amqp1.SenderConfig{
 							Target: "queue",
 						},
 					},
 					"sub": {
-						Conn: amqp10.ConnConfig{
+						Conn: amqp1.ConnConfig{
 							Addr: "amqp://artemis:artemis@localhost:61616",
 						},
-						Receiver: &amqp10.ReceiverConfig{
+						Receiver: &amqp1.ReceiverConfig{
 							Source: "queue",
 						},
 					},
@@ -171,18 +179,18 @@ var DefaultTestConfigWithAMQP10 = config.Config{
 		},
 	},
 }
-var DefaultTestConfigWithRedisPubSub = config.Config{
-	Fujin: DefaultFujinServerTestConfig,
+var DefaultTestConfigWithRedisPubSubQUIC = config.Config{
+	QUIC: DefaultQUICServerTestConfig,
 	Connectors: connector_config.ConnectorsConfig{
 		"connector": {
-			Protocol: "resp_pubsub",
+			Type: "redis_rueidis_pubsub",
 			Settings: pubsub.Config{
 				Common: pubsub.CommonSettings{
-					RedisConfig: respconfig.RedisConfig{
+					RedisConfig: redis_config.RedisConfig{
 						InitAddress:  []string{"localhost:6379"},
 						DisableCache: true,
 					},
-					WriterBatchConfig: respconfig.WriterBatchConfig{
+					WriterBatchConfig: redis_config.WriterBatchConfig{
 						BatchSize: 1000,
 						Linger:    5 * time.Millisecond,
 					},
@@ -200,18 +208,18 @@ var DefaultTestConfigWithRedisPubSub = config.Config{
 	},
 }
 
-var DefaultTestConfigWithRedisStreams = config.Config{
-	Fujin: DefaultFujinServerTestConfig,
+var DefaultTestConfigWithRedisStreamsQUIC = config.Config{
+	QUIC: DefaultQUICServerTestConfig,
 	Connectors: connector_config.ConnectorsConfig{
 		"connector": connector_config.ConnectorConfig{
-			Protocol: "resp_streams",
+			Type: "redis_rueidis_streams",
 			Settings: streams.Config{
 				Common: streams.CommonSettings{
-					RedisConfig: respconfig.RedisConfig{
+					RedisConfig: redis_config.RedisConfig{
 						InitAddress:  []string{"localhost:6379"},
 						DisableCache: true,
 					},
-					WriterBatchConfig: respconfig.WriterBatchConfig{
+					WriterBatchConfig: redis_config.WriterBatchConfig{
 						BatchSize: 1000,
 						Linger:    5 * time.Millisecond,
 					},
@@ -238,11 +246,11 @@ var DefaultTestConfigWithRedisStreams = config.Config{
 	},
 }
 
-var DefaultTestConfigWithMQTT = config.Config{
-	Fujin: DefaultFujinServerTestConfig,
+var DefaultTestConfigWithMQTTQUIC = config.Config{
+	QUIC: DefaultQUICServerTestConfig,
 	Connectors: connector_config.ConnectorsConfig{
 		"connector": {
-			Protocol: "mqtt",
+			Type: "mqtt_paho",
 			Settings: mqtt.Config{
 				Common: mqtt.CommonSettings{
 					BrokerURL:         "tcp://localhost:1883",
@@ -280,11 +288,11 @@ var DefaultTestConfigWithMQTT = config.Config{
 	},
 }
 
-var DefaultTestConfigWithNSQ = config.Config{
-	Fujin: DefaultFujinServerTestConfig,
+var DefaultTestConfigWithNSQQUIC = config.Config{
+	QUIC: DefaultQUICServerTestConfig,
 	Connectors: connector_config.ConnectorsConfig{
 		"connector": {
-			Protocol: "nsq",
+			Type: "nsq",
 			Settings: nsq.Config{
 				Common: nsq.CommonSettings{
 					Address:   "localhost:4150",
@@ -310,36 +318,127 @@ var DefaultTestConfigWithNSQ = config.Config{
 	},
 }
 
-func RunDefaultServerWithKafka3Brokers(ctx context.Context) *server.Server {
-	return RunServer(ctx, DefaultTestConfigWithKafka3Brokers)
+func RunDefaultServerWithNopQUIC(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithNopQUIC)
 }
 
-func RunDefaultServerWithNats(ctx context.Context) *server.Server {
-	return RunServer(ctx, DefaultTestConfigWithNats)
+func RunDefaultServerWithKafka3BrokersQUIC(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithKafka3BrokersQUIC)
 }
 
-func RunDefaultServerWithAMQP091(ctx context.Context) *server.Server {
-	return RunServer(ctx, DefaultTestConfigWithAMQP091)
+func RunDefaultServerWithNatsQUIC(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithNatsQUIC)
 }
 
-func RunDefaultServerWithAMQP10(ctx context.Context) *server.Server {
-	return RunServer(ctx, DefaultTestConfigWithAMQP10)
+func RunDefaultServerWithAMQP091QUIC(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithAMQP091QUIC)
 }
 
-func RunDefaultServerWithRedisPubSub(ctx context.Context) *server.Server {
-	return RunServer(ctx, DefaultTestConfigWithRedisPubSub)
+func RunDefaultServerWithAMQP10QUIC(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithAMQP10QUIC)
 }
 
-func RunDefaultServerWithRedisStreams(ctx context.Context) *server.Server {
-	return RunServer(ctx, DefaultTestConfigWithRedisStreams)
+func RunDefaultServerWithRedisPubSubQUIC(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithRedisPubSubQUIC)
 }
 
-func RunDefaultServerWithMQTT(ctx context.Context) *server.Server {
-	return RunServer(ctx, DefaultTestConfigWithMQTT)
+func RunDefaultServerWithRedisStreamsQUIC(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithRedisStreamsQUIC)
 }
 
-func RunDefaultServerWithNSQ(ctx context.Context) *server.Server {
-	return RunServer(ctx, DefaultTestConfigWithNSQ)
+func RunDefaultServerWithMQTTQUIC(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithMQTTQUIC)
+}
+
+func RunDefaultServerWithNSQQUIC(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithNSQQUIC)
+}
+
+// --- TCP test configs ---
+
+var DefaultTCPServerTestConfig = config.TCPServerConfig{
+	Enabled: true,
+	Addr:    ":4850",
+}
+
+var DefaultTestConfigWithNopTCP = config.Config{
+	TCP: DefaultTCPServerTestConfig,
+	Connectors: connector_config.ConnectorsConfig{
+		"connector": {
+			Type: "nop",
+		},
+	},
+}
+
+var DefaultTestConfigWithKafka3BrokersTCP = config.Config{
+	TCP: DefaultTCPServerTestConfig,
+	Connectors: connector_config.ConnectorsConfig{
+		"connector": {
+			Type: "kafka_franz",
+			Settings: kafka.Config{
+				Common: kafka.CommonSettings{
+					Brokers: []string{"localhost:9092", "localhost:9093", "localhost:9094"},
+				},
+				Clients: map[string]kafka.ClientSpecificSettings{
+					"sub": {
+						ConsumeTopics:          []string{"my_pub_topic"},
+						Group:                  "fujin",
+						AllowAutoTopicCreation: true,
+					},
+					"pub": {
+						ProduceTopic:           "my_pub_topic",
+						AllowAutoTopicCreation: true,
+						Linger:                 10 * time.Millisecond,
+					},
+				},
+			},
+		},
+	},
+}
+
+func RunDefaultServerWithNopTCP(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithNopTCP)
+}
+
+func RunDefaultServerWithKafka3BrokersTCP(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithKafka3BrokersTCP)
+}
+
+func createTCPClientConn(addr string) net.Conn {
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		panic(fmt.Errorf("dial tcp: %w", err))
+	}
+	if tc, ok := conn.(*net.TCPConn); ok {
+		_ = tc.SetNoDelay(true)
+	}
+	return conn
+}
+
+func doDefaultBindTCP(conn net.Conn) {
+	req := bindCmd("connector", nil, nil)
+	if _, err := conn.Write(req); err != nil {
+		panic(fmt.Errorf("write bind request: %w", err))
+	}
+}
+
+func drainTCPConn(b *testing.B, conn net.Conn, ch chan int) {
+	buf := make([]byte, defaultRecvBufSize)
+	bytes := 0
+
+	for {
+		conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+		n, err := conn.Read(buf)
+		bytes += n
+		if err != nil {
+			if !errors.Is(err, io.EOF) {
+				b.Errorf("Error on read: %v\n", err)
+			}
+			break
+		}
+	}
+
+	ch <- bytes
 }
 
 func RunServer(ctx context.Context, conf config.Config) *server.Server {
@@ -431,11 +530,11 @@ func handlePing(str *quic.Stream) {
 	n, err := str.Read(pingBuf[:])
 	if err == io.EOF {
 		if n != 0 {
-			if pingBuf[0] != byte(request.OP_CODE_PING) {
+			if pingBuf[0] != byte(v1.OP_CODE_PING) {
 				return
 			}
 		}
-		pingBuf[0] = byte(response.RESP_CODE_PONG)
+		pingBuf[0] = byte(v1.RESP_CODE_PONG)
 		if _, err := str.Write(pingBuf[:]); err != nil {
 			return
 		}
@@ -454,7 +553,7 @@ func generateTLSConfig() *tls.Config {
 		Certificate: [][]byte{cert},
 		PrivateKey:  key,
 	}
-	return &tls.Config{Certificates: []tls.Certificate{tlsCert}, InsecureSkipVerify: true, NextProtos: []string{version.Fujin1}}
+	return &tls.Config{Certificates: []tls.Certificate{tlsCert}, InsecureSkipVerify: true, NextProtos: []string{v1.Version}}
 }
 
 func bindCmd(connector string, meta, configOverrides map[string]string) []byte {

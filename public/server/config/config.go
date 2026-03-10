@@ -9,22 +9,54 @@ import (
 )
 
 type Config struct {
-	Fujin      FujinServerConfig
+	QUIC       QUICServerConfig
+	TCP        TCPServerConfig
 	GRPC       GRPCServerConfig
 	Connectors config.ConnectorsConfig
 }
 
-type FujinServerConfig struct {
-	Enabled               bool
-	Addr                  string
+type QUICServerConfig struct {
+	Enabled bool
+	Addr    string
+	TLS     *tls.Config
+	QUIC    *quic.Config
+	Fujin   FujinProtocolConfig
+}
+
+type TCPServerConfig struct {
+	Enabled bool
+	Addr    string
+	TLS     *tls.Config
+	Fujin   FujinProtocolConfig
+}
+
+// FujinProtocolConfig holds settings specific to the fujin binary protocol,
+// independent of the underlying transport.
+type FujinProtocolConfig struct {
 	PingInterval          time.Duration
 	PingTimeout           time.Duration
 	PingStream            bool
 	PingMaxRetries        int
 	WriteDeadline         time.Duration
 	ForceTerminateTimeout time.Duration
-	TLS                   *tls.Config
-	QUIC                  *quic.Config
+}
+
+func (f *FujinProtocolConfig) SetDefaults() {
+	if f.PingInterval == 0 {
+		f.PingInterval = 2 * time.Second
+	}
+	if f.PingTimeout == 0 {
+		f.PingTimeout = 5 * time.Second
+	}
+	if f.PingMaxRetries == 0 {
+		f.PingMaxRetries = 3
+	}
+	if f.WriteDeadline == 0 {
+		f.WriteDeadline = 10 * time.Second
+	}
+	if f.ForceTerminateTimeout == 0 {
+		f.ForceTerminateTimeout = 15 * time.Second
+	}
 }
 
 type GRPCServerConfig struct {
@@ -34,15 +66,12 @@ type GRPCServerConfig struct {
 	MaxConcurrentStreams uint32
 	TLS                  *tls.Config
 
-	// Message size limits (bytes)
-	MaxRecvMsgSize int // Maximum message size the server can receive
-	MaxSendMsgSize int // Maximum message size the server can send
+	MaxRecvMsgSize int
+	MaxSendMsgSize int
 
-	// Flow control window sizes (bytes)
-	InitialWindowSize     int32 // Initial window size for stream-level flow control
-	InitialConnWindowSize int32 // Initial window size for connection-level flow control
+	InitialWindowSize     int32
+	InitialConnWindowSize int32
 
-	// KeepAlive settings
 	ServerKeepAlive      ServerKeepAliveConfig
 	ClientKeepAlive      ClientKeepAliveConfig
 	ObservabilityEnabled bool
@@ -62,29 +91,15 @@ type ClientKeepAliveConfig struct {
 }
 
 func (c *Config) SetDefaults() {
-	if c.Fujin.Addr == "" {
-		c.Fujin.Addr = ":4848"
+	if c.QUIC.Addr == "" {
+		c.QUIC.Addr = ":4848"
 	}
+	c.QUIC.Fujin.SetDefaults()
 
-	if c.Fujin.PingInterval == 0 {
-		c.Fujin.PingInterval = 2 * time.Second
+	if c.TCP.Addr == "" {
+		c.TCP.Addr = ":4850"
 	}
-
-	if c.Fujin.PingTimeout == 0 {
-		c.Fujin.PingTimeout = 5 * time.Second
-	}
-
-	if c.Fujin.PingMaxRetries == 0 {
-		c.Fujin.PingMaxRetries = 3
-	}
-
-	if c.Fujin.WriteDeadline == 0 {
-		c.Fujin.WriteDeadline = 10 * time.Second
-	}
-
-	if c.Fujin.ForceTerminateTimeout == 0 {
-		c.Fujin.ForceTerminateTimeout = 15 * time.Second
-	}
+	c.TCP.Fujin.SetDefaults()
 
 	if c.GRPC.Addr == "" {
 		c.GRPC.Addr = ":4849"

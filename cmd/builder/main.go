@@ -20,7 +20,7 @@ var (
 	bindMiddlewares stringSlice
 	connMiddlewares stringSlice
 	output          = flag.String("output", "fujin", "Output binary path")
-	buildTags       = flag.String("tags", "netgo,osusergo", "Build tags for the final binary (e.g. fujin,grpc for protocols)")
+	buildTags       = flag.String("tags", "netgo,osusergo", "Build tags for the final binary (e.g. quic,tcp,grpc for transports)")
 	extraLdflags    = flag.String("ldflags", "", "Extra ldflags (e.g. -X main.Version=1.0.0)")
 	cgoEnabled      = flag.Bool("cgo", false, "Enable CGO (required by some plugins)")
 	localModule     = flag.Bool("local", false, "Use local fujin module (for builds from source)")
@@ -139,7 +139,7 @@ func validateInputs() error {
 		return fmt.Errorf("at least one configurator is required (e.g. -configurator github.com/fujin-io/fujin/public/plugins/configurator/file)")
 	}
 	if len(connectors) == 0 {
-		return fmt.Errorf("at least one connector is required (e.g. -connector github.com/fujin-io/fujin/public/plugins/connector/kafka)")
+		return fmt.Errorf("at least one connector is required (e.g. -connector github.com/fujin-io/fujin/public/plugins/connector/kafka/franz)")
 	}
 	if strings.TrimSpace(*output) == "" {
 		return fmt.Errorf("output path cannot be empty")

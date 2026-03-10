@@ -80,7 +80,7 @@ func (r *Reader) Subscribe(ctx context.Context, h func([]byte, string, ...any)) 
 	return nil
 }
 
-func (r *Reader) HSubscribe(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error {
+func (r *Reader) SubscribeWithHeaders(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error {
 	r.consumer.AddHandler(nsq.HandlerFunc(func(msg *nsq.Message) error {
 		if r.autoAck {
 			h(msg.Body, r.conf.Topic, nil)
@@ -116,7 +116,7 @@ func (r *Reader) Fetch(
 	fetchHandler(0, util.ErrNotSupported)
 }
 
-func (r *Reader) HFetch(
+func (r *Reader) FetchWithHeaders(
 	ctx context.Context, n uint32,
 	fetchHandler func(n uint32, err error),
 	msgHandler func(message []byte, topic string, hs [][]byte, args ...any),
@@ -167,11 +167,11 @@ func (r *Reader) EncodeMsgID(buf []byte, _ string, args ...any) []byte {
 	return append(buf, msgID[:]...)
 }
 
-func (r *Reader) MsgIDStaticArgsLen() int {
+func (r *Reader) MsgIDArgsLen() int {
 	return 16 // NSQ MessageID is [16]byte
 }
 
-func (r *Reader) IsAutoCommit() bool {
+func (r *Reader) AutoCommit() bool {
 	return r.autoAck
 }
 

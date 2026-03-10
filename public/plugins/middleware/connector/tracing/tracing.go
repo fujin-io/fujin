@@ -371,8 +371,8 @@ func (d *tracingReaderWrapper) Subscribe(ctx context.Context, h func(message []b
 	)
 }
 
-func (d *tracingReaderWrapper) HSubscribe(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error {
-	return d.r.HSubscribe(
+func (d *tracingReaderWrapper) SubscribeWithHeaders(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error {
+	return d.r.SubscribeWithHeaders(
 		ctx,
 		func(message []byte, topic string, hs [][]byte, args ...any) {
 			carrier := newByteHeadersCarrier(&hs)
@@ -414,8 +414,8 @@ func (d *tracingReaderWrapper) Fetch(ctx context.Context, n uint32, fetchRespons
 	)
 }
 
-func (d *tracingReaderWrapper) HFetch(ctx context.Context, n uint32, fetchResponseHandler func(n uint32, err error), msgHandler func(message []byte, topic string, hs [][]byte, args ...any)) {
-	d.r.HFetch(ctx, n,
+func (d *tracingReaderWrapper) FetchWithHeaders(ctx context.Context, n uint32, fetchResponseHandler func(n uint32, err error), msgHandler func(message []byte, topic string, hs [][]byte, args ...any)) {
+	d.r.FetchWithHeaders(ctx, n,
 		func(n uint32, err error) {
 			_, span := tracer().Start(ctx, "reader.hfetch.handle",
 				trace.WithAttributes(
@@ -491,16 +491,16 @@ func (d *tracingReaderWrapper) Nack(ctx context.Context, msgIDs [][]byte, nackHa
 	)
 }
 
-func (d *tracingReaderWrapper) MsgIDStaticArgsLen() int {
-	return d.r.MsgIDStaticArgsLen()
+func (d *tracingReaderWrapper) MsgIDArgsLen() int {
+	return d.r.MsgIDArgsLen()
 }
 
 func (d *tracingReaderWrapper) EncodeMsgID(buf []byte, topic string, args ...any) []byte {
 	return d.r.EncodeMsgID(buf, topic, args...)
 }
 
-func (d *tracingReaderWrapper) IsAutoCommit() bool {
-	return d.r.IsAutoCommit()
+func (d *tracingReaderWrapper) AutoCommit() bool {
+	return d.r.AutoCommit()
 }
 
 func (d *tracingReaderWrapper) Close() error {

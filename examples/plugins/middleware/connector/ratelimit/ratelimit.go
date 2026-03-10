@@ -10,7 +10,7 @@
 //
 //	connectors:
 //	  my_connector:
-//	    protocol: kafka
+//	    type: kafka_franz
 //	    connector_middlewares:
 //	      - name: ratelimit
 //	        config:
