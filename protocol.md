@@ -43,6 +43,7 @@ The Fujin protocol is transport-agnostic. The same byte stream runs over any sup
 
 - **QUIC** — Multiplexed streams over UDP with built-in TLS. Each command session runs on a separate QUIC stream. PING uses a dedicated control stream.
 - **TCP** — Plain TCP (with optional TLS). One connection carries a single command session. PING is in-band on the same connection.
+- **Unix** — Unix domain sockets. Same-machine only; uses filesystem path. PING is in-band.
 
 ## Versioning
 

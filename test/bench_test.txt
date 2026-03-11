@@ -12,7 +12,7 @@ ok      github.com/fujin-io/fujin/test  0.415s
 
 --- 1B Payload ---
 
-Benchmark_Produce_1BPayload_Nop_QUIC_QUIC-8          10000               104.2 ns/op       163.21 MB/s
+Benchmark_Produce_1BPayload_Nop_QUIC-8          10000               104.2 ns/op       163.21 MB/s
 PASS
 ok      github.com/fujin-io/fujin/test  0.437s
 
@@ -20,7 +20,7 @@ Benchmark_Produce_1BPayload_Nop_TCP-8              10000                 4.808 n
 PASS
 ok      github.com/fujin-io/fujin/test  0.438s
 
-Benchmark_Produce_1BPayload_Nop_QUIC_QUIC-8         100000               224.9 ns/op        75.58 MB/s
+Benchmark_Produce_1BPayload_Nop_QUIC-8         100000               224.9 ns/op        75.58 MB/s
 PASS
 ok      github.com/fujin-io/fujin/test  0.467s
 
@@ -28,7 +28,7 @@ Benchmark_Produce_1BPayload_Nop_TCP-8             100000               148.8 ns/
 PASS
 ok      github.com/fujin-io/fujin/test  0.477s
 
-Benchmark_Produce_1BPayload_Nop_QUIC_QUIC-8        1000000               308.6 ns/op        55.09 MB/s
+Benchmark_Produce_1BPayload_Nop_QUIC-8        1000000               308.6 ns/op        55.09 MB/s
 PASS
 ok      github.com/fujin-io/fujin/test  0.739s
 
@@ -38,7 +38,7 @@ ok      github.com/fujin-io/fujin/test  0.811s
 
 --- 32KB Payload ---
 
-Benchmark_Produce_32KBPayload_Nop_QUIC_QUIC-8        10000            122571 ns/op         267.47 MB/s
+Benchmark_Produce_32KBPayload_Nop_QUIC-8        10000            122571 ns/op         267.47 MB/s
 PASS
 ok      github.com/fujin-io/fujin/test  1.662s
 
@@ -46,7 +46,7 @@ Benchmark_Produce_32KBPayload_Nop_TCP-8            10000             34385 ns/op
 PASS
 ok      github.com/fujin-io/fujin/test  0.733s
 
-Benchmark_Produce_32KBPayload_Nop_QUIC_QUIC-8       100000            121276 ns/op         270.33 MB/s
+Benchmark_Produce_32KBPayload_Nop_QUIC-8       100000            121276 ns/op         270.33 MB/s
 PASS
 ok      github.com/fujin-io/fujin/test  12.654s
 
@@ -54,7 +54,7 @@ Benchmark_Produce_32KBPayload_Nop_TCP-8           100000             39045 ns/op
 PASS
 ok      github.com/fujin-io/fujin/test  4.312s
 
-Benchmark_Produce_32KBPayload_Nop_QUIC_QUIC-8      1000000            122672 ns/op         267.25 MB/s
+Benchmark_Produce_32KBPayload_Nop_QUIC-8      1000000            122672 ns/op         267.25 MB/s
 PASS
 ok      github.com/fujin-io/fujin/test  123.321s
 
@@ -66,7 +66,7 @@ ok      github.com/fujin-io/fujin/test  39.508s
 
 --- 1B Payload ---
 
-Benchmark_Produce_1BPayload_Kafka_3Brokers_QUIC_QUIC-8          10000                 5.513 ns/op       3083.90 MB/s
+Benchmark_Produce_1BPayload_Kafka_3Brokers_QUIC-8          10000                 5.513 ns/op       3083.90 MB/s
 PASS
 ok      github.com/fujin-io/fujin/test  0.474s
 
@@ -74,7 +74,7 @@ Benchmark_Produce_1BPayload_Kafka_3Brokers_TCP-8           10000                
 PASS
 ok      github.com/fujin-io/fujin/test  0.487s
 
-Benchmark_Produce_1BPayload_Kafka_3Brokers_QUIC_QUIC-8         100000               665.5 ns/op   25.54 MB/s
+Benchmark_Produce_1BPayload_Kafka_3Brokers_QUIC-8         100000               665.5 ns/op   25.54 MB/s
 PASS
 ok      github.com/fujin-io/fujin/test  0.567s
 
@@ -82,7 +82,7 @@ Benchmark_Produce_1BPayload_Kafka_3Brokers_TCP-8          100000               5
 PASS
 ok      github.com/fujin-io/fujin/test  0.533s
 
-Benchmark_Produce_1BPayload_Kafka_3Brokers_QUIC_QUIC-8        1000000               903.7 ns/op   18.81 MB/s
+Benchmark_Produce_1BPayload_Kafka_3Brokers_QUIC-8        1000000               903.7 ns/op   18.81 MB/s
 PASS
 ok      github.com/fujin-io/fujin/test  1.394s
 
@@ -92,7 +92,7 @@ ok      github.com/fujin-io/fujin/test  1.279s
 
 --- 32KB Payload ---
 
-Benchmark_Produce_32KBPayload_Kafka_3Brokers_QUIC_QUIC-8        10000            142094 ns/op    230.72 MB/s
+Benchmark_Produce_32KBPayload_Kafka_3Brokers_QUIC-8        10000            142094 ns/op    230.72 MB/s
 PASS
 ok      github.com/fujin-io/fujin/test  1.936s
 
@@ -100,7 +100,7 @@ Benchmark_Produce_32KBPayload_Kafka_3Brokers_TCP-8         10000             443
 PASS
 ok      github.com/fujin-io/fujin/test  1.437s
 
-Benchmark_Produce_32KBPayload_Kafka_3Brokers_QUIC_QUIC-8       100000            137659 ns/op    238.15 MB/s
+Benchmark_Produce_32KBPayload_Kafka_3Brokers_QUIC-8       100000            137659 ns/op    238.15 MB/s
 PASS
 ok      github.com/fujin-io/fujin/test  14.254s
 

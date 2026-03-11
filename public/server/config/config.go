@@ -11,6 +11,7 @@ import (
 type Config struct {
 	QUIC       QUICServerConfig
 	TCP        TCPServerConfig
+	Unix       UnixServerConfig
 	GRPC       GRPCServerConfig
 	Connectors config.ConnectorsConfig
 }
@@ -27,6 +28,12 @@ type TCPServerConfig struct {
 	Enabled bool
 	Addr    string
 	TLS     *tls.Config
+	Fujin   FujinProtocolConfig
+}
+
+type UnixServerConfig struct {
+	Enabled bool
+	Path    string // e.g. /run/fujin/fujin.sock or /tmp/fujin.sock
 	Fujin   FujinProtocolConfig
 }
 
@@ -100,6 +107,11 @@ func (c *Config) SetDefaults() {
 		c.TCP.Addr = ":4850"
 	}
 	c.TCP.Fujin.SetDefaults()
+
+	if c.Unix.Path == "" {
+		c.Unix.Path = "/tmp/fujin.sock"
+	}
+	c.Unix.Fujin.SetDefaults()
 
 	if c.GRPC.Addr == "" {
 		c.GRPC.Addr = ":4849"

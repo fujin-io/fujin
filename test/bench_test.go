@@ -83,6 +83,39 @@ func Benchmark_Produce_32KBPayload_Nop_TCP(b *testing.B) {
 	benchProduceTCP(b, "nop", "pub", sizedString(32*1024))
 }
 
+// No op Unix benchmarks
+func Benchmark_Produce_1BPayload_Nop_Unix(b *testing.B) {
+	benchProduceUnix(b, "nop", "pub", sizedString(1))
+}
+
+func Benchmark_Produce_32BPayload_Nop_Unix(b *testing.B) {
+	benchProduceUnix(b, "nop", "pub", sizedString(32))
+}
+
+func Benchmark_Produce_128BPayload_Nop_Unix(b *testing.B) {
+	benchProduceUnix(b, "nop", "pub", sizedString(128))
+}
+
+func Benchmark_Produce_256BPayload_Nop_Unix(b *testing.B) {
+	benchProduceUnix(b, "nop", "pub", sizedString(256))
+}
+
+func Benchmark_Produce_1KBPayload_Nop_Unix(b *testing.B) {
+	benchProduceUnix(b, "nop", "pub", sizedString(1024))
+}
+
+func Benchmark_Produce_4KBPayload_Nop_Unix(b *testing.B) {
+	benchProduceUnix(b, "nop", "pub", sizedString(4*1024))
+}
+
+func Benchmark_Produce_8KBPayload_Nop_Unix(b *testing.B) {
+	benchProduceUnix(b, "nop", "pub", sizedString(8*1024))
+}
+
+func Benchmark_Produce_32KBPayload_Nop_Unix(b *testing.B) {
+	benchProduceUnix(b, "nop", "pub", sizedString(32*1024))
+}
+
 // Kafka benchmarks
 func Benchmark_Produce_1BPayload_Kafka_3Brokers_QUIC(b *testing.B) {
 	benchProduceQUIC(b, "kafka3", "pub", sizedString(1))
@@ -146,6 +179,38 @@ func Benchmark_Produce_8KBPayload_Kafka_3Brokers_TCP(b *testing.B) {
 
 func Benchmark_Produce_32KBPayload_Kafka_3Brokers_TCP(b *testing.B) {
 	benchProduceTCP(b, "kafka3", "pub", sizedString(32*1024))
+}
+
+func Benchmark_Produce_1BPayload_Kafka_3Brokers_Unix(b *testing.B) {
+	benchProduceUnix(b, "kafka3", "pub", sizedString(1))
+}
+
+func Benchmark_Produce_32BPayload_Kafka_3Brokers_Unix(b *testing.B) {
+	benchProduceUnix(b, "kafka3", "pub", sizedString(32))
+}
+
+func Benchmark_Produce_128BPayload_Kafka_3Brokers_Unix(b *testing.B) {
+	benchProduceUnix(b, "kafka3", "pub", sizedString(128))
+}
+
+func Benchmark_Produce_256BPayload_Kafka_3Brokers_Unix(b *testing.B) {
+	benchProduceUnix(b, "kafka3", "pub", sizedString(256))
+}
+
+func Benchmark_Produce_1KBPayload_Kafka_3Brokers_Unix(b *testing.B) {
+	benchProduceUnix(b, "kafka3", "pub", sizedString(1024))
+}
+
+func Benchmark_Produce_4KBPayload_Kafka_3Brokers_Unix(b *testing.B) {
+	benchProduceUnix(b, "kafka3", "pub", sizedString(4*1024))
+}
+
+func Benchmark_Produce_8KBPayload_Kafka_3Brokers_Unix(b *testing.B) {
+	benchProduceUnix(b, "kafka3", "pub", sizedString(8*1024))
+}
+
+func Benchmark_Produce_32KBPayload_Kafka_3Brokers_Unix(b *testing.B) {
+	benchProduceUnix(b, "kafka3", "pub", sizedString(32*1024))
 }
 
 // Nats benchmarks
@@ -471,6 +536,73 @@ func benchProduceTCP(b *testing.B, typ, topic, payload string) {
 	bw.Flush()
 	elapsed := time.Since(startTime)
 	fmt.Println("seconds to write full buf to tcp conn:", elapsed.Seconds())
+	res := <-bytes
+	b.StopTimer()
+	c.Close()
+	expected := b.N*6 + 3
+	if res != expected {
+		panic(fmt.Errorf("Invalid number of bytes read: bytes: %d, expected: %d", res, expected))
+	}
+}
+
+func benchProduceUnix(b *testing.B, typ, topic, payload string) {
+	ctx, cancel := context.WithCancel(b.Context())
+	defer cancel()
+
+	var s *server.Server
+
+	b.StopTimer()
+	switch typ {
+	case "nop":
+		s = RunDefaultServerWithNopUnix(ctx)
+	case "kafka3":
+		s = RunDefaultServerWithKafka3BrokersUnix(ctx)
+	default:
+		panic("invalid typ")
+	}
+
+	defer func() {
+		cancel()
+		<-s.Done()
+	}()
+
+	c := createUnixClientConn(PERF_UNIX_PATH)
+	doDefaultBindUnix(c)
+
+	cmd := []byte{
+		byte(v1.OP_CODE_PRODUCE),
+		0, 0, 0, 0,
+	}
+
+	lenBuf := make([]byte, 4)
+	binary.BigEndian.PutUint32(lenBuf, uint32(len(topic)))
+
+	cmd = append(cmd, lenBuf...)
+	cmd = append(cmd, []byte(topic)...)
+
+	binary.BigEndian.PutUint32(lenBuf, uint32(len(payload)))
+
+	cmd = append(cmd, lenBuf...)
+	cmd = append(cmd, []byte(payload)...)
+
+	b.SetBytes(int64(len(cmd)))
+	bw := bufio.NewWriterSize(c, defaultSendBufSize)
+
+	bytes := make(chan int)
+
+	go drainUnixConn(b, c, bytes)
+
+	b.StartTimer()
+
+	startTime := time.Now()
+	for b.Loop() {
+		bw.Write(cmd)
+	}
+	bw.Write([]byte{byte(v1.OP_CODE_DISCONNECT)})
+
+	bw.Flush()
+	elapsed := time.Since(startTime)
+	fmt.Println("seconds to write full buf to unix conn:", elapsed.Seconds())
 	res := <-bytes
 	b.StopTimer()
 	c.Close()

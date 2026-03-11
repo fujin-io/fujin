@@ -16,7 +16,7 @@ Modern distributed systems often need to work with multiple message brokers, eac
 - **Transaction Support**: Atomic message production across multiple topics (not for all brokers)
 - **Blazing Speed & Efficiency**: Optimized for processing large volumes of messages efficiently, leveraging techniques like zero-allocation parsing
 - **Plugin support**: Choose from various available default plugins, or write your own, and compile it in binary
-- **Multiple Transports**: QUIC (multiplexed, built-in TLS) and TCP (raw throughput) — same protocol, choose what fits
+- **Multiple Transports**: QUIC (multiplexed, built-in TLS), TCP (raw throughput), Unix (same-host IPC, fastest for local clients) — same protocol, choose what fits
 - **gRPC Interface**: Modern, language-agnostic RPC interface for easy integration
 - **Keep-Alive Mechanism**: Automatic connection health monitoring
 
@@ -29,6 +29,7 @@ Modern distributed systems often need to work with multiple message brokers, eac
 - RESP (PubSub/Streams)
 - NSQ
 - MQTT
+- ZeroMQ (PUB/SUB)
 
 ## Client Interfaces
 
@@ -40,6 +41,7 @@ Optimized binary protocol with minimal overhead. Best for high-performance appli
 
 - **QUIC** — Multiplexed streams over UDP with built-in TLS. Ideal when you need multiple concurrent streams, built-in encryption, and connection migration.
 - **TCP** — Plain TCP (with optional TLS). Delivers higher raw throughput (~3x faster than QUIC on large payloads). Best when you need maximum single-stream performance over a reliable network.
+- **Unix** — Unix domain sockets. Same-machine only. Best for local IPC (sidecars, containers in same pod).
 
 Only Go client is supported right now.
 
@@ -91,6 +93,7 @@ fujin/
 │   └── transport/              # Transport implementations
 │       ├── quic/               # QUIC transport (quic-go)
 │       ├── tcp/                # TCP transport
+│       ├── unix/               # Unix domain sockets
 │       └── grpc/               # gRPC transport
 ├── examples/                   # Sample configs and runnable examples
 ├── resources/                  # Docker Compose, example configs
@@ -118,9 +121,10 @@ The server uses Go build tags to conditionally compile transports:
 - **Transports**:
   - `quic` - QUIC transport for the Fujin protocol (multiplexed, built-in TLS)
   - `tcp` - TCP transport for the Fujin protocol (raw throughput)
+  - `unix` - Unix domain sockets (automatically enabled on Linux/macOS, not available on Windows)
   - `grpc` - gRPC server (language-agnostic)
 
-The Fujin protocol code compiles when any dependent transport is enabled (`quic` or `tcp`).
+The Fujin protocol code compiles when any dependent transport is enabled (`quic`, `tcp`, or on Unix platforms `unix` is implicit).
 
 **Building the server:**
 
@@ -185,7 +189,7 @@ go run ./cmd/builder \
 
 **Available default plugins:**
 - Configurators: `public/plugins/configurator/file`
-- Connectors: `kafka`, `nats/core`, `rabbitmq_amqp09`, `azure_amqp1`, `resp/pubsub`, `resp/streams`, `mqtt`, `nsq`
+- Connectors: `kafka`, `nats/core`, `rabbitmq_amqp09`, `azure_amqp1`, `resp/pubsub`, `resp/streams`, `mqtt`, `nsq`, `zeromq/zmq4`
 - Bind middlewares: `auth_api_key`
 - Connector middlewares: `metrics`, `tracing`
 
