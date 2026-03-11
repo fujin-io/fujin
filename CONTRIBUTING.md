@@ -93,9 +93,10 @@ go run ./cmd/builder -local \
 Fujin uses Go build tags for conditional compilation:
 - `quic` - QUIC transport for the Fujin protocol (multiplexed, built-in TLS)
 - `tcp` - TCP transport for the Fujin protocol (raw throughput)
+- `unix` - Unix domain sockets (implicit on Linux/macOS)
 - `grpc` - gRPC server support
 
-The Fujin protocol code (`internal/protocol/fujin/`) compiles when any dependent transport tag is enabled (`quic` or `tcp`).
+The Fujin protocol code (`internal/protocol/fujin/`) compiles when any dependent transport tag is enabled (`quic`, `tcp`, or `unix` on Unix platforms).
 
 ## Testing
 

@@ -29,6 +29,7 @@ var (
 type Config struct {
 	QUIC       QUICTransportConfig              `yaml:"quic"`
 	TCP        TCPTransportConfig               `yaml:"tcp"`
+	Unix       UnixTransportConfig              `yaml:"unix"`
 	GRPC       GRPCConfig                       `yaml:"grpc"`
 	Connectors connectorconfig.ConnectorsConfig `yaml:"connectors"`
 }
@@ -54,9 +55,15 @@ type FujinProtocolConfig struct {
 }
 
 type TCPTransportConfig struct {
-	Enabled bool              `yaml:"enabled"`
-	Addr    string            `yaml:"addr"`
-	TLS     pconfig.TLSConfig `yaml:"tls"`
+	Enabled bool                `yaml:"enabled"`
+	Addr    string              `yaml:"addr"`
+	TLS     pconfig.TLSConfig   `yaml:"tls"`
+	Fujin   FujinProtocolConfig `yaml:"fujin"`
+}
+
+type UnixTransportConfig struct {
+	Enabled bool                `yaml:"enabled"`
+	Path    string              `yaml:"path"`
 	Fujin   FujinProtocolConfig `yaml:"fujin"`
 }
 
@@ -99,6 +106,11 @@ func (c *Config) parse() (serverconfig.Config, error) {
 		return serverconfig.Config{}, fmt.Errorf("parse tcp server config: %w", err)
 	}
 
+	unixConf, err := c.parseUnixServerConfig()
+	if err != nil {
+		return serverconfig.Config{}, fmt.Errorf("parse unix server config: %w", err)
+	}
+
 	grpcConf, err := c.parseGRPCConfig()
 	if err != nil {
 		return serverconfig.Config{}, fmt.Errorf("parse grpc server config: %w", err)
@@ -107,6 +119,7 @@ func (c *Config) parse() (serverconfig.Config, error) {
 	return serverconfig.Config{
 		QUIC:       quicConf,
 		TCP:        tcpConf,
+		Unix:       unixConf,
 		GRPC:       grpcConf,
 		Connectors: c.Connectors,
 	}, nil
@@ -175,6 +188,31 @@ func (c *Config) parseTCPServerConfig() (serverconfig.TCPServerConfig, error) {
 			PingMaxRetries:        c.TCP.Fujin.PingMaxRetries,
 			WriteDeadline:         c.TCP.Fujin.WriteDeadline,
 			ForceTerminateTimeout: c.TCP.Fujin.ForceTerminateTimeout,
+		},
+	}, nil
+}
+
+func (c *Config) parseUnixServerConfig() (serverconfig.UnixServerConfig, error) {
+	if c == nil {
+		return serverconfig.UnixServerConfig{}, ErrNilConfig
+	}
+
+	if !c.Unix.Enabled {
+		return serverconfig.UnixServerConfig{
+			Enabled: c.Unix.Enabled,
+		}, nil
+	}
+
+	return serverconfig.UnixServerConfig{
+		Enabled: c.Unix.Enabled,
+		Path:    c.Unix.Path,
+		Fujin: serverconfig.FujinProtocolConfig{
+			PingInterval:          c.Unix.Fujin.PingInterval,
+			PingTimeout:           c.Unix.Fujin.PingTimeout,
+			PingStream:            false,
+			PingMaxRetries:        c.Unix.Fujin.PingMaxRetries,
+			WriteDeadline:         c.Unix.Fujin.WriteDeadline,
+			ForceTerminateTimeout: c.Unix.Fujin.ForceTerminateTimeout,
 		},
 	}, nil
 }

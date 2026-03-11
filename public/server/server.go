@@ -8,6 +8,7 @@ import (
 	grpc_server "github.com/fujin-io/fujin/internal/transport/grpc/v1/server"
 	quicserver "github.com/fujin-io/fujin/internal/transport/quic"
 	tcpserver "github.com/fujin-io/fujin/internal/transport/tcp"
+	unixserver "github.com/fujin-io/fujin/internal/transport/unix"
 	"github.com/fujin-io/fujin/public/server/config"
 	"golang.org/x/sync/errgroup"
 )
@@ -17,6 +18,7 @@ type Server struct {
 
 	quicServer TransportServer
 	tcpServer  TransportServer
+	unixServer TransportServer
 	grpcServer GRPCServer
 
 	l *slog.Logger
@@ -52,6 +54,10 @@ func NewServer(conf config.Config, l *slog.Logger) (*Server, error) {
 		s.tcpServer = tcpserver.NewServer(s.conf.TCP, s.conf.Connectors, s.l)
 	}
 
+	if conf.Unix.Enabled {
+		s.unixServer = unixserver.NewServer(s.conf.Unix, s.conf.Connectors, s.l)
+	}
+
 	if conf.GRPC.Enabled {
 		s.grpcServer = grpc_server.NewGRPCServerWrapper(s.conf.GRPC, s.conf.Connectors, s.l)
 	}
@@ -71,6 +77,12 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	if s.tcpServer != nil {
 		eg.Go(func() error {
 			return s.tcpServer.ListenAndServe(eCtx)
+		})
+	}
+
+	if s.unixServer != nil {
+		eg.Go(func() error {
+			return s.unixServer.ListenAndServe(eCtx)
 		})
 	}
 
@@ -96,6 +108,11 @@ func (s *Server) ReadyForConnections(timeout time.Duration) bool {
 				return
 			}
 		}
+		if s.unixServer != nil {
+			if !s.unixServer.ReadyForConnections(timeout) {
+				return
+			}
+		}
 		close(ready)
 	}()
 
@@ -113,6 +130,9 @@ func (s *Server) Done() <-chan struct{} {
 	}
 	if s.tcpServer != nil {
 		return s.tcpServer.Done()
+	}
+	if s.unixServer != nil {
+		return s.unixServer.Done()
 	}
 	done := make(chan struct{})
 	close(done)

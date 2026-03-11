@@ -6,6 +6,8 @@ quic:
     server_key_pem_path: /assets/certs/fujin.io-key.pem
 grpc:
   enabled: true
+tcp:
+  enabled: true
 connectors:
   connector:
     type: rabbitmq_amqp09

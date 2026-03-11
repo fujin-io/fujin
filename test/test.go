@@ -37,6 +37,7 @@ const (
 	defaultSendBufSize = 512 * 1024
 	defaultRecvBufSize = 512 * 1024
 	PERF_TCP_ADDR      = "localhost:4850"
+	PERF_UNIX_PATH     = "/tmp/fujin-bench.sock"
 )
 
 var DefaultQUICServerTestConfig = config.QUICServerConfig{
@@ -420,6 +421,72 @@ func doDefaultBindTCP(conn net.Conn) {
 	if _, err := conn.Write(req); err != nil {
 		panic(fmt.Errorf("write bind request: %w", err))
 	}
+}
+
+// --- Unix test configs ---
+
+var DefaultUnixServerTestConfig = config.UnixServerConfig{
+	Enabled: true,
+	Path:    PERF_UNIX_PATH,
+}
+
+var DefaultTestConfigWithNopUnix = config.Config{
+	Unix: DefaultUnixServerTestConfig,
+	Connectors: connector_config.ConnectorsConfig{
+		"connector": {
+			Type: "nop",
+		},
+	},
+}
+
+var DefaultTestConfigWithKafka3BrokersUnix = config.Config{
+	Unix: DefaultUnixServerTestConfig,
+	Connectors: connector_config.ConnectorsConfig{
+		"connector": {
+			Type: "kafka_franz",
+			Settings: kafka.Config{
+				Common: kafka.CommonSettings{
+					Brokers: []string{"localhost:9092", "localhost:9093", "localhost:9094"},
+				},
+				Clients: map[string]kafka.ClientSpecificSettings{
+					"sub": {
+						ConsumeTopics:          []string{"my_pub_topic"},
+						Group:                  "fujin",
+						AllowAutoTopicCreation: true,
+					},
+					"pub": {
+						ProduceTopic:           "my_pub_topic",
+						AllowAutoTopicCreation: true,
+						Linger:                 10 * time.Millisecond,
+					},
+				},
+			},
+		},
+	},
+}
+
+func RunDefaultServerWithNopUnix(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithNopUnix)
+}
+
+func RunDefaultServerWithKafka3BrokersUnix(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithKafka3BrokersUnix)
+}
+
+func createUnixClientConn(path string) net.Conn {
+	conn, err := net.Dial("unix", path)
+	if err != nil {
+		panic(fmt.Errorf("dial unix: %w", err))
+	}
+	return conn
+}
+
+func doDefaultBindUnix(conn net.Conn) {
+	doDefaultBindTCP(conn) // same for any net.Conn
+}
+
+func drainUnixConn(b *testing.B, conn net.Conn, ch chan int) {
+	drainTCPConn(b, conn, ch)
 }
 
 func drainTCPConn(b *testing.B, conn net.Conn, ch chan int) {

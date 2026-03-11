@@ -6,7 +6,7 @@ services:
       dockerfile: Dockerfile
       args:
         FUJIN_CONNECTORS: github.com/fujin-io/fujin/public/plugins/connector/nsq
-        FUJIN_GO_TAGS: quic,tcp,grpc
+        FUJIN_GO_TAGS: quic,tcp,grpc,unix
     container_name: fujin
     environment:
       FUJIN_CONFIGURATOR: yaml
@@ -14,6 +14,7 @@ services:
     ports:
       - "4848:4848/udp"
       - "4849:4849"
+      - "4850:4850"
     volumes:
       - ./assets:/assets
     restart: always
