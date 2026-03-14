@@ -10,12 +10,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"log/slog"
 	"math/big"
 	"net"
 	"os"
 	"testing"
 	"time"
+
+	_ "github.com/fujin-io/fujin/public/plugins/transport/all"
 
 	"github.com/fujin-io/fujin/public/plugins/connector/azure/amqp1"
 	connector_config "github.com/fujin-io/fujin/public/plugins/connector/config"
@@ -477,7 +480,10 @@ func RunServer(ctx context.Context, conf config.Config) *server.Server {
 		Level:     slog.LevelDebug,
 	}))
 
-	s, _ := server.NewServer(conf, logger)
+	s, err := server.NewServer(conf, logger)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	go func() {
 		if err := s.ListenAndServe(ctx); err != nil {

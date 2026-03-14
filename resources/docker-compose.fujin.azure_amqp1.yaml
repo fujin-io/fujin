@@ -6,7 +6,7 @@ services:
       dockerfile: Dockerfile
       args:
         FUJIN_CONNECTORS: github.com/fujin-io/fujin/public/plugins/connector/azure/amqp1
-        FUJIN_GO_TAGS: quic,tcp,grpc,unix
+        FUJIN_GO_TAGS: fujin,grpc,unix
     container_name: fujin
     environment:
       FUJIN_CONFIGURATOR: yaml

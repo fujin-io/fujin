@@ -15,7 +15,7 @@ Modern distributed systems often need to work with multiple message brokers, eac
   - Pull: Clients request messages from server (not for all brokers)
 - **Transaction Support**: Atomic message production across multiple topics (not for all brokers)
 - **Blazing Speed & Efficiency**: Optimized for processing large volumes of messages efficiently, leveraging techniques like zero-allocation parsing
-- **Plugin support**: Choose from various available default plugins, or write your own, and compile it in binary
+- **Highly extendable**: Choose from various available default plugins, or write your own, and compile it in binary
 - **Multiple Transports**: QUIC (multiplexed, built-in TLS), TCP (raw throughput), Unix (same-host IPC, fastest for local clients) — same protocol, choose what fits
 - **gRPC Interface**: Modern, language-agnostic RPC interface for easy integration
 - **Keep-Alive Mechanism**: Automatic connection health monitoring
@@ -37,7 +37,7 @@ Fujin provides multiple client interfaces to suit different needs:
 
 ### Fujin Native Protocol
 
-Optimized binary protocol with minimal overhead. Best for high-performance applications. The protocol layer is transport-agnostic and supports two transports:
+Optimized binary protocol with minimal overhead. Best for high-performance applications. The protocol layer is transport-agnostic and supports multiple transports out of the box:
 
 - **QUIC** — Multiplexed streams over UDP with built-in TLS. Ideal when you need multiple concurrent streams, built-in encryption, and connection migration.
 - **TCP** — Plain TCP (with optional TLS). Delivers higher raw throughput (~3x faster than QUIC on large payloads). Best when you need maximum single-stream performance over a reliable network.
@@ -82,7 +82,7 @@ fujin/
 │   ├── main.go                 # Default server (all plugins)
 │   └── builder/                # Custom binary builder (selective plugins)
 ├── public/                     # Public API and plugins
-│   ├── plugins/                # Connectors, configurators, middlewares
+│   ├── plugins/                # Transport, onnectors, configurators, middlewares
 │   ├── proto/                  # gRPC and Fujin protocol definitions
 │   ├── server/                 # Server abstraction and config
 │   └── service/                # Core service (RunCLI)
@@ -91,9 +91,6 @@ fujin/
 │   │   ├── pool/               # Zero-allocation byte pool
 │   │   └── proto/response/     # Response builders
 │   └── transport/              # Transport implementations
-│       ├── quic/               # QUIC transport (quic-go)
-│       ├── tcp/                # TCP transport
-│       ├── unix/               # Unix domain sockets
 │       └── grpc/               # gRPC transport
 ├── examples/                   # Sample configs and runnable examples
 ├── resources/                  # Docker Compose, example configs
@@ -118,13 +115,9 @@ Full raw results: [`test/bench_test.txt`](test/bench_test.txt).
 The server uses Go build tags to conditionally compile transports:
 
 **Available Build Tags:**
-- **Transports**:
-  - `quic` - QUIC transport for the Fujin protocol (multiplexed, built-in TLS)
-  - `tcp` - TCP transport for the Fujin protocol (raw throughput)
-  - `unix` - Unix domain sockets (automatically enabled on Linux/macOS, not available on Windows)
+- **Protocols**:
+  - `fujin` - Transport-agnostic Fujin protocol
   - `grpc` - gRPC server (language-agnostic)
-
-The Fujin protocol code compiles when any dependent transport is enabled (`quic`, `tcp`, or on Unix platforms `unix` is implicit).
 
 **Building the server:**
 
@@ -134,16 +127,13 @@ The Makefile uses the [Custom Binary Builder](#custom-binary-builder) to build F
 # Build with all transports (default)
 make build
 
-# Build with QUIC only
-make build GO_BUILD_TAGS="quic"
-
-# Build with TCP only
-make build GO_BUILD_TAGS="tcp"
+# Build with Fujin only
+make build GO_BUILD_TAGS="fujin"
 
 # Build with all transports
-make build GO_BUILD_TAGS="quic,tcp,grpc"
+make build GO_BUILD_TAGS="fujin,grpc"
 
-# Build minimal (Kafka only, QUIC+gRPC)
+# Build minimal (Kafka only, Fujin+gRPC)
 make build CONNECTORS=github.com/fujin-io/fujin/public/plugins/connector/kafka/franz
 
 # Build with selected connectors
@@ -151,8 +141,8 @@ make build CONNECTORS="github.com/fujin-io/fujin/public/plugins/connector/kafka/
 ```
 
 **Binary Size Comparison (With kafka connector):**
-- With QUIC only: ~10 MB
-- With QUIC + gRPC: ~16 MB (full)
+- With Fujin only: ~10 MB
+- With Fujin + gRPC: ~16 MB (full)
 
 ### Custom Binary Builder
 
@@ -167,28 +157,31 @@ The `cmd/builder` tool builds a **minimal Fujin binary** containing only the plu
 
 ```bash
 go run ./cmd/builder \
-  -configurator github.com/fujin-io/fujin/public/plugins/configurator/file \
+  -transport github.com/fujin-io/fujin/public/plugins/transport/tcp \
+  -configurator github.com/fujin-io/fujin/public/plugins/configurator/yaml \
   -connector github.com/fujin-io/fujin/public/plugins/connector/kafka/franz \
   -connector github.com/fujin-io/fujin/public/plugins/connector/nats/core \
   -bind-middleware github.com/fujin-io/fujin/public/plugins/middleware/bind/auth_api_key \
   -connector-middleware github.com/fujin-io/fujin/public/plugins/middleware/connector/prom \
-  -tags "quic,tcp,grpc" \
+  -tags "fujin,grpc" \
   -output ./bin/fujin-minimal
 ```
 
 **Flags:**
 | Flag | Description |
 |------|-------------|
+| `-transport` | Transport |
 | `-configurator` | Config loader (at least one required, typically `yaml`) |
 | `-connector` | Broker connectors (repeat for multiple) |
 | `-bind-middleware` | Bind/auth middleware |
 | `-connector-middleware` | Connector middleware |
-| `-tags` | Go build tags: `quic`, `tcp`, `unix`, `grpc` for transports; |
+| `-tags` | Go build tags: `fujin`, `grpc` for protocols; |
 | `-output` | Output binary path (default: `fujin`) |
 | `-cgo` | Enable CGO (if required by custom plugins) |
 
 **Available default plugins:**
-- Configurators: `public/plugins/configurator/file`
+- Transports: `tcp`, `quic`, `unix`
+- Configurators: `yaml`
 - Connectors: `kafka`, `nats/core`, `rabbitmq_amqp09`, `azure_amqp1`, `resp/pubsub`, `resp/streams`, `mqtt`, `nsq`
 - Bind middlewares: `auth_api_key`
 - Connector middlewares: `prom`, `otel`

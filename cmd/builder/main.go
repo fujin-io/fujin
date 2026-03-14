@@ -21,7 +21,7 @@ var (
 	bindMiddlewares stringSlice
 	connMiddlewares stringSlice
 	output          = flag.String("output", "fujin", "Output binary path")
-	buildTags       = flag.String("tags", "netgo,osusergo", "Build tags for the final binary (e.g. quic,tcp,grpc for transports)")
+	buildTags       = flag.String("tags", "netgo,osusergo", "Build tags for the final binary (e.g. fujin,grpc for transports)")
 	extraLdflags    = flag.String("ldflags", "", "Extra ldflags (e.g. -X main.Version=1.0.0)")
 	cgoEnabled      = flag.Bool("cgo", false, "Enable CGO (required by some plugins)")
 	localModule     = flag.Bool("local", false, "Use local fujin module (for builds from source)")

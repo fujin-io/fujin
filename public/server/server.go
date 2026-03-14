@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -59,6 +60,7 @@ func NewServer(conf config.Config, l *slog.Logger) (*Server, error) {
 func (s *Server) ListenAndServe(ctx context.Context) error {
 	eg, eCtx := errgroup.WithContext(ctx)
 
+	fmt.Println(s == nil)
 	for _, ts := range s.transportServers {
 		ts := ts
 		eg.Go(func() error {
@@ -78,6 +80,8 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 func (s *Server) ReadyForConnections(timeout time.Duration) bool {
 	ready := make(chan struct{})
 	go func() {
+		fmt.Println(s == nil)
+		fmt.Println(s.transportServers)
 		for _, ts := range s.transportServers {
 			if !ts.ReadyForConnections(timeout) {
 				return
