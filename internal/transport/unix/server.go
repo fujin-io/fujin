@@ -43,7 +43,6 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		return fmt.Errorf("unix: path is required")
 	}
 
-	// Remove stale socket file if it exists
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("unix: remove stale socket: %w", err)
 	}
@@ -57,7 +56,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 
 	defer func() {
 		ln.Close()
-		os.Remove(path) // best-effort cleanup
+		os.Remove(path)
 
 		timeout := time.After(30 * time.Second)
 		doneCh := make(chan struct{})

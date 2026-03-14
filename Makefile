@@ -5,7 +5,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev
 
 FUJIN_PKG := github.com/fujin-io/fujin
 
-ALL_TAGS = grpc,quic,tcp
+ALL_TAGS = grpc,quic,tcp,unix
 
 GO_BUILD_TAGS ?= ${ALL_TAGS}
 

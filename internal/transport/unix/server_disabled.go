@@ -22,7 +22,7 @@ type Server struct {
 func NewServer(conf serverconfig.UnixServerConfig, baseConfig connectorconfig.ConnectorsConfig, l *slog.Logger) *Server {
 	return &Server{
 		conf: conf,
-		l:    l.With("server", "fujin-unix"),
+		l:    l.With("server", "fujin_unix"),
 	}
 }
 
