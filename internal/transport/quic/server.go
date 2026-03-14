@@ -41,7 +41,7 @@ func NewFujinServer(conf serverconfig.QUICServerConfig, baseConfig connectorconf
 		baseConfig: baseConfig,
 		ready:      make(chan struct{}),
 		done:       make(chan struct{}),
-		l:          l.With("server", "fujin"),
+		l:          l.With("server", "fujin_quic"),
 	}
 }
 

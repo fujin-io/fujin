@@ -41,7 +41,7 @@ fujin/
 │   ├── plugins/                # Connectors, configurators, middlewares
 │   │   ├── connector/          # Kafka, NATS, AMQP, MQTT, NSQ, RESP...
 │   │   ├── configurator/       # File-based config loader
-│   │   └── middleware/         # Bind (auth_api_key) and connector (metrics, tracing)
+│   │   └── middleware/         # Bind (auth_api_key) and connector middlewares (prom, otel)
 │   ├── proto/                  # gRPC and Fujin protocol definitions
 │   ├── server/                 # Server abstraction and config
 │   └── service/                # Core service (RunCLI)
@@ -83,7 +83,7 @@ go run ./cmd/builder -local \
   -configurator github.com/fujin-io/fujin/public/plugins/configurator/file \
   -connector github.com/fujin-io/fujin/public/plugins/connector/kafka/franz \
   -bind-middleware github.com/fujin-io/fujin/public/plugins/middleware/bind/auth_api_key \
-  -connector-middleware github.com/fujin-io/fujin/public/plugins/middleware/connector/metrics \
+  -connector-middleware github.com/fujin-io/fujin/public/plugins/middleware/connector/prom \
   -tags "quic,tcp,grpc" \
   -output ./bin/fujin
 ```

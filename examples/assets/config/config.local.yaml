@@ -55,14 +55,14 @@ connectors:
         disabled: true
     # Connector middlewares are applied to the connector
     # Available middlewares:
-    #   - metrics: Prometheus metrics collection
-    #   - tracing: OpenTelemetry distributed tracing
+    #   - prom: Prometheus metrics collection
+    #   - otel: OpenTelemetry distributed tracing
     # Each connector middleware can be disabled via config:
-    #   - name: metrics
+    #   - name: prom
     #     disabled: true
     connector_middlewares:
-      - name: metrics
-      - name: tracing
+      - name: prom
+      - name: otel
     settings:
       common:
         # broker settings

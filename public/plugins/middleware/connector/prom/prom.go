@@ -1,19 +1,19 @@
-// Package metrics provides a Prometheus metrics connector for connectors.
+// Package prom provides a Prometheus metrics connector for connectors.
 // Import this package to enable metrics collection:
 //
-//	import _ "github.com/fujin-io/fujin/public/plugins/middleware/connector/metrics"
+//	import _ "github.com/fujin-io/fujin/public/plugins/middleware/connector/prom"
 //
 // Configure in YAML:
 //
 //	connector_middlewares:
-//	  - name: metrics
+//	  - name: prom
 //	    config:
 //	      enabled: true
 //	      addr: ":9090"      # HTTP server address for /metrics endpoint
 //	      path: "/metrics"   # Metrics endpoint path
 //
 // Only one http server will be started to serve metrics.
-package metrics
+package prom
 
 import (
 	"context"
@@ -41,7 +41,7 @@ var (
 	httpSrvOnce sync.Once
 )
 
-// Config for metrics connector
+// Config for prom connector middleware
 type Config struct {
 	Disabled bool   `yaml:"enabled"`
 	Addr     string `yaml:"addr"` // HTTP server address (e.g., ":9090")
@@ -49,12 +49,12 @@ type Config struct {
 }
 
 func init() {
-	if err := cmv.Register("metrics", newMetricsMiddleware); err != nil {
-		panic(fmt.Sprintf("register metrics connector: %v", err))
+	if err := cmv.Register("prom", newPromMiddleware); err != nil {
+		panic(fmt.Sprintf("register prom connector middleware: %v", err))
 	}
 }
 
-func newMetricsMiddleware(config any, l *slog.Logger) (cmv.Middleware, error) {
+func newPromMiddleware(config any, l *slog.Logger) (cmv.Middleware, error) {
 	cfg := Config{
 		Addr: ":9090",    // default address
 		Path: "/metrics", // default path
@@ -80,14 +80,14 @@ func newMetricsMiddleware(config any, l *slog.Logger) (cmv.Middleware, error) {
 	}
 
 	if !cfg.Disabled {
-		initMetrics()
+		initProm()
 		initHTTPServer(cfg.Addr, cfg.Path, l)
 	}
 
-	return &metricsMiddleware{disabled: cfg.Disabled, l: l}, nil
+	return &promMiddleware{disabled: cfg.Disabled, l: l}, nil
 }
 
-func initMetrics() {
+func initProm() {
 	once.Do(func() {
 		opsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "fujin_ops_total",
@@ -134,7 +134,7 @@ func Init(ctx context.Context, addr, path string, l *slog.Logger) error {
 	if path == "" {
 		path = "/metrics"
 	}
-	initMetrics()
+	initProm()
 	initHTTPServer(addr, path, l)
 	return nil
 }
@@ -168,34 +168,34 @@ func ObserveProduceLatency(connector string, d time.Duration) {
 	}
 }
 
-// metricsMiddleware implements connector.Middleware
-type metricsMiddleware struct {
+// promMiddleware implements connector.Middleware
+type promMiddleware struct {
 	disabled bool
 	l        *slog.Logger
 }
 
-func (d *metricsMiddleware) WrapWriter(w connector.WriteCloser, connectorName string) connector.WriteCloser {
+func (d *promMiddleware) WrapWriter(w connector.WriteCloser, connectorName string) connector.WriteCloser {
 	if d.disabled {
 		return w
 	}
-	return &metricsWriterWrapper{w: w, connectorName: connectorName}
+	return &promWriterWrapper{w: w, connectorName: connectorName}
 }
 
-func (d *metricsMiddleware) WrapReader(r connector.ReadCloser, connectorName string) connector.ReadCloser {
+func (d *promMiddleware) WrapReader(r connector.ReadCloser, connectorName string) connector.ReadCloser {
 	if d.disabled {
 		return r
 	}
-	return &metricsReaderWrapper{r: r, connectorName: connectorName}
+	return &promReaderWrapper{r: r, connectorName: connectorName}
 }
 
 // Writer wrapper
 
-type metricsWriterWrapper struct {
+type promWriterWrapper struct {
 	w             connector.WriteCloser
 	connectorName string
 }
 
-func (d *metricsWriterWrapper) Produce(ctx context.Context, msg []byte, callback func(err error)) {
+func (d *promWriterWrapper) Produce(ctx context.Context, msg []byte, callback func(err error)) {
 	start := time.Now()
 	d.w.Produce(ctx, msg, func(err error) {
 		IncOp("produce", d.connectorName)
@@ -209,7 +209,7 @@ func (d *metricsWriterWrapper) Produce(ctx context.Context, msg []byte, callback
 	})
 }
 
-func (d *metricsWriterWrapper) HProduce(ctx context.Context, msg []byte, headers [][]byte, callback func(err error)) {
+func (d *promWriterWrapper) HProduce(ctx context.Context, msg []byte, headers [][]byte, callback func(err error)) {
 	start := time.Now()
 	d.w.HProduce(ctx, msg, headers, func(err error) {
 		IncOp("hproduce", d.connectorName)
@@ -223,7 +223,7 @@ func (d *metricsWriterWrapper) HProduce(ctx context.Context, msg []byte, headers
 	})
 }
 
-func (d *metricsWriterWrapper) Flush(ctx context.Context) error {
+func (d *promWriterWrapper) Flush(ctx context.Context) error {
 	err := d.w.Flush(ctx)
 	if err != nil {
 		IncError("flush", d.connectorName)
@@ -231,7 +231,7 @@ func (d *metricsWriterWrapper) Flush(ctx context.Context) error {
 	return err
 }
 
-func (d *metricsWriterWrapper) BeginTx(ctx context.Context) error {
+func (d *promWriterWrapper) BeginTx(ctx context.Context) error {
 	IncOp("begin_tx", d.connectorName)
 	err := d.w.BeginTx(ctx)
 	if err != nil {
@@ -240,7 +240,7 @@ func (d *metricsWriterWrapper) BeginTx(ctx context.Context) error {
 	return err
 }
 
-func (d *metricsWriterWrapper) CommitTx(ctx context.Context) error {
+func (d *promWriterWrapper) CommitTx(ctx context.Context) error {
 	IncOp("commit_tx", d.connectorName)
 	err := d.w.CommitTx(ctx)
 	if err != nil {
@@ -249,7 +249,7 @@ func (d *metricsWriterWrapper) CommitTx(ctx context.Context) error {
 	return err
 }
 
-func (d *metricsWriterWrapper) RollbackTx(ctx context.Context) error {
+func (d *promWriterWrapper) RollbackTx(ctx context.Context) error {
 	IncOp("rollback_tx", d.connectorName)
 	err := d.w.RollbackTx(ctx)
 	if err != nil {
@@ -258,7 +258,7 @@ func (d *metricsWriterWrapper) RollbackTx(ctx context.Context) error {
 	return err
 }
 
-func (d *metricsWriterWrapper) Close() error {
+func (d *promWriterWrapper) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	_ = Shutdown(ctx)
@@ -267,12 +267,12 @@ func (d *metricsWriterWrapper) Close() error {
 
 // Reader wrapper
 
-type metricsReaderWrapper struct {
+type promReaderWrapper struct {
 	r             connector.ReadCloser
 	connectorName string
 }
 
-func (d *metricsReaderWrapper) Subscribe(ctx context.Context, h func(message []byte, topic string, args ...any)) error {
+func (d *promReaderWrapper) Subscribe(ctx context.Context, h func(message []byte, topic string, args ...any)) error {
 	IncOp("subscribe", d.connectorName)
 	return d.r.Subscribe(
 		ctx,
@@ -283,7 +283,7 @@ func (d *metricsReaderWrapper) Subscribe(ctx context.Context, h func(message []b
 	)
 }
 
-func (d *metricsReaderWrapper) SubscribeWithHeaders(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error {
+func (d *promReaderWrapper) SubscribeWithHeaders(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error {
 	IncOp("hsubscribe", d.connectorName)
 	return d.r.SubscribeWithHeaders(
 		ctx,
@@ -294,7 +294,7 @@ func (d *metricsReaderWrapper) SubscribeWithHeaders(ctx context.Context, h func(
 	)
 }
 
-func (d *metricsReaderWrapper) Fetch(ctx context.Context, n uint32, fetchResponseHandler func(n uint32, err error), msgHandler func(message []byte, topic string, args ...any)) {
+func (d *promReaderWrapper) Fetch(ctx context.Context, n uint32, fetchResponseHandler func(n uint32, err error), msgHandler func(message []byte, topic string, args ...any)) {
 	frh := func(n uint32, err error) {
 		IncOp("fetch", d.connectorName)
 		if err != nil {
@@ -305,7 +305,7 @@ func (d *metricsReaderWrapper) Fetch(ctx context.Context, n uint32, fetchRespons
 	d.r.Fetch(ctx, n, frh, msgHandler)
 }
 
-func (d *metricsReaderWrapper) FetchWithHeaders(ctx context.Context, n uint32, fetchResponseHandler func(n uint32, err error), msgHandler func(message []byte, topic string, hs [][]byte, args ...any)) {
+func (d *promReaderWrapper) FetchWithHeaders(ctx context.Context, n uint32, fetchResponseHandler func(n uint32, err error), msgHandler func(message []byte, topic string, hs [][]byte, args ...any)) {
 	frh := func(n uint32, err error) {
 		IncOp("hfetch", d.connectorName)
 		if err != nil {
@@ -316,7 +316,7 @@ func (d *metricsReaderWrapper) FetchWithHeaders(ctx context.Context, n uint32, f
 	d.r.FetchWithHeaders(ctx, n, frh, msgHandler)
 }
 
-func (d *metricsReaderWrapper) Ack(ctx context.Context, msgIDs [][]byte, ackHandler func(error), ackMsgHandler func([]byte, error)) {
+func (d *promReaderWrapper) Ack(ctx context.Context, msgIDs [][]byte, ackHandler func(error), ackMsgHandler func([]byte, error)) {
 	d.r.Ack(
 		ctx, msgIDs,
 		func(err error) {
@@ -335,7 +335,7 @@ func (d *metricsReaderWrapper) Ack(ctx context.Context, msgIDs [][]byte, ackHand
 	)
 }
 
-func (d *metricsReaderWrapper) Nack(ctx context.Context, msgIDs [][]byte, nackHandler func(error), nackMsgHandler func([]byte, error)) {
+func (d *promReaderWrapper) Nack(ctx context.Context, msgIDs [][]byte, nackHandler func(error), nackMsgHandler func([]byte, error)) {
 	d.r.Nack(
 		ctx, msgIDs,
 		func(err error) {
@@ -354,19 +354,19 @@ func (d *metricsReaderWrapper) Nack(ctx context.Context, msgIDs [][]byte, nackHa
 	)
 }
 
-func (d *metricsReaderWrapper) MsgIDArgsLen() int {
+func (d *promReaderWrapper) MsgIDArgsLen() int {
 	return d.r.MsgIDArgsLen()
 }
 
-func (d *metricsReaderWrapper) EncodeMsgID(buf []byte, topic string, args ...any) []byte {
+func (d *promReaderWrapper) EncodeMsgID(buf []byte, topic string, args ...any) []byte {
 	return d.r.EncodeMsgID(buf, topic, args...)
 }
 
-func (d *metricsReaderWrapper) AutoCommit() bool {
+func (d *promReaderWrapper) AutoCommit() bool {
 	return d.r.AutoCommit()
 }
 
-func (d *metricsReaderWrapper) Close() error {
+func (d *promReaderWrapper) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	_ = Shutdown(ctx)

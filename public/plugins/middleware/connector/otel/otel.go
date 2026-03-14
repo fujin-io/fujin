@@ -1,15 +1,15 @@
-// Package tracing provides an OpenTelemetry distributed tracing connector middleware for connectors.
+// Package otel provides an OpenTelemetry distributed tracing connector middleware for connectors.
 // Import this package to enable distributed tracing:
 //
-//	import _ "github.com/fujin-io/fujin/public/plugins/middleware/connector/tracing"
+//	import _ "github.com/fujin-io/fujin/public/plugins/middleware/connector/otel"
 //
 // Configure in YAML:
 //
 //	connector_middlewares:
-//	  - name: tracing
+//	  - name: otel
 //	    config:
 //	      enabled: true
-package tracing
+package otel
 
 import (
 	"context"
@@ -38,7 +38,7 @@ var (
 	tracerProviderOnce   sync.Once
 )
 
-// Config for tracing connector middleware
+// Config for otel connector middleware
 type Config struct {
 	Disabled       bool    `yaml:"disabled"`
 	OTLPEndpoint   string  `yaml:"otlp_endpoint"`
@@ -50,12 +50,12 @@ type Config struct {
 }
 
 func init() {
-	if err := cmw.Register("tracing", newTracingMiddleware); err != nil {
-		panic(fmt.Sprintf("register tracing connector middleware: %v", err))
+	if err := cmw.Register("otel", newOtelMiddleware); err != nil {
+		panic(fmt.Sprintf("register otel connector middleware: %v", err))
 	}
 }
 
-func newTracingMiddleware(config any, l *slog.Logger) (cmw.Middleware, error) {
+func newOtelMiddleware(config any, l *slog.Logger) (cmw.Middleware, error) {
 	cfg := Config{
 		OTLPEndpoint:   "localhost:4317",
 		Insecure:       true,
@@ -110,7 +110,7 @@ func newTracingMiddleware(config any, l *slog.Logger) (cmw.Middleware, error) {
 		initTracerProvider(ctx, cfg, l)
 	}
 
-	return &tracingMiddleware{disabled: cfg.Disabled, l: l}, nil
+	return &otelMiddleware{disabled: cfg.Disabled, l: l}, nil
 }
 
 // initTracerProvider initializes the OpenTelemetry tracer provider (globally, once)
@@ -141,7 +141,7 @@ func initTracerProvider(ctx context.Context, cfg Config, l *slog.Logger) {
 		)
 		otel.SetTracerProvider(tracerProvider)
 		otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
-		l.Info("tracing initialized", "endpoint", cfg.OTLPEndpoint, "service", cfg.ServiceName)
+		l.Info("otel initialized", "endpoint", cfg.OTLPEndpoint, "service", cfg.ServiceName)
 	})
 }
 
@@ -153,24 +153,24 @@ func Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// tracingMiddleware implements connector.Middleware
-type tracingMiddleware struct {
+// otelMiddleware implements connector.Middleware
+type otelMiddleware struct {
 	disabled bool
 	l        *slog.Logger
 }
 
-func (d *tracingMiddleware) WrapWriter(w connector.WriteCloser, connectorName string) connector.WriteCloser {
+func (d *otelMiddleware) WrapWriter(w connector.WriteCloser, connectorName string) connector.WriteCloser {
 	if d.disabled {
 		return w
 	}
-	return &tracingWriterWrapper{w: w, connectorName: connectorName}
+	return &otelWriterWrapper{w: w, connectorName: connectorName}
 }
 
-func (d *tracingMiddleware) WrapReader(r connector.ReadCloser, connectorName string) connector.ReadCloser {
+func (d *otelMiddleware) WrapReader(r connector.ReadCloser, connectorName string) connector.ReadCloser {
 	if d.disabled {
 		return r
 	}
-	return &tracingReaderWrapper{r: r, connectorName: connectorName}
+	return &otelReaderWrapper{r: r, connectorName: connectorName}
 }
 
 // Helper functions
@@ -230,12 +230,12 @@ func (c byteHeadersCarrier) Keys() []string {
 
 // Writer wrapper
 
-type tracingWriterWrapper struct {
+type otelWriterWrapper struct {
 	w             connector.WriteCloser
 	connectorName string
 }
 
-func (d *tracingWriterWrapper) Produce(ctx context.Context, msg []byte, callback func(err error)) {
+func (d *otelWriterWrapper) Produce(ctx context.Context, msg []byte, callback func(err error)) {
 	var span trace.Span
 	ctx, span = tracer().Start(ctx, "writer.produce",
 		trace.WithAttributes(
@@ -254,7 +254,7 @@ func (d *tracingWriterWrapper) Produce(ctx context.Context, msg []byte, callback
 	})
 }
 
-func (d *tracingWriterWrapper) HProduce(ctx context.Context, msg []byte, headers [][]byte, callback func(err error)) {
+func (d *otelWriterWrapper) HProduce(ctx context.Context, msg []byte, headers [][]byte, callback func(err error)) {
 	var span trace.Span
 	ctx, span = tracer().Start(ctx, "writer.hproduce",
 		trace.WithAttributes(
@@ -277,7 +277,7 @@ func (d *tracingWriterWrapper) HProduce(ctx context.Context, msg []byte, headers
 	})
 }
 
-func (d *tracingWriterWrapper) Flush(ctx context.Context) error {
+func (d *otelWriterWrapper) Flush(ctx context.Context) error {
 	var span trace.Span
 	ctx, span = tracer().Start(ctx, "writer.flush",
 		trace.WithAttributes(
@@ -293,7 +293,7 @@ func (d *tracingWriterWrapper) Flush(ctx context.Context) error {
 	return err
 }
 
-func (d *tracingWriterWrapper) BeginTx(ctx context.Context) error {
+func (d *otelWriterWrapper) BeginTx(ctx context.Context) error {
 	var span trace.Span
 	ctx, span = tracer().Start(ctx, "writer.begin_tx",
 		trace.WithAttributes(
@@ -309,7 +309,7 @@ func (d *tracingWriterWrapper) BeginTx(ctx context.Context) error {
 	return err
 }
 
-func (d *tracingWriterWrapper) CommitTx(ctx context.Context) error {
+func (d *otelWriterWrapper) CommitTx(ctx context.Context) error {
 	var span trace.Span
 	ctx, span = tracer().Start(ctx, "writer.commit_tx",
 		trace.WithAttributes(
@@ -325,7 +325,7 @@ func (d *tracingWriterWrapper) CommitTx(ctx context.Context) error {
 	return err
 }
 
-func (d *tracingWriterWrapper) RollbackTx(ctx context.Context) error {
+func (d *otelWriterWrapper) RollbackTx(ctx context.Context) error {
 	var span trace.Span
 	ctx, span = tracer().Start(ctx, "writer.rollback_tx",
 		trace.WithAttributes(
@@ -341,7 +341,7 @@ func (d *tracingWriterWrapper) RollbackTx(ctx context.Context) error {
 	return err
 }
 
-func (d *tracingWriterWrapper) Close() error {
+func (d *otelWriterWrapper) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	_ = Shutdown(ctx)
@@ -350,12 +350,12 @@ func (d *tracingWriterWrapper) Close() error {
 
 // Reader wrapper
 
-type tracingReaderWrapper struct {
+type otelReaderWrapper struct {
 	r             connector.ReadCloser
 	connectorName string
 }
 
-func (d *tracingReaderWrapper) Subscribe(ctx context.Context, h func(message []byte, topic string, args ...any)) error {
+func (d *otelReaderWrapper) Subscribe(ctx context.Context, h func(message []byte, topic string, args ...any)) error {
 	return d.r.Subscribe(
 		ctx,
 		func(message []byte, topic string, args ...any) {
@@ -371,7 +371,7 @@ func (d *tracingReaderWrapper) Subscribe(ctx context.Context, h func(message []b
 	)
 }
 
-func (d *tracingReaderWrapper) SubscribeWithHeaders(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error {
+func (d *otelReaderWrapper) SubscribeWithHeaders(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error {
 	return d.r.SubscribeWithHeaders(
 		ctx,
 		func(message []byte, topic string, hs [][]byte, args ...any) {
@@ -389,7 +389,7 @@ func (d *tracingReaderWrapper) SubscribeWithHeaders(ctx context.Context, h func(
 	)
 }
 
-func (d *tracingReaderWrapper) Fetch(ctx context.Context, n uint32, fetchResponseHandler func(n uint32, err error), msgHandler func(message []byte, topic string, args ...any)) {
+func (d *otelReaderWrapper) Fetch(ctx context.Context, n uint32, fetchResponseHandler func(n uint32, err error), msgHandler func(message []byte, topic string, args ...any)) {
 	d.r.Fetch(ctx, n,
 		func(n uint32, err error) {
 			_, span := tracer().Start(ctx, "reader.fetch.handle",
@@ -414,7 +414,7 @@ func (d *tracingReaderWrapper) Fetch(ctx context.Context, n uint32, fetchRespons
 	)
 }
 
-func (d *tracingReaderWrapper) FetchWithHeaders(ctx context.Context, n uint32, fetchResponseHandler func(n uint32, err error), msgHandler func(message []byte, topic string, hs [][]byte, args ...any)) {
+func (d *otelReaderWrapper) FetchWithHeaders(ctx context.Context, n uint32, fetchResponseHandler func(n uint32, err error), msgHandler func(message []byte, topic string, hs [][]byte, args ...any)) {
 	d.r.FetchWithHeaders(ctx, n,
 		func(n uint32, err error) {
 			_, span := tracer().Start(ctx, "reader.hfetch.handle",
@@ -441,7 +441,7 @@ func (d *tracingReaderWrapper) FetchWithHeaders(ctx context.Context, n uint32, f
 	)
 }
 
-func (d *tracingReaderWrapper) Ack(ctx context.Context, msgIDs [][]byte, ackHandler func(error), ackMsgHandler func([]byte, error)) {
+func (d *otelReaderWrapper) Ack(ctx context.Context, msgIDs [][]byte, ackHandler func(error), ackMsgHandler func([]byte, error)) {
 	d.r.Ack(ctx, msgIDs,
 		func(err error) {
 			_, span := tracer().Start(ctx, "reader.ack.handle",
@@ -466,7 +466,7 @@ func (d *tracingReaderWrapper) Ack(ctx context.Context, msgIDs [][]byte, ackHand
 	)
 }
 
-func (d *tracingReaderWrapper) Nack(ctx context.Context, msgIDs [][]byte, nackHandler func(error), nackMsgHandler func([]byte, error)) {
+func (d *otelReaderWrapper) Nack(ctx context.Context, msgIDs [][]byte, nackHandler func(error), nackMsgHandler func([]byte, error)) {
 	d.r.Nack(ctx, msgIDs,
 		func(err error) {
 			_, span := tracer().Start(ctx, "reader.nack.handle",
@@ -491,19 +491,19 @@ func (d *tracingReaderWrapper) Nack(ctx context.Context, msgIDs [][]byte, nackHa
 	)
 }
 
-func (d *tracingReaderWrapper) MsgIDArgsLen() int {
+func (d *otelReaderWrapper) MsgIDArgsLen() int {
 	return d.r.MsgIDArgsLen()
 }
 
-func (d *tracingReaderWrapper) EncodeMsgID(buf []byte, topic string, args ...any) []byte {
+func (d *otelReaderWrapper) EncodeMsgID(buf []byte, topic string, args ...any) []byte {
 	return d.r.EncodeMsgID(buf, topic, args...)
 }
 
-func (d *tracingReaderWrapper) AutoCommit() bool {
+func (d *otelReaderWrapper) AutoCommit() bool {
 	return d.r.AutoCommit()
 }
 
-func (d *tracingReaderWrapper) Close() error {
+func (d *otelReaderWrapper) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	_ = Shutdown(ctx)

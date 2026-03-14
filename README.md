@@ -171,7 +171,7 @@ go run ./cmd/builder \
   -connector github.com/fujin-io/fujin/public/plugins/connector/kafka/franz \
   -connector github.com/fujin-io/fujin/public/plugins/connector/nats/core \
   -bind-middleware github.com/fujin-io/fujin/public/plugins/middleware/bind/auth_api_key \
-  -connector-middleware github.com/fujin-io/fujin/public/plugins/middleware/connector/metrics \
+  -connector-middleware github.com/fujin-io/fujin/public/plugins/middleware/connector/prom \
   -tags "quic,tcp,grpc" \
   -output ./bin/fujin-minimal
 ```
@@ -179,19 +179,19 @@ go run ./cmd/builder \
 **Flags:**
 | Flag | Description |
 |------|-------------|
-| `-configurator` | Config loader (at least one required, typically `file`) |
+| `-configurator` | Config loader (at least one required, typically `yaml`) |
 | `-connector` | Broker connectors (repeat for multiple) |
-| `-bind-middleware` | Bind/auth middleware (e.g. `auth_api_key`) |
-| `-connector-middleware` | Connector middleware (e.g. `metrics`, `tracing`) |
-| `-tags` | Go build tags: `quic`, `tcp`, `grpc` for transports; |
+| `-bind-middleware` | Bind/auth middleware |
+| `-connector-middleware` | Connector middleware |
+| `-tags` | Go build tags: `quic`, `tcp`, `unix`, `grpc` for transports; |
 | `-output` | Output binary path (default: `fujin`) |
 | `-cgo` | Enable CGO (if required by custom plugins) |
 
 **Available default plugins:**
 - Configurators: `public/plugins/configurator/file`
-- Connectors: `kafka`, `nats/core`, `rabbitmq_amqp09`, `azure_amqp1`, `resp/pubsub`, `resp/streams`, `mqtt`, `nsq`, `zeromq/zmq4`
+- Connectors: `kafka`, `nats/core`, `rabbitmq_amqp09`, `azure_amqp1`, `resp/pubsub`, `resp/streams`, `mqtt`, `nsq`
 - Bind middlewares: `auth_api_key`
-- Connector middlewares: `metrics`, `tracing`
+- Connector middlewares: `prom`, `otel`
 
 Use full package paths, e.g. `github.com/fujin-io/fujin/public/plugins/connector/kafka/franz`.
 

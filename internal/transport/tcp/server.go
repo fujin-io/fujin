@@ -33,7 +33,7 @@ func NewServer(conf serverconfig.TCPServerConfig, baseConfig connectorconfig.Con
 		baseConfig: baseConfig,
 		ready:      make(chan struct{}),
 		done:       make(chan struct{}),
-		l:          l.With("server", "fujin-tcp"),
+		l:          l.With("server", "fujin_tcp"),
 	}
 }
 
@@ -113,7 +113,6 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 				BaseConfig:            s.baseConfig,
 				PingInterval:          s.conf.Fujin.PingInterval,
 				PingTimeout:           s.conf.Fujin.PingTimeout,
-				PingStream:            false,
 				WriteDeadline:         s.conf.Fujin.WriteDeadline,
 				ForceTerminateTimeout: s.conf.Fujin.ForceTerminateTimeout,
 				AbortRead:             func() { conn.SetReadDeadline(time.Now()) },
