@@ -315,7 +315,6 @@ func (h *Handler) handle(buf []byte) error {
 
 	for i = 0; i < len(buf); i++ {
 		b = buf[i]
-		fmt.Println(b)
 		switch h.ps.state {
 		case OP_START:
 			switch h.sessionState {
@@ -2079,6 +2078,7 @@ func (h *Handler) handle(buf []byte) error {
 
 // handleBind processes BIND command and creates Manager with config overrides
 func (h *Handler) handleBind(meta map[string]string, configOverrides map[string]string) error {
+	fmt.Println("handleBind", meta, configOverrides)
 	if h.connected {
 		// Already initialized, ignore
 		return fmt.Errorf("already initialized")
@@ -2092,11 +2092,19 @@ func (h *Handler) handleBind(meta map[string]string, configOverrides map[string]
 	bindMiddlewareConfigs := make([]bmwconfig.Config, 0, len(h.connectorConfig.BindMiddlewares))
 	bindMiddlewareConfigs = append(bindMiddlewareConfigs, h.connectorConfig.BindMiddlewares...)
 
+	buf := pool.Get(2)[:2]
+	buf[0] = byte(v1.RESP_CODE_BIND)
+	buf[1] = v1.ERR_CODE_NO
+
 	// Process bind middlewares
 	if len(bindMiddlewareConfigs) > 0 {
 		if err := bmw.Chain(h.ctx, meta, bindMiddlewareConfigs, h.l); err != nil {
 			h.l.Warn("bind middleware rejected", "connector", h.ps.ba.connectorNameValue, "err", err)
-			h.out.EnqueueProtoMulti([]byte{byte(v1.RESP_CODE_BIND)}, errProtoBuf(err))
+			buf[1] = v1.ERR_CODE_YES
+			errBuf := errProtoBuf(err)
+			h.out.EnqueueProtoMulti(buf, errBuf)
+			pool.Put(buf)
+			pool.Put(errBuf)
 			return nil
 		}
 	}
@@ -2106,14 +2114,19 @@ func (h *Handler) handleBind(meta map[string]string, configOverrides map[string]
 	if len(overrides) > 0 {
 		modifiedConfigForOverride, err := connectors.ApplyOverrides(h.connectorConfig, overrides)
 		if err != nil {
-			h.out.EnqueueProtoMulti([]byte{byte(v1.RESP_CODE_BIND)}, errProtoBuf(err))
+			buf[1] = v1.ERR_CODE_YES
+			errBuf := errProtoBuf(err)
+			h.out.EnqueueProtoMulti(buf, errBuf)
+			pool.Put(buf)
+			pool.Put(errBuf)
 			return nil
 		} else {
 			modifiedConfig = modifiedConfigForOverride
 		}
 	}
 
-	h.out.EnqueueProto([]byte{byte(v1.RESP_CODE_BIND), v1.ERR_CODE_NO})
+	h.out.EnqueueProtoMulti(buf)
+	pool.Put(buf)
 
 	// Create a new Manager with the modified configuration
 	h.cman = connectors.NewManagerV2(modifiedConfig, h.ps.ba.connectorNameValue, h.l)
