@@ -46,278 +46,258 @@ var DefaultQUICServerTestConfig = config.QUICServerConfig{
 	TLS:     generateTLSConfig(),
 }
 
-var DefaultTestConfigWithNopQUIC = config.Config{
-	QUIC: DefaultQUICServerTestConfig,
-	Connectors: connector_config.ConnectorsConfig{
-		"connector": {
-			Type: "nop",
-		},
-	},
+var DefaultGRPCServerTestConfig = config.GRPCServerConfig{
+	Enabled: true,
+	Addr:    ":4849",
+	TLS:     generateTLSConfig(),
 }
 
-var DefaultTestConfigWithKafka3BrokersQUIC = config.Config{
-	QUIC: DefaultQUICServerTestConfig,
-	Connectors: connector_config.ConnectorsConfig{
-		"connector": {
-			Type: "kafka_franz",
-			Settings: kafka.Config{
-				Common: kafka.CommonSettings{
-					Brokers: []string{"localhost:9092", "localhost:9093", "localhost:9094"},
-				},
-				Clients: map[string]kafka.ClientSpecificSettings{
-					"sub": {
-						ConsumeTopics:          []string{"my_pub_topic"},
-						Group:                  "fujin",
-						AllowAutoTopicCreation: true,
-					},
-					"pub": {
-						ProduceTopic:           "my_pub_topic",
-						AllowAutoTopicCreation: true,
-						Linger:                 10 * time.Millisecond,
-					},
-				},
-			},
-		},
+var DefaultTestConfigWithNopQUIC = MakeConfigWithQUIC(connector_config.ConnectorsConfig{
+	"connector": {
+		Type: "nop",
 	},
-}
+})
 
-var DefaultTestConfigWithNatsQUIC = config.Config{
-	QUIC: DefaultQUICServerTestConfig,
-	Connectors: connector_config.ConnectorsConfig{
-		"connector": {
-			Type: "nats_core",
-			Settings: core.Config{
-				Common: core.CommonSettings{
-					URL: "nats://localhost:4222",
+var DefaultTestConfigWithKafka3BrokersQUIC = MakeConfigWithQUIC(connector_config.ConnectorsConfig{
+	"connector": {
+		Type: "kafka_franz",
+		Settings: kafka.Config{
+			Common: kafka.CommonSettings{
+				Brokers: []string{"localhost:9092", "localhost:9093", "localhost:9094"},
+			},
+			Clients: map[string]kafka.ClientSpecificSettings{
+				"sub": {
+					ConsumeTopics:          []string{"my_pub_topic"},
+					Group:                  "fujin",
+					AllowAutoTopicCreation: true,
 				},
-				Clients: map[string]core.ClientSpecificSettings{
-					"pub": {
-						Subject: "my_subject",
-					},
-					"sub": {
-						Subject: "my_subject",
-					},
+				"pub": {
+					ProduceTopic:           "my_pub_topic",
+					AllowAutoTopicCreation: true,
+					Linger:                 10 * time.Millisecond,
 				},
 			},
 		},
 	},
-}
+})
 
-var DefaultTestConfigWithAMQP091QUIC = config.Config{
-	QUIC: DefaultQUICServerTestConfig,
-	Connectors: connector_config.ConnectorsConfig{
-		"connector": {
-			Type: "rabbitmq_amqp09",
-			Settings: amqp09.Config{
-				Clients: map[string]amqp09.ClientSpecificSettings{
-					"pub": {
-						Conn: amqp09.ConnConfig{
-							URL: "amqp://guest:guest@localhost",
-						},
-						Exchange: amqp09.ExchangeConfig{
-							Name: "events",
-							Kind: "fanout",
-						},
-						Queue: amqp09.QueueConfig{
-							Name: "my_queue",
-						},
-						QueueBind: amqp09.QueueBindConfig{
-							RoutingKey: "my_routing_key",
-						},
-						Publish: &amqp09.PublishConfig{
-							ContentType: "text/plain",
-						},
-					},
-					"sub": {
-						Conn: amqp09.ConnConfig{
-							URL: "amqp://guest:guest@localhost",
-						},
-						Exchange: amqp09.ExchangeConfig{
-							Name: "events",
-							Kind: "fanout",
-						},
-						Queue: amqp09.QueueConfig{
-							Name: "my_queue",
-						},
-						QueueBind: amqp09.QueueBindConfig{
-							RoutingKey: "my_routing_key",
-						},
-						Consume: &amqp09.ConsumeConfig{
-							Consumer: "fujin",
-						},
-					},
+var DefaultTestConfigWithNatsQUIC = MakeConfigWithQUIC(connector_config.ConnectorsConfig{
+	"connector": {
+		Type: "nats_core",
+		Settings: core.Config{
+			Common: core.CommonSettings{
+				URL: "nats://localhost:4222",
+			},
+			Clients: map[string]core.ClientSpecificSettings{
+				"pub": {
+					Subject: "my_subject",
+				},
+				"sub": {
+					Subject: "my_subject",
 				},
 			},
 		},
 	},
-}
+})
 
-var DefaultTestConfigWithAMQP10QUIC = config.Config{
-	QUIC: DefaultQUICServerTestConfig,
-	Connectors: connector_config.ConnectorsConfig{
-		"connector": {
-			Type: "azure_amqp1",
-			Settings: amqp1.Config{
-				Clients: map[string]amqp1.ClientSpecificSettings{
-					"pub": {
-						Conn: amqp1.ConnConfig{
-							Addr: "amqp://artemis:artemis@localhost:61616",
-						},
-						Sender: &amqp1.SenderConfig{
-							Target: "queue",
-						},
+var DefaultTestConfigWithAMQP091QUIC = MakeConfigWithQUIC(connector_config.ConnectorsConfig{
+	"connector": {
+		Type: "rabbitmq_amqp09",
+		Settings: amqp09.Config{
+			Clients: map[string]amqp09.ClientSpecificSettings{
+				"pub": {
+					Conn: amqp09.ConnConfig{
+						URL: "amqp://guest:guest@localhost",
 					},
-					"sub": {
-						Conn: amqp1.ConnConfig{
-							Addr: "amqp://artemis:artemis@localhost:61616",
-						},
-						Receiver: &amqp1.ReceiverConfig{
-							Source: "queue",
-						},
+					Exchange: amqp09.ExchangeConfig{
+						Name: "events",
+						Kind: "fanout",
+					},
+					Queue: amqp09.QueueConfig{
+						Name: "my_queue",
+					},
+					QueueBind: amqp09.QueueBindConfig{
+						RoutingKey: "my_routing_key",
+					},
+					Publish: &amqp09.PublishConfig{
+						ContentType: "text/plain",
+					},
+				},
+				"sub": {
+					Conn: amqp09.ConnConfig{
+						URL: "amqp://guest:guest@localhost",
+					},
+					Exchange: amqp09.ExchangeConfig{
+						Name: "events",
+						Kind: "fanout",
+					},
+					Queue: amqp09.QueueConfig{
+						Name: "my_queue",
+					},
+					QueueBind: amqp09.QueueBindConfig{
+						RoutingKey: "my_routing_key",
+					},
+					Consume: &amqp09.ConsumeConfig{
+						Consumer: "fujin",
 					},
 				},
 			},
 		},
 	},
-}
-var DefaultTestConfigWithRedisPubSubQUIC = config.Config{
-	QUIC: DefaultQUICServerTestConfig,
-	Connectors: connector_config.ConnectorsConfig{
-		"connector": {
-			Type: "redis_rueidis_pubsub",
-			Settings: pubsub.Config{
-				Common: pubsub.CommonSettings{
-					RedisConfig: redis_config.RedisConfig{
-						InitAddress:  []string{"localhost:6379"},
-						DisableCache: true,
-					},
-					WriterBatchConfig: redis_config.WriterBatchConfig{
-						BatchSize: 1000,
-						Linger:    5 * time.Millisecond,
-					},
-				},
-				Clients: map[string]pubsub.ClientSpecificSettings{
-					"pub": {
-						Channel: "channel",
-					},
-					"sub": {
-						Channels: []string{"channel"},
-					},
-				},
-			},
-		},
-	},
-}
+})
 
-var DefaultTestConfigWithRedisStreamsQUIC = config.Config{
-	QUIC: DefaultQUICServerTestConfig,
-	Connectors: connector_config.ConnectorsConfig{
-		"connector": connector_config.ConnectorConfig{
-			Type: "redis_rueidis_streams",
-			Settings: streams.Config{
-				Common: streams.CommonSettings{
-					RedisConfig: redis_config.RedisConfig{
-						InitAddress:  []string{"localhost:6379"},
-						DisableCache: true,
+var DefaultTestConfigWithAMQP10QUIC = MakeConfigWithQUIC(connector_config.ConnectorsConfig{
+	"connector": {
+		Type: "azure_amqp1",
+		Settings: amqp1.Config{
+			Clients: map[string]amqp1.ClientSpecificSettings{
+				"pub": {
+					Conn: amqp1.ConnConfig{
+						Addr: "amqp://artemis:artemis@localhost:61616",
 					},
-					WriterBatchConfig: redis_config.WriterBatchConfig{
-						BatchSize: 1000,
-						Linger:    5 * time.Millisecond,
+					Sender: &amqp1.SenderConfig{
+						Target: "queue",
 					},
 				},
-				Clients: map[string]streams.ClientSpecificSettings{
-					"pub": {
-						Stream: "stream",
+				"sub": {
+					Conn: amqp1.ConnConfig{
+						Addr: "amqp://artemis:artemis@localhost:61616",
 					},
-					"sub": {
-						Streams: map[string]streams.StreamConf{
-							"stream": {
-								StartID:       ">",
-								GroupCreateID: "$",
-							},
-						},
-						Group: streams.GroupConf{
-							Name:     "fujin",
-							Consumer: "fujin",
-						},
+					Receiver: &amqp1.ReceiverConfig{
+						Source: "queue",
 					},
 				},
 			},
 		},
 	},
-}
+})
 
-var DefaultTestConfigWithMQTTQUIC = config.Config{
-	QUIC: DefaultQUICServerTestConfig,
-	Connectors: connector_config.ConnectorsConfig{
-		"connector": {
-			Type: "mqtt_paho",
-			Settings: mqtt.Config{
-				Common: mqtt.CommonSettings{
-					BrokerURL:         "tcp://localhost:1883",
-					KeepAlive:         2,
-					DisconnectTimeout: 5 * time.Second,
-					ConnectTimeout:    300 * time.Second,
+var DefaultTestConfigWithRedisPubSubQUIC = MakeConfigWithQUIC(connector_config.ConnectorsConfig{
+	"connector": {
+		Type: "redis_rueidis_pubsub",
+		Settings: pubsub.Config{
+			Common: pubsub.CommonSettings{
+				RedisConfig: redis_config.RedisConfig{
+					InitAddress:  []string{"localhost:6379"},
+					DisableCache: true,
 				},
-				Clients: map[string]mqtt.ClientSpecificSettings{
-					"pub": {
-						ClientID:      "fujin_pub",
-						Topic:         "my_topic",
-						QoS:           0,
-						Retain:        true,
-						CleanStart:    true,
-						SessionExpiry: 5,
-						Pool: mqtt.PoolConfig{
-							Size:           1000000,
-							PreAlloc:       true,
-							ReleaseTimeout: 30 * time.Second,
-						},
-					},
-					"sub": {
-						ClientID:         "fujin_sub",
-						Topic:            "my_topic",
-						QoS:              0,
-						Retain:           false,
-						CleanStart:       true,
-						SessionExpiry:    0,
-						SendAcksInterval: 50 * time.Millisecond,
-						AckTTL:           5 * time.Minute,
-					},
+				WriterBatchConfig: redis_config.WriterBatchConfig{
+					BatchSize: 1000,
+					Linger:    5 * time.Millisecond,
+				},
+			},
+			Clients: map[string]pubsub.ClientSpecificSettings{
+				"pub": {
+					Channel: "channel",
+				},
+				"sub": {
+					Channels: []string{"channel"},
 				},
 			},
 		},
 	},
-}
+})
 
-var DefaultTestConfigWithNSQQUIC = config.Config{
-	QUIC: DefaultQUICServerTestConfig,
-	Connectors: connector_config.ConnectorsConfig{
-		"connector": {
-			Type: "nsq",
-			Settings: nsq.Config{
-				Common: nsq.CommonSettings{
-					Address:   "localhost:4150",
-					Addresses: []string{"localhost:4150"},
+var DefaultTestConfigWithRedisStreamsQUIC = MakeConfigWithQUIC(connector_config.ConnectorsConfig{
+	"connector": {
+		Type: "redis_rueidis_streams",
+		Settings: streams.Config{
+			Common: streams.CommonSettings{
+				RedisConfig: redis_config.RedisConfig{
+					InitAddress:  []string{"localhost:6379"},
+					DisableCache: true,
 				},
-				Clients: map[string]nsq.ClientSpecificSettings{
-					"pub": {
-						Topic: "my_topic",
-						Pool: nsq.PoolConfig{
-							Size:           1000000,
-							PreAlloc:       true,
-							ReleaseTimeout: 5 * time.Second,
+				WriterBatchConfig: redis_config.WriterBatchConfig{
+					BatchSize: 1000,
+					Linger:    5 * time.Millisecond,
+				},
+			},
+			Clients: map[string]streams.ClientSpecificSettings{
+				"pub": {
+					Stream: "stream",
+				},
+				"sub": {
+					Streams: map[string]streams.StreamConf{
+						"stream": {
+							StartID:       ">",
+							GroupCreateID: "$",
 						},
 					},
-					"sub": {
-						Topic:       "my_topic",
-						Channel:     "my_channel",
-						MaxInFlight: 1000000,
+					Group: streams.GroupConf{
+						Name:     "fujin",
+						Consumer: "fujin",
 					},
 				},
 			},
 		},
 	},
-}
+})
+
+var DefaultTestConfigWithMQTTQUIC = MakeConfigWithQUIC(connector_config.ConnectorsConfig{
+	"connector": {
+		Type: "mqtt_paho",
+		Settings: mqtt.Config{
+			Common: mqtt.CommonSettings{
+				BrokerURL:         "tcp://localhost:1883",
+				KeepAlive:         2,
+				DisconnectTimeout: 5 * time.Second,
+				ConnectTimeout:    300 * time.Second,
+			},
+			Clients: map[string]mqtt.ClientSpecificSettings{
+				"pub": {
+					ClientID:      "fujin_pub",
+					Topic:         "my_topic",
+					QoS:           0,
+					Retain:        true,
+					CleanStart:    true,
+					SessionExpiry: 5,
+					Pool: mqtt.PoolConfig{
+						Size:           1000000,
+						PreAlloc:       true,
+						ReleaseTimeout: 30 * time.Second,
+					},
+				},
+				"sub": {
+					ClientID:         "fujin_sub",
+					Topic:            "my_topic",
+					QoS:              0,
+					Retain:           false,
+					CleanStart:       true,
+					SessionExpiry:    0,
+					SendAcksInterval: 50 * time.Millisecond,
+					AckTTL:           5 * time.Minute,
+				},
+			},
+		},
+	},
+})
+
+var DefaultTestConfigWithNSQQUIC = MakeConfigWithQUIC(connector_config.ConnectorsConfig{
+	"connector": {
+		Type: "nsq",
+		Settings: nsq.Config{
+			Common: nsq.CommonSettings{
+				Address:   "localhost:4150",
+				Addresses: []string{"localhost:4150"},
+			},
+			Clients: map[string]nsq.ClientSpecificSettings{
+				"pub": {
+					Topic: "my_topic",
+					Pool: nsq.PoolConfig{
+						Size:           1000000,
+						PreAlloc:       true,
+						ReleaseTimeout: 5 * time.Second,
+					},
+				},
+				"sub": {
+					Topic:       "my_topic",
+					Channel:     "my_channel",
+					MaxInFlight: 1000000,
+				},
+			},
+		},
+	},
+})
 
 func RunDefaultServerWithNopQUIC(ctx context.Context) *server.Server {
 	return RunServer(ctx, DefaultTestConfigWithNopQUIC)
@@ -362,40 +342,34 @@ var DefaultTCPServerTestConfig = config.TCPServerConfig{
 	Addr:    ":4850",
 }
 
-var DefaultTestConfigWithNopTCP = config.Config{
-	TCP: DefaultTCPServerTestConfig,
-	Connectors: connector_config.ConnectorsConfig{
-		"connector": {
-			Type: "nop",
-		},
+var DefaultTestConfigWithNopTCP = MakeConfigWithTCP(connector_config.ConnectorsConfig{
+	"connector": {
+		Type: "nop",
 	},
-}
+})
 
-var DefaultTestConfigWithKafka3BrokersTCP = config.Config{
-	TCP: DefaultTCPServerTestConfig,
-	Connectors: connector_config.ConnectorsConfig{
-		"connector": {
-			Type: "kafka_franz",
-			Settings: kafka.Config{
-				Common: kafka.CommonSettings{
-					Brokers: []string{"localhost:9092", "localhost:9093", "localhost:9094"},
+var DefaultTestConfigWithKafka3BrokersTCP = MakeConfigWithTCP(connector_config.ConnectorsConfig{
+	"connector": {
+		Type: "kafka_franz",
+		Settings: kafka.Config{
+			Common: kafka.CommonSettings{
+				Brokers: []string{"localhost:9092", "localhost:9093", "localhost:9094"},
+			},
+			Clients: map[string]kafka.ClientSpecificSettings{
+				"sub": {
+					ConsumeTopics:          []string{"my_pub_topic"},
+					Group:                  "fujin",
+					AllowAutoTopicCreation: true,
 				},
-				Clients: map[string]kafka.ClientSpecificSettings{
-					"sub": {
-						ConsumeTopics:          []string{"my_pub_topic"},
-						Group:                  "fujin",
-						AllowAutoTopicCreation: true,
-					},
-					"pub": {
-						ProduceTopic:           "my_pub_topic",
-						AllowAutoTopicCreation: true,
-						Linger:                 10 * time.Millisecond,
-					},
+				"pub": {
+					ProduceTopic:           "my_pub_topic",
+					AllowAutoTopicCreation: true,
+					Linger:                 10 * time.Millisecond,
 				},
 			},
 		},
 	},
-}
+})
 
 func RunDefaultServerWithNopTCP(ctx context.Context) *server.Server {
 	return RunServer(ctx, DefaultTestConfigWithNopTCP)
@@ -425,45 +399,34 @@ func doDefaultBindTCP(conn net.Conn) {
 
 // --- Unix test configs ---
 
-var DefaultUnixServerTestConfig = config.UnixServerConfig{
-	Enabled: true,
-	Path:    PERF_UNIX_PATH,
-}
-
-var DefaultTestConfigWithNopUnix = config.Config{
-	Unix: DefaultUnixServerTestConfig,
-	Connectors: connector_config.ConnectorsConfig{
-		"connector": {
-			Type: "nop",
-		},
+var DefaultTestConfigWithNopUnix = MakeConfigWithUnix(connector_config.ConnectorsConfig{
+	"connector": {
+		Type: "nop",
 	},
-}
+})
 
-var DefaultTestConfigWithKafka3BrokersUnix = config.Config{
-	Unix: DefaultUnixServerTestConfig,
-	Connectors: connector_config.ConnectorsConfig{
-		"connector": {
-			Type: "kafka_franz",
-			Settings: kafka.Config{
-				Common: kafka.CommonSettings{
-					Brokers: []string{"localhost:9092", "localhost:9093", "localhost:9094"},
+var DefaultTestConfigWithKafka3BrokersUnix = MakeConfigWithUnix(connector_config.ConnectorsConfig{
+	"connector": {
+		Type: "kafka_franz",
+		Settings: kafka.Config{
+			Common: kafka.CommonSettings{
+				Brokers: []string{"localhost:9092", "localhost:9093", "localhost:9094"},
+			},
+			Clients: map[string]kafka.ClientSpecificSettings{
+				"sub": {
+					ConsumeTopics:          []string{"my_pub_topic"},
+					Group:                  "fujin",
+					AllowAutoTopicCreation: true,
 				},
-				Clients: map[string]kafka.ClientSpecificSettings{
-					"sub": {
-						ConsumeTopics:          []string{"my_pub_topic"},
-						Group:                  "fujin",
-						AllowAutoTopicCreation: true,
-					},
-					"pub": {
-						ProduceTopic:           "my_pub_topic",
-						AllowAutoTopicCreation: true,
-						Linger:                 10 * time.Millisecond,
-					},
+				"pub": {
+					ProduceTopic:           "my_pub_topic",
+					AllowAutoTopicCreation: true,
+					Linger:                 10 * time.Millisecond,
 				},
 			},
 		},
 	},
-}
+})
 
 func RunDefaultServerWithNopUnix(ctx context.Context) *server.Server {
 	return RunServer(ctx, DefaultTestConfigWithNopUnix)

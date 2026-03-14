@@ -87,7 +87,7 @@ fujin/
 │   ├── server/                 # Server abstraction and config
 │   └── service/                # Core service (RunCLI)
 ├── internal/                   # Internal implementation (not exported)
-│   ├── protocol/fujin/         # Fujin binary protocol (transport-agnostic)
+│   ├── proto/         # Fujin binary protocol (transport-agnostic)
 │   │   ├── pool/               # Zero-allocation byte pool
 │   │   └── proto/response/     # Response builders
 │   └── transport/              # Transport implementations

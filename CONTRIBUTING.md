@@ -46,7 +46,7 @@ fujin/
 │   ├── server/                 # Server abstraction and config
 │   └── service/                # Core service (RunCLI)
 ├── internal/                   # Internal implementation (not exported)
-│   ├── protocol/fujin/         # Fujin binary protocol (transport-agnostic)
+│   ├── proto/         # Fujin binary protocol (transport-agnostic)
 │   └── transport/              # Transport implementations (quic/, tcp/, grpc/)
 ├── examples/                   # Sample configs and runnable examples
 ├── resources/                  # Docker Compose, Grafana, example configs
@@ -96,7 +96,7 @@ Fujin uses Go build tags for conditional compilation:
 - `unix` - Unix domain sockets (implicit on Linux/macOS)
 - `grpc` - gRPC server support
 
-The Fujin protocol code (`internal/protocol/fujin/`) compiles when any dependent transport tag is enabled (`quic`, `tcp`, or `unix` on Unix platforms).
+The Fujin protocol code (`internal/proto/`) compiles when any dependent transport tag is enabled (`quic`, `tcp`, or `unix` on Unix platforms).
 
 ## Testing
 

@@ -5,13 +5,14 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev
 
 FUJIN_PKG := github.com/fujin-io/fujin
 
-ALL_TAGS = grpc,quic,tcp,unix
+ALL_TAGS = fujin,grpc
 
 GO_BUILD_TAGS ?= ${ALL_TAGS}
 
 # Full plugin set for default build.
 CONFIGURATORS ?= github.com/fujin-io/fujin/public/plugins/configurator/all
 CONNECTORS ?= github.com/fujin-io/fujin/public/plugins/connector/all
+TRANSPORTS ?= github.com/fujin-io/fujin/public/plugins/transport/all
 BIND_MIDDLEWARES ?= github.com/fujin-io/fujin/public/plugins/middleware/bind/all
 CONNECTOR_MIDDLEWARES ?= github.com/fujin-io/fujin/public/plugins/middleware/connector/all
 
@@ -45,6 +46,7 @@ all: clean build run
 
 comma := ,
 # Build args (comma-separated)
+BUILDER_TR_ARGS := $(foreach c,$(subst $(comma), ,$(TRANSPORTS)),-transport $(c))
 BUILDER_CONF_ARGS := $(foreach c,$(subst $(comma), ,$(CONFIGURATORS)),-configurator $(c))
 BUILDER_CONN_ARGS := $(foreach c,$(subst $(comma), ,$(CONNECTORS)),-connector $(c))
 BUILDER_BIND_M_ARGS := $(foreach c,$(subst $(comma), ,$(BIND_MIDDLEWARES)),-bind-middleware $(c))
@@ -55,6 +57,7 @@ build:
 	@echo "==> Building ${APP_NAME} for ${DETECTED_OS} (Version: ${VERSION}, Tags: [${GO_BUILD_TAGS}], Connectors: [${CONNECTORS}])"
 	@go run ./cmd/builder \
 		-local \
+		$(BUILDER_TR_ARGS) \
 		$(BUILDER_CONF_ARGS) \
 		$(BUILDER_CONN_ARGS) \
 		$(BUILDER_BIND_M_ARGS) \

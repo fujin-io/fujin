@@ -40,7 +40,8 @@ var (
 
 // Config for otel connector middleware
 type Config struct {
-	Disabled       bool    `yaml:"disabled"`
+	// Enabled allows enabling/disabling the middleware. nil = true (enabled by default)
+	Enabled        *bool   `yaml:"enabled,omitempty"`
 	OTLPEndpoint   string  `yaml:"otlp_endpoint"`
 	Insecure       bool    `yaml:"insecure"`
 	SampleRatio    float64 `yaml:"sample_ratio"`
@@ -67,9 +68,9 @@ func newOtelMiddleware(config any, l *slog.Logger) (cmw.Middleware, error) {
 
 	// Parse config if provided
 	if m, ok := config.(map[string]any); ok {
-		if disabled, exists := m["disabled"]; exists {
-			if v, ok := disabled.(bool); ok {
-				cfg.Disabled = v
+		if enabled, exists := m["enabled"]; exists {
+			if v, ok := enabled.(bool); ok {
+				cfg.Enabled = &v
 			}
 		}
 		if endpoint, exists := m["otlp_endpoint"]; exists {
@@ -104,13 +105,15 @@ func newOtelMiddleware(config any, l *slog.Logger) (cmw.Middleware, error) {
 		}
 	}
 
-	if !cfg.Disabled {
+	// nil or true = enabled (default)
+	enabled := cfg.Enabled == nil || *cfg.Enabled
+	if enabled {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		initTracerProvider(ctx, cfg, l)
 	}
 
-	return &otelMiddleware{disabled: cfg.Disabled, l: l}, nil
+	return &otelMiddleware{enabled: enabled, l: l}, nil
 }
 
 // initTracerProvider initializes the OpenTelemetry tracer provider (globally, once)
@@ -155,19 +158,19 @@ func Shutdown(ctx context.Context) error {
 
 // otelMiddleware implements connector.Middleware
 type otelMiddleware struct {
-	disabled bool
-	l        *slog.Logger
+	enabled bool
+	l       *slog.Logger
 }
 
 func (d *otelMiddleware) WrapWriter(w connector.WriteCloser, connectorName string) connector.WriteCloser {
-	if d.disabled {
+	if !d.enabled {
 		return w
 	}
 	return &otelWriterWrapper{w: w, connectorName: connectorName}
 }
 
 func (d *otelMiddleware) WrapReader(r connector.ReadCloser, connectorName string) connector.ReadCloser {
-	if d.disabled {
+	if !d.enabled {
 		return r
 	}
 	return &otelReaderWrapper{r: r, connectorName: connectorName}

@@ -1,5 +1,3 @@
-//go:build tcp
-
 package tcp
 
 import (
@@ -12,8 +10,9 @@ import (
 	"sync"
 	"time"
 
-	fujin "github.com/fujin-io/fujin/internal/protocol/fujin"
 	connectorconfig "github.com/fujin-io/fujin/public/plugins/connector/config"
+	"github.com/fujin-io/fujin/public/proto/fujin/v1/handler"
+	"github.com/fujin-io/fujin/public/proto/fujin/v1/session"
 	serverconfig "github.com/fujin-io/fujin/public/server/config"
 )
 
@@ -109,7 +108,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 				connWg.Done()
 			}()
 
-			fujin.HandleStream(ctx, conn, fujin.StreamOptions{
+			handler.HandleStream(ctx, conn, session.StreamOptions{
 				BaseConfig:            s.baseConfig,
 				PingInterval:          s.conf.Fujin.PingInterval,
 				PingTimeout:           s.conf.Fujin.PingTimeout,

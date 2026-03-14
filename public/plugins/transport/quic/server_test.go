@@ -1,5 +1,3 @@
-//go:build quic
-
 package quic_test
 
 import (
@@ -10,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	quicserver "github.com/fujin-io/fujin/internal/transport/quic"
 	connectorconfig "github.com/fujin-io/fujin/public/plugins/connector/config"
+	quicserver "github.com/fujin-io/fujin/public/plugins/transport/quic"
 	"github.com/fujin-io/fujin/public/server/config"
 	quicgo "github.com/quic-go/quic-go"
 	"github.com/stretchr/testify/assert"
@@ -32,7 +30,7 @@ func TestNewFujinServer(t *testing.T) {
 	baseConfig := connectorconfig.ConnectorsConfig{}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	srv := quicserver.NewFujinServer(conf, baseConfig, logger)
+	srv := quicserver.NewServer(conf, baseConfig, logger)
 
 	assert.NotNil(t, srv)
 }
@@ -43,7 +41,7 @@ func TestNewFujinServer_WithNilLogger(t *testing.T) {
 	}
 
 	assert.NotPanics(t, func() {
-		quicserver.NewFujinServer(conf, connectorconfig.ConnectorsConfig{}, slog.Default())
+		quicserver.NewServer(conf, connectorconfig.ConnectorsConfig{}, slog.Default())
 	})
 }
 
@@ -60,7 +58,7 @@ func TestNewFujinServer_WithTLS(t *testing.T) {
 	baseConfig := connectorconfig.ConnectorsConfig{}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	srv := quicserver.NewFujinServer(conf, baseConfig, logger)
+	srv := quicserver.NewServer(conf, baseConfig, logger)
 
 	assert.NotNil(t, srv)
 }
@@ -78,7 +76,7 @@ func TestNewFujinServer_WithQUICConfig(t *testing.T) {
 	baseConfig := connectorconfig.ConnectorsConfig{}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	srv := quicserver.NewFujinServer(conf, baseConfig, logger)
+	srv := quicserver.NewServer(conf, baseConfig, logger)
 
 	assert.NotNil(t, srv)
 }
@@ -90,7 +88,7 @@ func TestFujinServer_ReadyForConnections_Timeout(t *testing.T) {
 	baseConfig := connectorconfig.ConnectorsConfig{}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	srv := quicserver.NewFujinServer(conf, baseConfig, logger)
+	srv := quicserver.NewServer(conf, baseConfig, logger)
 
 	ready := srv.ReadyForConnections(10 * time.Millisecond)
 	assert.False(t, ready, "Server should not be ready (timeout)")
@@ -103,7 +101,7 @@ func TestFujinServer_ReadyForConnections_Success(t *testing.T) {
 	baseConfig := connectorconfig.ConnectorsConfig{}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	srv := quicserver.NewFujinServer(conf, baseConfig, logger)
+	srv := quicserver.NewServer(conf, baseConfig, logger)
 
 	go func() {
 		time.Sleep(10 * time.Millisecond)
@@ -120,7 +118,7 @@ func TestFujinServer_Done(t *testing.T) {
 	baseConfig := connectorconfig.ConnectorsConfig{}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	srv := quicserver.NewFujinServer(conf, baseConfig, logger)
+	srv := quicserver.NewServer(conf, baseConfig, logger)
 
 	done := srv.Done()
 	assert.NotNil(t, done, "Done channel should not be nil")
@@ -139,7 +137,7 @@ func TestFujinServer_ListenAndServe_InvalidAddress(t *testing.T) {
 	baseConfig := connectorconfig.ConnectorsConfig{}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	srv := quicserver.NewFujinServer(conf, baseConfig, logger)
+	srv := quicserver.NewServer(conf, baseConfig, logger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
@@ -166,7 +164,7 @@ func TestFujinServer_ListenAndServe_CancelContext(t *testing.T) {
 		Level: slog.LevelError,
 	}))
 
-	srv := quicserver.NewFujinServer(conf, baseConfig, logger)
+	srv := quicserver.NewServer(conf, baseConfig, logger)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -206,7 +204,7 @@ func TestFujinServer_MultipleInstances(t *testing.T) {
 				PingInterval: 2 * time.Second,
 			},
 		}
-		servers[i] = quicserver.NewFujinServer(conf, baseConfig, logger)
+		servers[i] = quicserver.NewServer(conf, baseConfig, logger)
 		assert.NotNil(t, servers[i])
 	}
 
@@ -279,7 +277,7 @@ func TestFujinServer_ConfigurationVariations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			srv := quicserver.NewFujinServer(tt.conf, baseConfig, logger)
+			srv := quicserver.NewServer(tt.conf, baseConfig, logger)
 			assert.NotNil(t, srv)
 			assert.NotNil(t, srv.Done())
 		})
@@ -293,7 +291,7 @@ func TestFujinServer_ReadyForConnections_MultipleWaiters(t *testing.T) {
 	baseConfig := connectorconfig.ConnectorsConfig{}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	srv := quicserver.NewFujinServer(conf, baseConfig, logger)
+	srv := quicserver.NewServer(conf, baseConfig, logger)
 
 	results := make(chan bool, 3)
 	for i := 0; i < 3; i++ {

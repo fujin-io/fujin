@@ -1,4 +1,4 @@
-package fujin
+package proto
 
 import (
 	"testing"

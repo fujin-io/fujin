@@ -46,20 +46,20 @@ connectors:
     # They are particularly useful for authentication and authorization for example
     # Available middlewares:
     #   - auth_api_key: API key authentication
-    # Each bind middleware can be disabled via config:
+    # Each bind middleware can be disabled via enabled: false:
     #   - name: example_middleware
-    #     disabled: true
+    #     enabled: false
     bind_middlewares:
       - name: auth_api_key
         api_key: supersecretkey
-        disabled: true
+        enabled: false
     # Connector middlewares are applied to the connector
     # Available middlewares:
     #   - prom: Prometheus metrics collection
     #   - otel: OpenTelemetry distributed tracing
-    # Each connector middleware can be disabled via config:
+    # Each connector middleware can be disabled via enabled: false:
     #   - name: prom
-    #     disabled: true
+    #     enabled: false
     connector_middlewares:
       - name: prom
       - name: otel

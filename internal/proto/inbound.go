@@ -1,4 +1,4 @@
-package fujin
+package proto
 
 import (
 	"context"
@@ -7,8 +7,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/fujin-io/fujin/internal/protocol/fujin/pool"
 	"github.com/fujin-io/fujin/internal/common/assert"
+	"github.com/fujin-io/fujin/internal/proto/pool"
+	"github.com/fujin-io/fujin/public/proto/fujin/v1/session"
 )
 
 var (
@@ -20,15 +21,15 @@ const (
 )
 
 type inbound struct {
-	str       Stream
-	h         *handler
+	str       session.Stream
+	h         *Handler
 	ftt       time.Duration // force terminate timeout
 	abortRead func()        // transport-specific: abort read with error (QUIC: CancelRead(ConnErr))
 	closeRead func()        // transport-specific: close read cleanly (QUIC: CancelRead(NoErr))
 	l         *slog.Logger
 }
 
-func newInbound(str Stream, ftt time.Duration, h *handler, l *slog.Logger, abortRead, closeRead func()) *inbound {
+func NewInbound(str session.Stream, ftt time.Duration, h *Handler, l *slog.Logger, abortRead, closeRead func()) *inbound {
 	assert.NotNil(h)
 	assert.NotNil(l)
 
@@ -42,7 +43,7 @@ func newInbound(str Stream, ftt time.Duration, h *handler, l *slog.Logger, abort
 	}
 }
 
-func (i *inbound) readLoop(ctx context.Context) {
+func (i *inbound) ReadLoop(ctx context.Context) {
 	stopCh := make(chan struct{})
 	buf := pool.Get(readBufferSize)
 

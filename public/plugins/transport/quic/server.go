@@ -1,5 +1,3 @@
-//go:build quic
-
 package quic
 
 import (
@@ -13,10 +11,11 @@ import (
 	"sync"
 	"time"
 
-	fujin "github.com/fujin-io/fujin/internal/protocol/fujin"
-	"github.com/fujin-io/fujin/internal/protocol/fujin/pool"
+	"github.com/fujin-io/fujin/internal/proto/pool"
 	connectorconfig "github.com/fujin-io/fujin/public/plugins/connector/config"
 	v1 "github.com/fujin-io/fujin/public/proto/fujin/v1"
+	"github.com/fujin-io/fujin/public/proto/fujin/v1/handler"
+	"github.com/fujin-io/fujin/public/proto/fujin/v1/session"
 	serverconfig "github.com/fujin-io/fujin/public/server/config"
 	quicgo "github.com/quic-go/quic-go"
 )
@@ -35,7 +34,7 @@ type FujinServer struct {
 	l *slog.Logger
 }
 
-func NewFujinServer(conf serverconfig.QUICServerConfig, baseConfig connectorconfig.ConnectorsConfig, l *slog.Logger) *FujinServer {
+func NewServer(conf serverconfig.QUICServerConfig, baseConfig connectorconfig.ConnectorsConfig, l *slog.Logger) *FujinServer {
 	return &FujinServer{
 		conf:       conf,
 		baseConfig: baseConfig,
@@ -228,7 +227,7 @@ func (s *FujinServer) ListenAndServe(ctx context.Context) error {
 
 					connWg.Add(1)
 					go func() {
-						fujin.HandleStream(ctx, str, fujin.StreamOptions{
+						handler.HandleStream(ctx, str, session.StreamOptions{
 							BaseConfig:            s.baseConfig,
 							PingInterval:          s.conf.Fujin.PingInterval,
 							PingTimeout:           s.conf.Fujin.PingTimeout,

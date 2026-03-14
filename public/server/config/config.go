@@ -5,13 +5,12 @@ import (
 	"time"
 
 	"github.com/fujin-io/fujin/public/plugins/connector/config"
+	"github.com/fujin-io/fujin/public/plugins/transport"
 	"github.com/quic-go/quic-go"
 )
 
 type Config struct {
-	QUIC       QUICServerConfig
-	TCP        TCPServerConfig
-	Unix       UnixServerConfig
+	Transports []transport.Config
 	GRPC       GRPCServerConfig
 	Connectors config.ConnectorsConfig
 }
@@ -32,9 +31,8 @@ type TCPServerConfig struct {
 }
 
 type UnixServerConfig struct {
-	Enabled bool
-	Path    string // e.g. /run/fujin/fujin.sock or /tmp/fujin.sock
-	Fujin   FujinProtocolConfig
+	Path  string // e.g. /run/fujin/fujin.sock or /tmp/fujin.sock
+	Fujin FujinProtocolConfig
 }
 
 // FujinProtocolConfig holds settings specific to the fujin binary protocol,
@@ -98,21 +96,6 @@ type ClientKeepAliveConfig struct {
 }
 
 func (c *Config) SetDefaults() {
-	if c.QUIC.Addr == "" {
-		c.QUIC.Addr = ":4848"
-	}
-	c.QUIC.Fujin.SetDefaults()
-
-	if c.TCP.Addr == "" {
-		c.TCP.Addr = ":4850"
-	}
-	c.TCP.Fujin.SetDefaults()
-
-	if c.Unix.Path == "" {
-		c.Unix.Path = "/tmp/fujin.sock"
-	}
-	c.Unix.Fujin.SetDefaults()
-
 	if c.GRPC.Addr == "" {
 		c.GRPC.Addr = ":4849"
 	}

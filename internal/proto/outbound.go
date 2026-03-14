@@ -1,4 +1,4 @@
-package fujin
+package proto
 
 import (
 	"log/slog"
@@ -7,7 +7,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/fujin-io/fujin/internal/protocol/fujin/pool"
+	"github.com/fujin-io/fujin/internal/proto/pool"
+	"github.com/fujin-io/fujin/public/proto/fujin/v1/session"
 )
 
 const (
@@ -21,14 +22,14 @@ type Outbound struct {
 	wv     net.Buffers   // working vector
 	wdl    time.Duration // write deadline
 	c      *sync.Cond
-	pb     int64        // pending bytes
-	str    Stream
+	pb     int64 // pending bytes
+	str    session.Stream
 	closed atomic.Bool
 	l      *slog.Logger
 }
 
 func NewOutbound(
-	str Stream, wdl time.Duration,
+	str session.Stream, wdl time.Duration,
 	l *slog.Logger) *Outbound {
 	o := &Outbound{
 		str: str,

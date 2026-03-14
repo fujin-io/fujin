@@ -1,4 +1,4 @@
-package fujin
+package proto
 
 import (
 	"context"
@@ -11,15 +11,16 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/fujin-io/fujin/internal/protocol/fujin/pool"
-	"github.com/fujin-io/fujin/internal/protocol/fujin/proto/response/server"
 	pool2 "github.com/fujin-io/fujin/internal/common/pool"
 	"github.com/fujin-io/fujin/internal/connectors"
+	"github.com/fujin-io/fujin/internal/proto/pool"
+	"github.com/fujin-io/fujin/internal/proto/response/server"
 	"github.com/fujin-io/fujin/public/plugins/connector"
 	"github.com/fujin-io/fujin/public/plugins/connector/config"
 	bmw "github.com/fujin-io/fujin/public/plugins/middleware/bind"
 	bmwconfig "github.com/fujin-io/fujin/public/plugins/middleware/bind/config"
 	v1 "github.com/fujin-io/fujin/public/proto/fujin/v1"
+	"github.com/fujin-io/fujin/public/proto/fujin/v1/session"
 )
 
 const (
@@ -228,10 +229,10 @@ type headerArgs struct {
 	headersKV [][]byte
 }
 
-type handler struct {
+type Handler struct {
 	ctx             context.Context
 	out             *Outbound
-	str             Stream
+	str             session.Stream
 	baseConfig      config.ConnectorsConfig
 	connectorConfig config.ConnectorConfig
 	cman            *connectors.ManagerV2 // Created during BIND
@@ -272,13 +273,13 @@ type handler struct {
 	l *slog.Logger
 }
 
-func newHandler(
+func NewHandler(
 	ctx context.Context,
 	pingInterval time.Duration, pingTimeout time.Duration, pingStream bool,
 	baseConfig config.ConnectorsConfig,
-	out *Outbound, str Stream, l *slog.Logger,
-) *handler {
-	h := &handler{
+	out *Outbound, str session.Stream, l *slog.Logger,
+) *Handler {
+	h := &Handler{
 		ctx:                         ctx,
 		baseConfig:                  baseConfig,
 		pingInterval:                pingInterval,
@@ -306,7 +307,7 @@ func newHandler(
 	return h
 }
 
-func (h *handler) handle(buf []byte) error {
+func (h *Handler) handle(buf []byte) error {
 	var (
 		i int
 		b byte
@@ -314,6 +315,7 @@ func (h *handler) handle(buf []byte) error {
 
 	for i = 0; i < len(buf); i++ {
 		b = buf[i]
+		fmt.Println(b)
 		switch h.ps.state {
 		case OP_START:
 			switch h.sessionState {
@@ -1821,7 +1823,7 @@ func (h *handler) handle(buf []byte) error {
 					if meta == nil {
 						meta = make(map[string]string)
 					}
-					if err := h.handleInit(meta, nil); err != nil {
+					if err := h.handleBind(meta, nil); err != nil {
 						return err
 					}
 					h.ps.ba = bindArgs{}
@@ -1898,7 +1900,8 @@ func (h *handler) handle(buf []byte) error {
 					if meta == nil {
 						meta = make(map[string]string)
 					}
-					if err := h.handleInit(meta, h.ps.ba.configOverrides); err != nil {
+					if err := h.handleBind(meta, h.ps.ba.configOverrides); err != nil {
+						fmt.Println("handleBind error", err)
 						return err
 					}
 					h.ps.ba = bindArgs{}
@@ -2074,8 +2077,8 @@ func (h *handler) handle(buf []byte) error {
 	return nil
 }
 
-// handleInit processes BIND command and creates Manager with config overrides
-func (h *handler) handleInit(meta map[string]string, configOverrides map[string]string) error {
+// handleBind processes BIND command and creates Manager with config overrides
+func (h *Handler) handleBind(meta map[string]string, configOverrides map[string]string) error {
 	if h.connected {
 		// Already initialized, ignore
 		return fmt.Errorf("already initialized")
@@ -2143,7 +2146,7 @@ func (h *handler) handleInit(meta map[string]string, configOverrides map[string]
 	return nil
 }
 
-func (h *handler) writePing() {
+func (h *Handler) writePing() {
 	t := time.NewTicker(h.pingInterval)
 	defer t.Stop()
 
@@ -2157,7 +2160,7 @@ func (h *handler) writePing() {
 	}
 }
 
-func (h *handler) subscribe(ctx context.Context, subID byte, r connector.ReadCloser) {
+func (h *Handler) subscribe(ctx context.Context, subID byte, r connector.ReadCloser) {
 	msgHandler := h.subEnqueueMsgFunc(h.out, subID, r)
 	for {
 		select {
@@ -2173,7 +2176,7 @@ func (h *handler) subscribe(ctx context.Context, subID byte, r connector.ReadClo
 	}
 }
 
-func (h *handler) hsubscribe(ctx context.Context, subID byte, r connector.ReadCloser) {
+func (h *Handler) hsubscribe(ctx context.Context, subID byte, r connector.ReadCloser) {
 	msgHandler := h.subEnqueueMsgFuncWithHeaders(h.out, subID, r)
 	for {
 		select {
@@ -2189,7 +2192,7 @@ func (h *handler) hsubscribe(ctx context.Context, subID byte, r connector.ReadCl
 	}
 }
 
-func (h *handler) produce(msg []byte) {
+func (h *Handler) produce(msg []byte) {
 	buf := pool.Get(6) // 1 byte (resp op code) + 4 bytes (request id) + 1 byte (err no/err yes)
 	successResp := server.ProduceResponseSuccess(buf, h.ps.ca.cID)
 	h.nonTxSessionWriters[h.ps.pa.topic].Produce(
@@ -2211,7 +2214,7 @@ func (h *handler) produce(msg []byte) {
 		})
 }
 
-func (h *handler) hproduce(msg []byte) {
+func (h *Handler) hproduce(msg []byte) {
 	buf := pool.Get(6)
 	hdr := buf[:0]
 	hdr = append(hdr, byte(v1.RESP_CODE_HPRODUCE))
@@ -2235,7 +2238,7 @@ func (h *handler) hproduce(msg []byte) {
 		})
 }
 
-func (h *handler) produceTx(msg []byte) {
+func (h *Handler) produceTx(msg []byte) {
 	buf := pool.Get(6) // 1 byte (resp op code) + 4 bytes (request id) + 1 byte (success/failure)
 	successResp := server.ProduceResponseSuccess(buf, h.ps.ca.cID)
 	h.currentTxWriter.Produce(h.ctx, msg, func(err error) {
@@ -2255,7 +2258,7 @@ func (h *handler) produceTx(msg []byte) {
 	})
 }
 
-func (h *handler) hproduceTx(msg []byte) {
+func (h *Handler) hproduceTx(msg []byte) {
 	buf := pool.Get(6)
 	hdr := buf[:0]
 	hdr = append(hdr, byte(v1.RESP_CODE_HPRODUCE))
@@ -2277,7 +2280,7 @@ func (h *handler) hproduceTx(msg []byte) {
 	})
 }
 
-func (h *handler) fetch(topic string, autoCommit bool, n uint32) {
+func (h *Handler) fetch(topic string, autoCommit bool, n uint32) {
 	// Check if we already have a subscription_id for this topic (implicit subscription)
 	h.fhMu.Lock()
 	topicReaders, exists := h.fetchReaders[topic]
@@ -2393,7 +2396,7 @@ func (h *handler) fetch(topic string, autoCommit bool, n uint32) {
 	}(h.ps.fa.headered, subID)
 }
 
-func (h *handler) flushBufs() {
+func (h *Handler) flushBufs() {
 	if h.ps.ca.cID != nil {
 		pool.Put(h.ps.ca.cID)
 		h.ps.ca.cID = nil
@@ -2413,13 +2416,13 @@ func (h *handler) flushBufs() {
 	}
 }
 
-func (h *handler) close() {
+func (h *Handler) close() {
 	h.stopRead = true
 	h.disconnect()
 	close(h.closed)
 }
 
-func (h *handler) parseWriteTopicLenArg() error {
+func (h *Handler) parseWriteTopicLenArg() error {
 	h.ps.pa.topicLen = binary.BigEndian.Uint32(h.ps.argBuf[0:v1.Uint32Len])
 	if h.ps.pa.topicLen == 0 {
 		return ErrWriteTopicLenArgEmpty
@@ -2428,7 +2431,7 @@ func (h *handler) parseWriteTopicLenArg() error {
 	return nil
 }
 
-func (h *handler) parseWriteTopicArg() error {
+func (h *Handler) parseWriteTopicArg() error {
 	h.ps.pa.topic = string(h.ps.argBuf)
 	if h.ps.pa.topic == "" {
 		return ErrWriteTopicArgEmpty
@@ -2437,7 +2440,7 @@ func (h *handler) parseWriteTopicArg() error {
 	return nil
 }
 
-func (h *handler) parseWriteMsgSizeArg() error {
+func (h *Handler) parseWriteMsgSizeArg() error {
 	h.ps.pma.size = binary.BigEndian.Uint32(h.ps.argBuf[0:v1.Uint32Len])
 	if h.ps.pma.size == 0 {
 		return ErrWriteMsgSizeArgEmpty
@@ -2446,7 +2449,7 @@ func (h *handler) parseWriteMsgSizeArg() error {
 	return nil
 }
 
-func (h *handler) parseSubscribeTopicLenArg() error {
+func (h *Handler) parseSubscribeTopicLenArg() error {
 	h.ps.sa.topicLen = binary.BigEndian.Uint32(h.ps.argBuf[0:v1.Uint32Len])
 	if h.ps.sa.topicLen == 0 {
 		return ErrReaderNameSizeArgNotProvided
@@ -2455,7 +2458,7 @@ func (h *handler) parseSubscribeTopicLenArg() error {
 	return nil
 }
 
-func (h *handler) flushWriters() error {
+func (h *Handler) flushWriters() error {
 	for _, sw := range h.nonTxSessionWriters {
 		// TODO: on flush err return fail
 		if err := sw.Flush(h.ctx); err != nil {
@@ -2466,7 +2469,7 @@ func (h *handler) flushWriters() error {
 	return nil
 }
 
-func (h *handler) enqueueWriteErrResponse(err error) {
+func (h *Handler) enqueueWriteErrResponse(err error) {
 	errPayload := err.Error()
 	errLen := len(errPayload)
 	buf := pool.Get(10 + errLen) // resp code produce (1) + request id (4) + err code (1) + err (4 + errLen)
@@ -2480,11 +2483,11 @@ func (h *handler) enqueueWriteErrResponse(err error) {
 	pool.Put(buf)
 }
 
-func (h *handler) enqueueStop() {
+func (h *Handler) enqueueStop() {
 	h.out.EnqueueProto(v1.STOP_REQ)
 }
 
-func (h *handler) enqueueAckSuccess(cID []byte) {
+func (h *Handler) enqueueAckSuccess(cID []byte) {
 	header := pool.Get(6)
 	header = append(header, byte(v1.RESP_CODE_ACK))
 	header = append(header, cID...)
@@ -2496,7 +2499,7 @@ func (h *handler) enqueueAckSuccess(cID []byte) {
 	pool.Put(count)
 }
 
-func (h *handler) enqueueAckSuccessNoLock(cID []byte) {
+func (h *Handler) enqueueAckSuccessNoLock(cID []byte) {
 	header := pool.Get(6)
 	header = append(header, byte(v1.RESP_CODE_ACK))
 	header = append(header, cID...)
@@ -2510,7 +2513,7 @@ func (h *handler) enqueueAckSuccessNoLock(cID []byte) {
 	pool.Put(count)
 }
 
-func (h *handler) enqueueAckErrNoLock(cID []byte, err error) {
+func (h *Handler) enqueueAckErrNoLock(cID []byte, err error) {
 	header := pool.Get(6)
 	header = append(header, byte(v1.RESP_CODE_ACK))
 	header = append(header, cID...)
@@ -2521,7 +2524,7 @@ func (h *handler) enqueueAckErrNoLock(cID []byte, err error) {
 	pool.Put(header)
 }
 
-func (h *handler) enqueueAckMsgIDSuccessNoLock(msgID []byte) {
+func (h *Handler) enqueueAckMsgIDSuccessNoLock(msgID []byte) {
 	lenBuf := pool.Get(v1.Uint32Len)
 	lenBuf = binary.BigEndian.AppendUint32(lenBuf, uint32(len(msgID)))
 	okFlag := pool.Get(1)
@@ -2534,7 +2537,7 @@ func (h *handler) enqueueAckMsgIDSuccessNoLock(msgID []byte) {
 	pool.Put(okFlag)
 }
 
-func (h *handler) enqueueAckMsgIDErrNoLock(msgID []byte, err error) {
+func (h *Handler) enqueueAckMsgIDErrNoLock(msgID []byte, err error) {
 	lenBuf := pool.Get(v1.Uint32Len)
 	lenBuf = binary.BigEndian.AppendUint32(lenBuf, uint32(len(msgID)))
 	errFlag := pool.Get(1)
@@ -2548,7 +2551,7 @@ func (h *handler) enqueueAckMsgIDErrNoLock(msgID []byte, err error) {
 	pool.Put(errFlag)
 }
 
-func (h *handler) enqueueNackSuccess(cID []byte) {
+func (h *Handler) enqueueNackSuccess(cID []byte) {
 	header := pool.Get(6)
 	header = append(header, byte(v1.RESP_CODE_NACK))
 	header = append(header, cID...)
@@ -2560,7 +2563,7 @@ func (h *handler) enqueueNackSuccess(cID []byte) {
 	pool.Put(count)
 }
 
-func (h *handler) enqueueNackSuccessNoLock(cID []byte) {
+func (h *Handler) enqueueNackSuccessNoLock(cID []byte) {
 	header := pool.Get(6)
 	header = append(header, byte(v1.RESP_CODE_NACK))
 	header = append(header, cID...)
@@ -2574,7 +2577,7 @@ func (h *handler) enqueueNackSuccessNoLock(cID []byte) {
 	pool.Put(count)
 }
 
-func (h *handler) enqueueNackErrNoLock(cID []byte, err error) {
+func (h *Handler) enqueueNackErrNoLock(cID []byte, err error) {
 	header := pool.Get(6)
 	header = append(header, byte(v1.RESP_CODE_NACK))
 	header = append(header, cID...)
@@ -2585,7 +2588,7 @@ func (h *handler) enqueueNackErrNoLock(cID []byte, err error) {
 	pool.Put(header)
 }
 
-func (h *handler) enqueueTxBeginSuccess(cID []byte) {
+func (h *Handler) enqueueTxBeginSuccess(cID []byte) {
 	header := pool.Get(6)
 	header = append(header, byte(v1.RESP_CODE_TX_BEGIN))
 	header = append(header, cID...)
@@ -2594,7 +2597,7 @@ func (h *handler) enqueueTxBeginSuccess(cID []byte) {
 	pool.Put(header)
 }
 
-func (h *handler) enqueueTxBeginErr(cID []byte, err error) {
+func (h *Handler) enqueueTxBeginErr(cID []byte, err error) {
 	header := pool.Get(6)
 	header = append(header, byte(v1.RESP_CODE_TX_BEGIN))
 	header = append(header, cID...)
@@ -2603,7 +2606,7 @@ func (h *handler) enqueueTxBeginErr(cID []byte, err error) {
 	pool.Put(header)
 }
 
-func (h *handler) enqueueTxCommitSuccess(cID []byte) {
+func (h *Handler) enqueueTxCommitSuccess(cID []byte) {
 	header := pool.Get(6)
 	header = append(header, byte(v1.RESP_CODE_TX_COMMIT))
 	header = append(header, cID...)
@@ -2612,7 +2615,7 @@ func (h *handler) enqueueTxCommitSuccess(cID []byte) {
 	pool.Put(header)
 }
 
-func (h *handler) enqueueTxCommitErr(cID []byte, err error) {
+func (h *Handler) enqueueTxCommitErr(cID []byte, err error) {
 	header := pool.Get(6)
 	header = append(header, byte(v1.RESP_CODE_TX_COMMIT))
 	header = append(header, cID...)
@@ -2621,7 +2624,7 @@ func (h *handler) enqueueTxCommitErr(cID []byte, err error) {
 	pool.Put(header)
 }
 
-func (h *handler) enqueueTxRollbackSuccess(cID []byte) {
+func (h *Handler) enqueueTxRollbackSuccess(cID []byte) {
 	header := pool.Get(6)
 	header = append(header, byte(v1.RESP_CODE_TX_ROLLBACK))
 	header = append(header, cID...)
@@ -2630,7 +2633,7 @@ func (h *handler) enqueueTxRollbackSuccess(cID []byte) {
 	pool.Put(header)
 }
 
-func (h *handler) enqueueTxRollbackErr(cID []byte, err error) {
+func (h *Handler) enqueueTxRollbackErr(cID []byte, err error) {
 	header := pool.Get(6)
 	header = append(header, byte(v1.RESP_CODE_TX_ROLLBACK))
 	header = append(header, cID...)
@@ -2658,7 +2661,7 @@ func enqueueUnsubscribeSuccess(out *Outbound, cID []byte) {
 	pool.Put(sbuf)
 }
 
-func (h *handler) subEnqueueMsgFunc(
+func (h *Handler) subEnqueueMsgFunc(
 	out *Outbound, subID byte, r connector.ReadCloser,
 ) func(message []byte, topic string, args ...any) {
 	staticArgsLen := r.MsgIDArgsLen()
@@ -2694,7 +2697,7 @@ func (h *handler) subEnqueueMsgFunc(
 	}
 }
 
-func (h *handler) subEnqueueMsgFuncWithHeaders(
+func (h *Handler) subEnqueueMsgFuncWithHeaders(
 	out *Outbound, subID byte, r connector.ReadCloser,
 ) func(message []byte, topic string, hs [][]byte, args ...any) {
 	staticArgsLen := r.MsgIDArgsLen()
@@ -2750,7 +2753,7 @@ func (h *handler) subEnqueueMsgFuncWithHeaders(
 	}
 }
 
-func (h *handler) fetchEnqueueMsgFunc(
+func (h *Handler) fetchEnqueueMsgFunc(
 	out *Outbound, r connector.ReadCloser, topic string, autoCommit bool,
 ) func(message []byte, topic string, args ...any) {
 	staticArgsLen := r.MsgIDArgsLen()
@@ -2800,7 +2803,7 @@ func (h *handler) fetchEnqueueMsgFunc(
 	return mh
 }
 
-func (h *handler) fetchEnqueueMsgFuncWithHeaders(
+func (h *Handler) fetchEnqueueMsgFuncWithHeaders(
 	out *Outbound, r connector.ReadCloser, topic string, autoCommit bool,
 ) func(message []byte, topic string, hs [][]byte, args ...any) {
 	staticArgsLen := r.MsgIDArgsLen()

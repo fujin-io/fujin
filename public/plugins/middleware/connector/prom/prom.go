@@ -43,9 +43,10 @@ var (
 
 // Config for prom connector middleware
 type Config struct {
-	Disabled bool   `yaml:"enabled"`
-	Addr     string `yaml:"addr"` // HTTP server address (e.g., ":9090")
-	Path     string `yaml:"path"` // Metrics endpoint path (default: "/metrics")
+	// Enabled allows enabling/disabling the middleware. nil = true (enabled by default)
+	Enabled *bool  `yaml:"enabled,omitempty"`
+	Addr    string `yaml:"addr"` // HTTP server address (e.g., ":9090")
+	Path    string `yaml:"path"` // Metrics endpoint path (default: "/metrics")
 }
 
 func init() {
@@ -62,9 +63,9 @@ func newPromMiddleware(config any, l *slog.Logger) (cmv.Middleware, error) {
 
 	// Parse config if provided
 	if m, ok := config.(map[string]any); ok {
-		if disabled, exists := m["disabled"]; exists {
-			if v, ok := disabled.(bool); ok {
-				cfg.Disabled = v
+		if enabled, exists := m["enabled"]; exists {
+			if v, ok := enabled.(bool); ok {
+				cfg.Enabled = &v
 			}
 		}
 		if addr, exists := m["addr"]; exists {
@@ -79,12 +80,14 @@ func newPromMiddleware(config any, l *slog.Logger) (cmv.Middleware, error) {
 		}
 	}
 
-	if !cfg.Disabled {
+	// nil or true = enabled (default)
+	enabled := cfg.Enabled == nil || *cfg.Enabled
+	if enabled {
 		initProm()
 		initHTTPServer(cfg.Addr, cfg.Path, l)
 	}
 
-	return &promMiddleware{disabled: cfg.Disabled, l: l}, nil
+	return &promMiddleware{enabled: enabled, l: l}, nil
 }
 
 func initProm() {
@@ -170,19 +173,19 @@ func ObserveProduceLatency(connector string, d time.Duration) {
 
 // promMiddleware implements connector.Middleware
 type promMiddleware struct {
-	disabled bool
-	l        *slog.Logger
+	enabled bool
+	l       *slog.Logger
 }
 
 func (d *promMiddleware) WrapWriter(w connector.WriteCloser, connectorName string) connector.WriteCloser {
-	if d.disabled {
+	if !d.enabled {
 		return w
 	}
 	return &promWriterWrapper{w: w, connectorName: connectorName}
 }
 
 func (d *promMiddleware) WrapReader(r connector.ReadCloser, connectorName string) connector.ReadCloser {
-	if d.disabled {
+	if !d.enabled {
 		return r
 	}
 	return &promReaderWrapper{r: r, connectorName: connectorName}

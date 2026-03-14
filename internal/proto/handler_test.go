@@ -1,4 +1,4 @@
-package fujin
+package proto
 
 import (
 	"context"
@@ -13,9 +13,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newTestHandler() *handler {
+func newTestHandler() *Handler {
 	ctx := context.Background()
-	h := &handler{
+	h := &Handler{
 		ctx:          ctx,
 		ps:           &parseState{},
 		sessionState: STREAM_STATE_BIND,
