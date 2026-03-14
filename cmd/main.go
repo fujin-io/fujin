@@ -9,6 +9,7 @@ import (
 	_ "github.com/fujin-io/fujin/public/plugins/connector/all"
 	_ "github.com/fujin-io/fujin/public/plugins/middleware/bind/all"
 	_ "github.com/fujin-io/fujin/public/plugins/middleware/connector/all"
+	_ "github.com/fujin-io/fujin/public/plugins/transport/all"
 	"github.com/fujin-io/fujin/public/service"
 )
 

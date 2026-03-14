@@ -17,9 +17,9 @@ import (
 	connectorconfig "github.com/fujin-io/fujin/public/plugins/connector/config"
 	bmw "github.com/fujin-io/fujin/public/plugins/middleware/bind"
 	cmw "github.com/fujin-io/fujin/public/plugins/middleware/connector"
+	"github.com/fujin-io/fujin/public/plugins/transport"
 	"github.com/fujin-io/fujin/public/server"
 	serverconfig "github.com/fujin-io/fujin/public/server/config"
-	"github.com/quic-go/quic-go"
 )
 
 var (
@@ -27,48 +27,17 @@ var (
 )
 
 type Config struct {
-	QUIC       QUICTransportConfig              `yaml:"quic"`
-	TCP        TCPTransportConfig               `yaml:"tcp"`
-	Unix       UnixTransportConfig              `yaml:"unix"`
+	Fujin      FujinConfig                      `yaml:"fujin"`
 	GRPC       GRPCConfig                       `yaml:"grpc"`
 	Connectors connectorconfig.ConnectorsConfig `yaml:"connectors"`
 }
 
-type QUICTransportConfig struct {
-	Enabled              bool                `yaml:"enabled"`
-	Addr                 string              `yaml:"addr"`
-	TLS                  pconfig.TLSConfig   `yaml:"tls"`
-	MaxIncomingStreams    int64               `yaml:"max_incoming_streams"`
-	KeepAlivePeriod      time.Duration       `yaml:"keepalive_period"`
-	HandshakeIdleTimeout time.Duration       `yaml:"handshake_idle_timeout"`
-	MaxIdleTimeout       time.Duration       `yaml:"max_idle_timeout"`
-	Fujin                FujinProtocolConfig  `yaml:"fujin"`
-}
-
-type FujinProtocolConfig struct {
-	PingInterval          time.Duration `yaml:"ping_interval"`
-	PingTimeout           time.Duration `yaml:"ping_timeout"`
-	PingStream            bool          `yaml:"ping_stream"`
-	PingMaxRetries        int           `yaml:"ping_max_retries"`
-	WriteDeadline         time.Duration `yaml:"write_deadline"`
-	ForceTerminateTimeout time.Duration `yaml:"force_terminate_timeout"`
-}
-
-type TCPTransportConfig struct {
-	Enabled bool                `yaml:"enabled"`
-	Addr    string              `yaml:"addr"`
-	TLS     pconfig.TLSConfig   `yaml:"tls"`
-	Fujin   FujinProtocolConfig `yaml:"fujin"`
-}
-
-type UnixTransportConfig struct {
-	Enabled bool                `yaml:"enabled"`
-	Path    string              `yaml:"path"`
-	Fujin   FujinProtocolConfig `yaml:"fujin"`
+type FujinConfig struct {
+	Transports []transport.Config `yaml:"transports"`
 }
 
 type GRPCConfig struct {
-	Enabled               bool                  `yaml:"enabled"`
+	Enabled               *bool                 `yaml:"enabled,omitempty"` // nil = true (default)
 	Addr                  string                `yaml:"addr"`
 	ConnectionTimeout     time.Duration         `yaml:"connection_timeout"`
 	MaxConcurrentStreams  uint32                `yaml:"max_concurrent_streams"`
@@ -79,7 +48,7 @@ type GRPCConfig struct {
 	ServerKeepAlive       ServerKeepAliveConfig `yaml:"server_keepalive"`
 	ClientKeepAlive       ClientKeepAliveConfig `yaml:"client_keepalive"`
 	TLS                   pconfig.TLSConfig     `yaml:"tls"`
-	ObservabilityEnabled  bool                  `yaml:"observability_enabled"`
+	ObservabilityEnabled  *bool                 `yaml:"observability_enabled,omitempty"` // nil = false (default)
 }
 
 type ServerKeepAliveConfig struct {
@@ -96,124 +65,15 @@ type ClientKeepAliveConfig struct {
 }
 
 func (c *Config) parse() (serverconfig.Config, error) {
-	quicConf, err := c.parseQUICServerConfig()
-	if err != nil {
-		return serverconfig.Config{}, fmt.Errorf("parse quic server config: %w", err)
-	}
-
-	tcpConf, err := c.parseTCPServerConfig()
-	if err != nil {
-		return serverconfig.Config{}, fmt.Errorf("parse tcp server config: %w", err)
-	}
-
-	unixConf, err := c.parseUnixServerConfig()
-	if err != nil {
-		return serverconfig.Config{}, fmt.Errorf("parse unix server config: %w", err)
-	}
-
 	grpcConf, err := c.parseGRPCConfig()
 	if err != nil {
 		return serverconfig.Config{}, fmt.Errorf("parse grpc server config: %w", err)
 	}
 
 	return serverconfig.Config{
-		QUIC:       quicConf,
-		TCP:        tcpConf,
-		Unix:       unixConf,
+		Transports: c.Fujin.Transports,
 		GRPC:       grpcConf,
 		Connectors: c.Connectors,
-	}, nil
-}
-
-func (c *Config) parseQUICServerConfig() (serverconfig.QUICServerConfig, error) {
-	if c == nil {
-		return serverconfig.QUICServerConfig{}, ErrNilConfig
-	}
-
-	if !c.QUIC.Enabled {
-		return serverconfig.QUICServerConfig{
-			Enabled: c.QUIC.Enabled,
-		}, nil
-	}
-
-	err := c.QUIC.TLS.Parse()
-	if err != nil {
-		return serverconfig.QUICServerConfig{}, fmt.Errorf("parse tls conf: %w", err)
-	}
-
-	return serverconfig.QUICServerConfig{
-		Enabled: c.QUIC.Enabled,
-		Addr:    c.QUIC.Addr,
-		TLS:     c.QUIC.TLS.Config,
-		QUIC: &quic.Config{
-			MaxIncomingStreams:    c.QUIC.MaxIncomingStreams,
-			KeepAlivePeriod:      c.QUIC.KeepAlivePeriod,
-			HandshakeIdleTimeout: c.QUIC.HandshakeIdleTimeout,
-			MaxIdleTimeout:       c.QUIC.MaxIdleTimeout,
-		},
-		Fujin: serverconfig.FujinProtocolConfig{
-			PingInterval:          c.QUIC.Fujin.PingInterval,
-			PingTimeout:           c.QUIC.Fujin.PingTimeout,
-			PingStream:            c.QUIC.Fujin.PingStream,
-			PingMaxRetries:        c.QUIC.Fujin.PingMaxRetries,
-			WriteDeadline:         c.QUIC.Fujin.WriteDeadline,
-			ForceTerminateTimeout: c.QUIC.Fujin.ForceTerminateTimeout,
-		},
-	}, nil
-}
-
-func (c *Config) parseTCPServerConfig() (serverconfig.TCPServerConfig, error) {
-	if c == nil {
-		return serverconfig.TCPServerConfig{}, ErrNilConfig
-	}
-
-	if !c.TCP.Enabled {
-		return serverconfig.TCPServerConfig{
-			Enabled: c.TCP.Enabled,
-		}, nil
-	}
-
-	if err := c.TCP.TLS.Parse(); err != nil {
-		return serverconfig.TCPServerConfig{}, fmt.Errorf("parse tls conf: %w", err)
-	}
-
-	return serverconfig.TCPServerConfig{
-		Enabled: c.TCP.Enabled,
-		Addr:    c.TCP.Addr,
-		TLS:     c.TCP.TLS.Config,
-		Fujin: serverconfig.FujinProtocolConfig{
-			PingInterval:          c.TCP.Fujin.PingInterval,
-			PingTimeout:           c.TCP.Fujin.PingTimeout,
-			PingStream:            false,
-			PingMaxRetries:        c.TCP.Fujin.PingMaxRetries,
-			WriteDeadline:         c.TCP.Fujin.WriteDeadline,
-			ForceTerminateTimeout: c.TCP.Fujin.ForceTerminateTimeout,
-		},
-	}, nil
-}
-
-func (c *Config) parseUnixServerConfig() (serverconfig.UnixServerConfig, error) {
-	if c == nil {
-		return serverconfig.UnixServerConfig{}, ErrNilConfig
-	}
-
-	if !c.Unix.Enabled {
-		return serverconfig.UnixServerConfig{
-			Enabled: c.Unix.Enabled,
-		}, nil
-	}
-
-	return serverconfig.UnixServerConfig{
-		Enabled: c.Unix.Enabled,
-		Path:    c.Unix.Path,
-		Fujin: serverconfig.FujinProtocolConfig{
-			PingInterval:          c.Unix.Fujin.PingInterval,
-			PingTimeout:           c.Unix.Fujin.PingTimeout,
-			PingStream:            false,
-			PingMaxRetries:        c.Unix.Fujin.PingMaxRetries,
-			WriteDeadline:         c.Unix.Fujin.WriteDeadline,
-			ForceTerminateTimeout: c.Unix.Fujin.ForceTerminateTimeout,
-		},
 	}, nil
 }
 
@@ -222,9 +82,10 @@ func (c *Config) parseGRPCConfig() (serverconfig.GRPCServerConfig, error) {
 		return serverconfig.GRPCServerConfig{}, ErrNilConfig
 	}
 
-	if !c.GRPC.Enabled {
+	grpcEnabled := c.GRPC.Enabled == nil || *c.GRPC.Enabled
+	if !grpcEnabled {
 		return serverconfig.GRPCServerConfig{
-			Enabled: c.GRPC.Enabled,
+			Enabled: false,
 		}, nil
 	}
 
@@ -233,8 +94,9 @@ func (c *Config) parseGRPCConfig() (serverconfig.GRPCServerConfig, error) {
 		return serverconfig.GRPCServerConfig{}, fmt.Errorf("parse tls conf: %w", err)
 	}
 
+	obsEnabled := c.GRPC.ObservabilityEnabled != nil && *c.GRPC.ObservabilityEnabled
 	return serverconfig.GRPCServerConfig{
-		Enabled:               c.GRPC.Enabled,
+		Enabled:               grpcEnabled,
 		Addr:                  c.GRPC.Addr,
 		ConnectionTimeout:     c.GRPC.ConnectionTimeout,
 		MaxConcurrentStreams:  c.GRPC.MaxConcurrentStreams,
@@ -245,7 +107,7 @@ func (c *Config) parseGRPCConfig() (serverconfig.GRPCServerConfig, error) {
 		ServerKeepAlive:       c.GRPC.ServerKeepAlive.parse(),
 		ClientKeepAlive:       c.GRPC.ClientKeepAlive.parse(),
 		TLS:                   c.GRPC.TLS.Config,
-		ObservabilityEnabled:  c.GRPC.ObservabilityEnabled,
+		ObservabilityEnabled:  obsEnabled,
 	}, nil
 }
 
@@ -369,15 +231,23 @@ func loadConfigWithLoader(ctx context.Context, loaderType string, cfg *Config) e
 
 // logRegisteredPlugins logs all registered connectors, connector middlewares, bind middlewares, and configurators
 func logRegisteredPlugins(l *slog.Logger) {
+	transports := transport.List()
 	connectors := connector.List()
 	cmws := cmw.List()
 	bmws := bmw.List()
 	configurators := configurator.List()
 
+	sort.Strings(transports)
 	sort.Strings(connectors)
 	sort.Strings(cmws)
 	sort.Strings(bmws)
 	sort.Strings(configurators)
+
+	if len(transports) > 0 {
+		l.Info("registered transports", "list", strings.Join(transports, ", "))
+	} else {
+		l.Warn("no transports registered")
+	}
 
 	if len(connectors) > 0 {
 		l.Info("registered connectors", "list", strings.Join(connectors, ", "))

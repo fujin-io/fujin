@@ -82,8 +82,8 @@ func Chain(
 	l *slog.Logger,
 ) error {
 	for _, cfg := range configs {
-		// Check if middleware is disabled
-		if cfg.Disabled {
+		// Skip if disabled (nil = true = enabled by default)
+		if cfg.Enabled != nil && !*cfg.Enabled {
 			continue
 		}
 

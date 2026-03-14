@@ -5,13 +5,14 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev
 
 FUJIN_PKG := github.com/fujin-io/fujin
 
-ALL_TAGS = grpc,quic,tcp
+ALL_TAGS = fujin,grpc
 
 GO_BUILD_TAGS ?= ${ALL_TAGS}
 
 # Full plugin set for default build.
 CONFIGURATORS ?= github.com/fujin-io/fujin/public/plugins/configurator/all
 CONNECTORS ?= github.com/fujin-io/fujin/public/plugins/connector/all
+TRANSPORTS ?= github.com/fujin-io/fujin/public/plugins/transport/all
 BIND_MIDDLEWARES ?= github.com/fujin-io/fujin/public/plugins/middleware/bind/all
 CONNECTOR_MIDDLEWARES ?= github.com/fujin-io/fujin/public/plugins/middleware/connector/all
 
@@ -26,7 +27,7 @@ ifeq ($(OS),Windows_NT)
     RMDIR := rmdir /S /Q
     MKDIR := mkdir
     PATHSEP := \\
-	BOOTCONF := set "FUJIN_CONFIGURATOR=yaml" && set "FUJIN_CONFIGURATOR_YAML_PATHS=./examples/assets/config/config.local.yaml"
+	BOOTCONF := set "FUJIN_CONFIGURATOR=yaml" && set "FUJIN_CONFIGURATOR_YAML_PATHS=./config.dev.yaml"
 else
     DETECTED_OS := $(shell uname -s)
     BINARY_EXT :=
@@ -34,7 +35,7 @@ else
     RMDIR := rm -rf
     MKDIR := mkdir -p
     PATHSEP := /
-	BOOTCONF := export FUJIN_CONFIGURATOR=yaml && export FUJIN_CONFIGURATOR_YAML_PATHS=./examples/assets/config/config.local.yaml
+	BOOTCONF := export FUJIN_CONFIGURATOR=yaml && export FUJIN_CONFIGURATOR_YAML_PATHS=./config.dev.yaml
 endif
 
 BIN_DIR := bin
@@ -45,6 +46,7 @@ all: clean build run
 
 comma := ,
 # Build args (comma-separated)
+BUILDER_TR_ARGS := $(foreach c,$(subst $(comma), ,$(TRANSPORTS)),-transport $(c))
 BUILDER_CONF_ARGS := $(foreach c,$(subst $(comma), ,$(CONFIGURATORS)),-configurator $(c))
 BUILDER_CONN_ARGS := $(foreach c,$(subst $(comma), ,$(CONNECTORS)),-connector $(c))
 BUILDER_BIND_M_ARGS := $(foreach c,$(subst $(comma), ,$(BIND_MIDDLEWARES)),-bind-middleware $(c))
@@ -55,6 +57,7 @@ build:
 	@echo "==> Building ${APP_NAME} for ${DETECTED_OS} (Version: ${VERSION}, Tags: [${GO_BUILD_TAGS}], Connectors: [${CONNECTORS}])"
 	@go run ./cmd/builder \
 		-local \
+		$(BUILDER_TR_ARGS) \
 		$(BUILDER_CONF_ARGS) \
 		$(BUILDER_CONN_ARGS) \
 		$(BUILDER_BIND_M_ARGS) \
@@ -112,13 +115,13 @@ help:
 	@echo "Binary: $(BINARY)"
 
 # Broker management commands
-.PHONY: up-kafka down-kafka up-nats down-nats up-rabbitmq down-rabbitmq up-artemis down-artemis up-emqx down-emqx up-nsq down-nsq up-zeromq down-zeromq
+.PHONY: up-kafka_franz down-kafka_franz up-nats_core down-nats_core up-rabbitmq_amqp09 down-rabbitmq_amqp09 up-azure_amqp1 down-azure_amqp1 up-mqtt_paho down-mqtt_paho up-nsq down-nsq
 
 # Kafka
-up-kafka:
+up-kafka_franz:
 	docker compose -f resources/docker-compose.fujin.kafka_franz.yaml -f resources/docker-compose.kafka.yaml -f resources/docker-compose.observability.yaml up -d
 
-down-kafka:
+down-kafka_franz:
 	docker compose -f resources/docker-compose.fujin.kafka_franz.yaml -f resources/docker-compose.kafka.yaml -f resources/docker-compose.observability.yaml down
 
 # NATS
@@ -143,24 +146,23 @@ down-azure_amqp1:
 	docker compose -f resources/docker-compose.fujin.azure_amqp1.yaml -f resources/docker-compose.artemis.yaml -f resources/docker-compose.observability.yaml down
 
 # EMQX
-up-mqtt:
+up-mqtt_paho:
 	docker compose -f resources/docker-compose.fujin.mqtt_paho.yaml -f resources/docker-compose.emqx.yaml -f resources/docker-compose.observability.yaml up -d
 
-down-mqtt:
+down-mqtt_paho:
 	docker compose -f resources/docker-compose.fujin.mqtt_paho.yaml -f resources/docker-compose.emqx.yaml -f resources/docker-compose.observability.yaml down
 # Redis (e.g. ValKey)
-up-resp_pubsub:
-	docker compose -f resources/docker-compose.fujin.resp_pubsub.yaml -f resources/docker-compose.valkey.yaml -f resources/docker-compose.observability.yaml up -d
+up-redis_rueidis_pubsub:
+	docker compose -f resources/docker-compose.fujin.redis_rueidis_pubsub.yaml -f resources/docker-compose.valkey.yaml -f resources/docker-compose.observability.yaml up -d
 
-down-resp_pubsub:
-	docker compose -f resources/docker-compose.fujin.resp_pubsub.yaml -f resources/docker-compose.valkey.yaml -f resources/docker-compose.observability.yaml down
+down-redis_rueidis_pubsub:
+	docker compose -f resources/docker-compose.fujin.redis_rueidis_pubsub.yaml -f resources/docker-compose.valkey.yaml -f resources/docker-compose.observability.yaml down
 
 up-redis_rueidis_streams:
 	docker compose -f resources/docker-compose.fujin.redis_rueidis_streams.yaml -f resources/docker-compose.valkey.yaml -f resources/docker-compose.observability.yaml up -d
 
 down-redis_rueidis_streams:
 	docker compose -f resources/docker-compose.fujin.redis_rueidis_streams.yaml -f resources/docker-compose.valkey.yaml -f resources/docker-compose.observability.yaml down
-
 
 # NSQ
 up-nsq:

@@ -17,10 +17,11 @@ const (
 var (
 	configurators   stringSlice
 	connectors      stringSlice
+	transports      stringSlice
 	bindMiddlewares stringSlice
 	connMiddlewares stringSlice
 	output          = flag.String("output", "fujin", "Output binary path")
-	buildTags       = flag.String("tags", "netgo,osusergo", "Build tags for the final binary (e.g. quic,tcp,grpc for transports)")
+	buildTags       = flag.String("tags", "netgo,osusergo", "Build tags for the final binary (e.g. fujin,grpc for transports)")
 	extraLdflags    = flag.String("ldflags", "", "Extra ldflags (e.g. -X main.Version=1.0.0)")
 	cgoEnabled      = flag.Bool("cgo", false, "Enable CGO (required by some plugins)")
 	localModule     = flag.Bool("local", false, "Use local fujin module (for builds from source)")
@@ -36,6 +37,7 @@ func (s *stringSlice) Set(v string) error {
 
 func init() {
 	flag.Var(&configurators, "configurator", "Configurator plugins")
+	flag.Var(&transports, "transport", "Transport plugins")
 	flag.Var(&connectors, "connector", "Connector plugins")
 	flag.Var(&bindMiddlewares, "bind-middleware", "Bind middleware plugins")
 	flag.Var(&connMiddlewares, "connector-middleware", "Connector middleware plugins")
@@ -105,6 +107,7 @@ func runBuild(opts buildOpts) error {
 	mainContent := generateMain(pluginsByType{
 		configurators:   configurators,
 		connectors:      connectors,
+		transports:      transports,
 		bindMiddlewares: bindMiddlewares,
 		connMiddlewares: connMiddlewares,
 	})
@@ -161,6 +164,7 @@ func collectPlugins() []string {
 	var all []string
 	all = append(all, configurators...)
 	all = append(all, connectors...)
+	all = append(all, transports...)
 	all = append(all, bindMiddlewares...)
 	all = append(all, connMiddlewares...)
 	return all
@@ -169,6 +173,7 @@ func collectPlugins() []string {
 type pluginsByType struct {
 	configurators   []string
 	connectors      []string
+	transports      []string
 	bindMiddlewares []string
 	connMiddlewares []string
 }
@@ -185,6 +190,9 @@ func generateMain(p pluginsByType) string {
 		imports = append(imports, fmt.Sprintf(`_ "%s"`, imp))
 	}
 	for _, imp := range p.connectors {
+		imports = append(imports, fmt.Sprintf(`_ "%s"`, imp))
+	}
+	for _, imp := range p.transports {
 		imports = append(imports, fmt.Sprintf(`_ "%s"`, imp))
 	}
 	for _, imp := range p.bindMiddlewares {

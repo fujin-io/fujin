@@ -5,8 +5,8 @@
 package all
 
 import (
-	// metrics connector middleware - provides Prometheus metrics
-	_ "github.com/fujin-io/fujin/public/plugins/middleware/connector/metrics"
-	// tracing connector middleware - provides OpenTelemetry distributed tracing
-	_ "github.com/fujin-io/fujin/public/plugins/middleware/connector/tracing"
+	// prom connector middleware - provides Prometheus metrics
+	_ "github.com/fujin-io/fujin/public/plugins/middleware/connector/prom"
+	// otel connector middleware - provides OpenTelemetry distributed tracing
+	_ "github.com/fujin-io/fujin/public/plugins/middleware/connector/otel"
 )

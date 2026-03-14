@@ -16,25 +16,33 @@ import (
 
 	cconfig "github.com/fujin-io/fujin/public/plugins/connector/config"
 	nats_core "github.com/fujin-io/fujin/public/plugins/connector/nats/core"
+	"github.com/fujin-io/fujin/public/plugins/transport"
 	"github.com/fujin-io/fujin/public/server"
-	"github.com/fujin-io/fujin/public/server/config"
+	serverconfig "github.com/fujin-io/fujin/public/server/config"
 	nats_server "github.com/nats-io/nats-server/v2/server"
 )
 
-var DefaultQUICServerTestConfig = config.QUICServerConfig{
-	Enabled: true,
-	Addr:    ":4848",
-	TLS:     generateTLSConfig(),
-}
+var defaultEnabled = true
 
-var DefaultGRPCServerTestConfig = config.GRPCServerConfig{
+var DefaultGRPCServerTestConfig = serverconfig.GRPCServerConfig{
 	Enabled: true,
 	Addr:    ":4849",
 	// TLS disabled
 }
 
-var DefaultTestConfigWithNats = config.Config{
-	QUIC: DefaultQUICServerTestConfig,
+var DefaultTestConfigWithNats = serverconfig.Config{
+	Transports: []transport.Config{{
+		Type:    "quic",
+		Enabled: &defaultEnabled,
+		Settings: map[string]any{
+			"addr": ":4848",
+			"tls": map[string]any{
+				"enabled":               true,
+				"server_cert_pem_path":  "examples/assets/certs/fujin.io.pem",
+				"server_key_pem_path":   "examples/assets/certs/fujin.io-key.pem",
+			},
+		},
+	}},
 	GRPC: DefaultGRPCServerTestConfig,
 	Connectors: cconfig.ConnectorsConfig{
 		"nats_core_connector": {
