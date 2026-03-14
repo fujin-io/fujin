@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	_ "github.com/fujin-io/fujin/internal/proto"
 	connectorconfig "github.com/fujin-io/fujin/public/plugins/connector/config"
 	"github.com/fujin-io/fujin/public/proto/fujin/v1/handler"
 	"github.com/fujin-io/fujin/public/proto/fujin/v1/session"
