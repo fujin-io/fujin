@@ -1900,7 +1900,6 @@ func (h *Handler) handle(buf []byte) error {
 						meta = make(map[string]string)
 					}
 					if err := h.handleBind(meta, h.ps.ba.configOverrides); err != nil {
-						fmt.Println("handleBind error", err)
 						return err
 					}
 					h.ps.ba = bindArgs{}
@@ -2078,7 +2077,6 @@ func (h *Handler) handle(buf []byte) error {
 
 // handleBind processes BIND command and creates Manager with config overrides
 func (h *Handler) handleBind(meta map[string]string, configOverrides map[string]string) error {
-	fmt.Println("handleBind", meta, configOverrides)
 	if h.connected {
 		// Already initialized, ignore
 		return fmt.Errorf("already initialized")

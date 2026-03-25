@@ -17,7 +17,7 @@ BIND_MIDDLEWARES ?= github.com/fujin-io/fujin/public/plugins/middleware/bind/all
 CONNECTOR_MIDDLEWARES ?= github.com/fujin-io/fujin/public/plugins/middleware/connector/all
 
 BENCH_TIME ?= 1000000x
-BENCH_FUNC ?= Benchmark_Produce_1BPayload_Nop_TCP
+BENCH_FUNC ?= Benchmark_Produce_32KBPayload_Nop_TCP
 
 # Detect OS
 ifeq ($(OS),Windows_NT)

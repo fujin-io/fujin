@@ -13,7 +13,7 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/quic-go/quic-go v0.59.0
 	github.com/rabbitmq/amqp091-go v1.10.0
-	github.com/redis/rueidis v1.0.72
+	github.com/redis/rueidis v1.0.73
 	github.com/stretchr/testify v1.11.1
 	github.com/twmb/franz-go v1.20.7
 	github.com/twmb/franz-go/pkg/kmsg v1.12.0
@@ -38,8 +38,6 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/go-zeromq/goczmq/v4 v4.2.2 // indirect
-	github.com/go-zeromq/zmq4 v0.17.0 // indirect
 	github.com/golang/snappy v1.0.0 // indirect
 	github.com/google/go-tpm v0.9.8 // indirect
 	github.com/google/uuid v1.6.0 // indirect
