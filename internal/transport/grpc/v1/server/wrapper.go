@@ -4,9 +4,13 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"net"
+	"os"
 
 	connectorconfig "github.com/fujin-io/fujin/public/plugins/connector/config"
+	"github.com/fujin-io/fujin/public/plugins/transport"
 	serverconfig "github.com/fujin-io/fujin/public/server/config"
 )
 
@@ -30,4 +34,43 @@ func (w *GRPCServerWrapper) ListenAndServe(ctx context.Context) error {
 // Stop gracefully stops the gRPC server
 func (w *GRPCServerWrapper) Stop() {
 	w.server.Stop()
+}
+
+// SetBaseConfigProvider implements transport.HotReloadable.
+func (w *GRPCServerWrapper) SetBaseConfigProvider(p func() connectorconfig.ConnectorsConfig) {
+	w.server.SetBaseConfigProvider(p)
+}
+
+// ListenerFDs implements transport.ListenerFDProvider.
+func (w *GRPCServerWrapper) ListenerFDs() ([]transport.ListenerFD, error) {
+	if w.server.lis == nil {
+		return nil, fmt.Errorf("grpc listener not started")
+	}
+	type filer interface {
+		File() (*os.File, error)
+	}
+	f, ok := w.server.lis.(filer)
+	if !ok {
+		return nil, fmt.Errorf("grpc listener does not support File()")
+	}
+	file, err := f.File()
+	if err != nil {
+		return nil, fmt.Errorf("grpc listener file: %w", err)
+	}
+	return []transport.ListenerFD{{
+		FD:   file,
+		Type: "tcp",
+		Addr: w.server.conf.Addr,
+		Meta: map[string]string{"grpc": "true"},
+	}}, nil
+}
+
+// ListenAndServeInherited implements transport.ListenerInheritor.
+func (w *GRPCServerWrapper) ListenAndServeInherited(ctx context.Context, fd *os.File) error {
+	ln, err := net.FileListener(fd)
+	fd.Close()
+	if err != nil {
+		return fmt.Errorf("inherit grpc listener: %w", err)
+	}
+	return w.server.ListenAndServeInherited(ctx, ln)
 }

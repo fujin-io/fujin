@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"os/signal"
-	"syscall"
 
 	_ "github.com/fujin-io/fujin/public/plugins/configurator/all"
 	_ "github.com/fujin-io/fujin/public/plugins/connector/all"
@@ -14,7 +13,7 @@ import (
 )
 
 func main() {
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	ctx, cancel := signal.NotifyContext(context.Background(), service.ShutdownSignals()...)
 	defer cancel()
 
 	service.RunCLI(ctx)

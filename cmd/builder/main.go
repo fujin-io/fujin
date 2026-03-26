@@ -183,7 +183,6 @@ func generateMain(p pluginsByType) string {
 	imports = append(imports,
 		`"context"`,
 		`"os/signal"`,
-		`"syscall"`,
 		fmt.Sprintf(`"%s"`, fujinService),
 	)
 	for _, imp := range p.configurators {
@@ -211,7 +210,7 @@ func generateMain(p pluginsByType) string {
 	sb.WriteString(")\n\n")
 	sb.WriteString("var Version string\n\n")
 	sb.WriteString(`func main() {
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	ctx, cancel := signal.NotifyContext(context.Background(), service.ShutdownSignals()...)
 	defer cancel()
 	service.RunCLI(ctx)
 }

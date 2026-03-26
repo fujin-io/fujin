@@ -55,12 +55,40 @@ func (o *Outbound) WriteLoop() {
 		}
 
 		if closed {
-			o.flushOutbound()
+			// Detach remaining pending buffers
+			o.wv = append(o.wv, o.v...)
+			o.v = nil
+			o.Unlock()
+
+			// Final write without lock
+			o.writeBuffers()
+
+			// Return any remaining buffers to pool
+			o.Lock()
+			for i := range o.v {
+				pool.Put(o.v[i])
+			}
+			o.v = nil
+			for i := range o.wv {
+				pool.Put(o.wv[i])
+			}
+			o.wv = nil
 			o.Unlock()
 			return
 		}
 
-		waitOK = o.flushOutbound()
+		// Detach pending buffers under lock
+		o.wv = append(o.wv, o.v...)
+		o.v = nil
+		o.Unlock()
+
+		// I/O without lock — wv is only accessed from WriteLoop
+		n := o.writeBuffers()
+
+		// Update pending bytes under lock
+		o.Lock()
+		o.pb -= n
+		waitOK = o.pb == 0
 		o.Unlock()
 	}
 }
@@ -87,27 +115,15 @@ func (o *Outbound) EnqueueProtoMulti(protos ...[]byte) {
 	o.SignalFlush()
 }
 
-func (o *Outbound) flushOutbound() bool {
-	defer func() {
-		if o.IsClosed() {
-			for i := range o.wv {
-				pool.Put(o.wv[i])
-			}
-			o.wv = nil
-		}
-	}()
-
-	if o.str == nil || o.pb == 0 {
-		return true
+// writeBuffers writes wv to the stream without holding the lock.
+// Returns the number of bytes written. Only called from WriteLoop.
+func (o *Outbound) writeBuffers() int64 {
+	if o.str == nil || len(o.wv) == 0 {
+		return 0
 	}
 
-	detached, _ := o.getV()
-	o.v = nil
-
-	o.wv = append(o.wv, detached...)
 	var _orig [MaxVectorSize][]byte
 	orig := append(_orig[:0], o.wv...)
-
 	startOfWv := o.wv[0:]
 
 	start := time.Now()
@@ -141,16 +157,7 @@ func (o *Outbound) flushOutbound() bool {
 
 	o.wv = append(startOfWv[:0], o.wv...)
 
-	o.pb -= n
-	if o.pb > 0 {
-		o.SignalFlush()
-	}
-
-	return true
-}
-
-func (o *Outbound) getV() (net.Buffers, int64) {
-	return o.v, o.pb
+	return n
 }
 
 func (o *Outbound) SignalFlush() {

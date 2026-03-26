@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"sync"
 	"time"
 
@@ -75,6 +76,40 @@ func List() []string {
 		names = append(names, n)
 	}
 	return names
+}
+
+// HotReloadable is implemented by transports that support dynamic config reload.
+// When set, the provider function is called at BIND time to get the latest config.
+type HotReloadable interface {
+	SetBaseConfigProvider(func() connectorconfig.ConnectorsConfig)
+}
+
+// ListenerFD holds a duplicated file descriptor for a listener along with metadata
+// describing the listener type and address, used during graceful binary upgrades.
+type ListenerFD struct {
+	FD   *os.File
+	Type string            // "tcp", "udp", "unix"
+	Addr string            // ":4850", "/tmp/fujin.sock"
+	Meta map[string]string // e.g. {"grpc":"true"}
+}
+
+// ListenerFDProvider is implemented by transports that can export their listener
+// file descriptors for graceful binary upgrade via FD passing.
+type ListenerFDProvider interface {
+	ListenerFDs() ([]ListenerFD, error)
+}
+
+// ListenerInheritor is implemented by transports that can start serving
+// on an inherited listener file descriptor from a previous process.
+type ListenerInheritor interface {
+	ListenAndServeInherited(ctx context.Context, fd *os.File) error
+}
+
+// FDKey returns the key used to match inherited FDs to transports during
+// graceful binary upgrade. Format: "type:addr" (e.g. "tcp::4850", "unix:/tmp/fujin.sock").
+// GRPC transports append ":grpc" suffix.
+type FDKeyProvider interface {
+	FDKey() string
 }
 
 // NewServer creates a TransportServer for the given entry.

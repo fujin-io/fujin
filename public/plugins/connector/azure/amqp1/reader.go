@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log/slog"
+	"reflect"
 	"unsafe"
 
 	"github.com/Azure/go-amqp"
@@ -98,9 +99,6 @@ func (r *Reader) Subscribe(ctx context.Context, h func(message []byte, topic str
 		if err != nil {
 			return fmt.Errorf("azure_amqp1: receive: %w", err)
 		}
-		if err := r.receiver.AcceptMessage(ctx, msg); err != nil {
-			return err
-		}
 		if err := handler(msg); err != nil {
 			return fmt.Errorf("azure_amqp1: handler: %w", err)
 		}
@@ -114,11 +112,11 @@ func (r *Reader) SubscribeWithHeaders(ctx context.Context, h func(message []byte
 			var hs [][]byte
 			if msg.ApplicationProperties != nil {
 				for k, v := range msg.ApplicationProperties {
-					keyBytes := unsafe.Slice((*byte)(unsafe.StringData(k)), len(k))
+					keyBytes := []byte(k)
 					var valueBytes []byte
 					switch val := v.(type) {
 					case string:
-						valueBytes = unsafe.Slice((*byte)(unsafe.StringData(val)), len(val))
+						valueBytes = []byte(val)
 					case []byte:
 						valueBytes = val
 					default:
@@ -135,11 +133,11 @@ func (r *Reader) SubscribeWithHeaders(ctx context.Context, h func(message []byte
 			var hs [][]byte
 			if msg.ApplicationProperties != nil {
 				for k, v := range msg.ApplicationProperties {
-					keyBytes := unsafe.Slice((*byte)(unsafe.StringData(k)), len(k))
+					keyBytes := []byte(k)
 					var valueBytes []byte
 					switch val := v.(type) {
 					case string:
-						valueBytes = unsafe.Slice((*byte)(unsafe.StringData(val)), len(val))
+						valueBytes = []byte(val)
 					case []byte:
 						valueBytes = val
 					default:
@@ -157,9 +155,6 @@ func (r *Reader) SubscribeWithHeaders(ctx context.Context, h func(message []byte
 		msg, err := r.receiver.Receive(ctx, nil)
 		if err != nil {
 			return fmt.Errorf("azure_amqp1: receive: %w", err)
-		}
-		if err := r.receiver.AcceptMessage(ctx, msg); err != nil {
-			return err
 		}
 		if err := handler(msg); err != nil {
 			return fmt.Errorf("azure_amqp1: handler: %w", err)
@@ -250,14 +245,27 @@ func (r *Reader) Close() error {
 	return nil
 }
 
+// deliveryIDOffset is computed once at init via reflect, so it stays correct
+// across go-amqp version bumps (the field is unexported).
+var deliveryIDOffset uintptr
+
+func init() {
+	t := reflect.TypeOf(amqp.Message{})
+	f, ok := t.FieldByName("deliveryID")
+	if !ok {
+		panic("azure_amqp1: amqp.Message has no deliveryID field — go-amqp version incompatible")
+	}
+	deliveryIDOffset = f.Offset
+}
+
 func SetDeliveryId(msg *amqp.Message, val uint32) {
 	ptr := unsafe.Pointer(msg)
-	fieldPtr := (*uint32)(unsafe.Pointer(uintptr(ptr) + 84))
+	fieldPtr := (*uint32)(unsafe.Pointer(uintptr(ptr) + deliveryIDOffset))
 	*fieldPtr = val
 }
 
 func GetDeliveryId(msg *amqp.Message) uint32 {
 	ptr := unsafe.Pointer(msg)
-	fieldPtr := (*uint32)(unsafe.Pointer(uintptr(ptr) + 84))
+	fieldPtr := (*uint32)(unsafe.Pointer(uintptr(ptr) + deliveryIDOffset))
 	return *fieldPtr
 }

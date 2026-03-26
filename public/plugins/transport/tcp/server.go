@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"os"
 	"sync"
 	"time"
 
 	connectorconfig "github.com/fujin-io/fujin/public/plugins/connector/config"
+	"github.com/fujin-io/fujin/public/plugins/transport"
 	"github.com/fujin-io/fujin/public/proto/fujin/v1/handler"
 	"github.com/fujin-io/fujin/public/proto/fujin/v1/session"
 	serverconfig "github.com/fujin-io/fujin/public/server/config"
@@ -19,6 +21,10 @@ import (
 type Server struct {
 	conf       serverconfig.TCPServerConfig
 	baseConfig connectorconfig.ConnectorsConfig
+
+	configProvider func() connectorconfig.ConnectorsConfig
+
+	ln net.Listener // stored for ListenerFDs
 
 	ready chan struct{}
 	done  chan struct{}
@@ -36,6 +42,46 @@ func NewServer(conf serverconfig.TCPServerConfig, baseConfig connectorconfig.Con
 	}
 }
 
+// FDKey implements transport.FDKeyProvider.
+func (s *Server) FDKey() string { return "tcp:" + s.conf.Addr }
+
+// SetBaseConfigProvider implements transport.HotReloadable.
+func (s *Server) SetBaseConfigProvider(p func() connectorconfig.ConnectorsConfig) {
+	s.configProvider = p
+}
+
+// ListenerFDs implements transport.ListenerFDProvider.
+func (s *Server) ListenerFDs() ([]transport.ListenerFD, error) {
+	if s.ln == nil {
+		return nil, fmt.Errorf("tcp listener not started")
+	}
+	type filer interface {
+		File() (*os.File, error)
+	}
+	f, ok := s.ln.(filer)
+	if !ok {
+		return nil, fmt.Errorf("tcp listener does not support File()")
+	}
+	file, err := f.File()
+	if err != nil {
+		return nil, fmt.Errorf("tcp listener file: %w", err)
+	}
+	return []transport.ListenerFD{{FD: file, Type: "tcp", Addr: s.conf.Addr}}, nil
+}
+
+// ListenAndServeInherited implements transport.ListenerInheritor.
+func (s *Server) ListenAndServeInherited(ctx context.Context, fd *os.File) error {
+	ln, err := net.FileListener(fd)
+	fd.Close()
+	if err != nil {
+		return fmt.Errorf("inherit tcp listener: %w", err)
+	}
+	if s.conf.TLS != nil {
+		ln = tls.NewListener(ln, s.conf.TLS)
+	}
+	return s.acceptLoop(ctx, ln)
+}
+
 func (s *Server) ListenAndServe(ctx context.Context) error {
 	var (
 		ln  net.Listener
@@ -50,6 +96,12 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("listen tcp: %w", err)
 	}
+
+	return s.acceptLoop(ctx, ln)
+}
+
+func (s *Server) acceptLoop(ctx context.Context, ln net.Listener) error {
+	s.ln = ln
 
 	connWg := &sync.WaitGroup{}
 
@@ -110,6 +162,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 
 			handler.HandleStream(ctx, conn, session.StreamOptions{
 				BaseConfig:            s.baseConfig,
+				BaseConfigProvider:    s.configProvider,
 				PingInterval:          s.conf.Fujin.PingInterval,
 				PingTimeout:           s.conf.Fujin.PingTimeout,
 				WriteDeadline:         s.conf.Fujin.WriteDeadline,

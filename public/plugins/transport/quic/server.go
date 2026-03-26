@@ -8,11 +8,13 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/fujin-io/fujin/internal/proto/pool"
 	connectorconfig "github.com/fujin-io/fujin/public/plugins/connector/config"
+	"github.com/fujin-io/fujin/public/plugins/transport"
 	v1 "github.com/fujin-io/fujin/public/proto/fujin/v1"
 	"github.com/fujin-io/fujin/public/proto/fujin/v1/handler"
 	"github.com/fujin-io/fujin/public/proto/fujin/v1/session"
@@ -27,6 +29,10 @@ var (
 type FujinServer struct {
 	conf       serverconfig.QUICServerConfig
 	baseConfig connectorconfig.ConnectorsConfig
+
+	configProvider func() connectorconfig.ConnectorsConfig
+
+	udpConn *net.UDPConn // stored for ListenerFDs
 
 	ready chan struct{}
 	done  chan struct{}
@@ -44,6 +50,41 @@ func NewServer(conf serverconfig.QUICServerConfig, baseConfig connectorconfig.Co
 	}
 }
 
+// FDKey implements transport.FDKeyProvider.
+func (s *FujinServer) FDKey() string { return "udp:" + s.conf.Addr }
+
+// SetBaseConfigProvider implements transport.HotReloadable.
+func (s *FujinServer) SetBaseConfigProvider(p func() connectorconfig.ConnectorsConfig) {
+	s.configProvider = p
+}
+
+// ListenerFDs implements transport.ListenerFDProvider.
+func (s *FujinServer) ListenerFDs() ([]transport.ListenerFD, error) {
+	if s.udpConn == nil {
+		return nil, fmt.Errorf("quic udp conn not started")
+	}
+	file, err := s.udpConn.File()
+	if err != nil {
+		return nil, fmt.Errorf("quic udp conn file: %w", err)
+	}
+	return []transport.ListenerFD{{FD: file, Type: "udp", Addr: s.conf.Addr}}, nil
+}
+
+// ListenAndServeInherited implements transport.ListenerInheritor.
+func (s *FujinServer) ListenAndServeInherited(ctx context.Context, fd *os.File) error {
+	pc, err := net.FilePacketConn(fd)
+	fd.Close()
+	if err != nil {
+		return fmt.Errorf("inherit udp conn: %w", err)
+	}
+	udpConn, ok := pc.(*net.UDPConn)
+	if !ok {
+		pc.Close()
+		return fmt.Errorf("inherited fd is not a UDP connection")
+	}
+	return s.serve(ctx, udpConn)
+}
+
 func (s *FujinServer) ListenAndServe(ctx context.Context) error {
 	addr, err := net.ResolveUDPAddr("udp", s.conf.Addr)
 	if err != nil {
@@ -54,6 +95,13 @@ func (s *FujinServer) ListenAndServe(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("listen udp: %w", err)
 	}
+
+	return s.serve(ctx, conn)
+}
+
+func (s *FujinServer) serve(ctx context.Context, conn *net.UDPConn) error {
+	s.udpConn = conn
+
 	tr := &quicgo.Transport{
 		Conn: conn,
 	}
@@ -229,6 +277,7 @@ func (s *FujinServer) ListenAndServe(ctx context.Context) error {
 					go func() {
 						handler.HandleStream(ctx, str, session.StreamOptions{
 							BaseConfig:            s.baseConfig,
+							BaseConfigProvider:    s.configProvider,
 							PingInterval:          s.conf.Fujin.PingInterval,
 							PingTimeout:           s.conf.Fujin.PingTimeout,
 							PingStream:            s.conf.Fujin.PingStream,

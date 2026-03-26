@@ -13,6 +13,7 @@ import (
 	"time"
 
 	connectorconfig "github.com/fujin-io/fujin/public/plugins/connector/config"
+	"github.com/fujin-io/fujin/public/plugins/transport"
 	"github.com/fujin-io/fujin/public/proto/fujin/v1/handler"
 	"github.com/fujin-io/fujin/public/proto/fujin/v1/session"
 	serverconfig "github.com/fujin-io/fujin/public/server/config"
@@ -21,6 +22,10 @@ import (
 type Server struct {
 	conf       serverconfig.UnixServerConfig
 	baseConfig connectorconfig.ConnectorsConfig
+
+	configProvider func() connectorconfig.ConnectorsConfig
+
+	ln net.Listener // stored for ListenerFDs
 
 	ready chan struct{}
 	done  chan struct{}
@@ -38,6 +43,44 @@ func NewServer(conf serverconfig.UnixServerConfig, baseConfig connectorconfig.Co
 	}
 }
 
+// FDKey implements transport.FDKeyProvider.
+func (s *Server) FDKey() string { return "unix:" + s.conf.Path }
+
+// SetBaseConfigProvider implements transport.HotReloadable.
+func (s *Server) SetBaseConfigProvider(p func() connectorconfig.ConnectorsConfig) {
+	s.configProvider = p
+}
+
+// ListenerFDs implements transport.ListenerFDProvider.
+func (s *Server) ListenerFDs() ([]transport.ListenerFD, error) {
+	if s.ln == nil {
+		return nil, fmt.Errorf("unix listener not started")
+	}
+	type filer interface {
+		File() (*os.File, error)
+	}
+	f, ok := s.ln.(filer)
+	if !ok {
+		return nil, fmt.Errorf("unix listener does not support File()")
+	}
+	file, err := f.File()
+	if err != nil {
+		return nil, fmt.Errorf("unix listener file: %w", err)
+	}
+	return []transport.ListenerFD{{FD: file, Type: "unix", Addr: s.conf.Path}}, nil
+}
+
+// ListenAndServeInherited implements transport.ListenerInheritor.
+func (s *Server) ListenAndServeInherited(ctx context.Context, fd *os.File) error {
+	ln, err := net.FileListener(fd)
+	fd.Close()
+	if err != nil {
+		return fmt.Errorf("inherit unix listener: %w", err)
+	}
+	// Don't remove the socket file — inherited from old process
+	return s.acceptLoop(ctx, ln, false)
+}
+
 func (s *Server) ListenAndServe(ctx context.Context) error {
 	path := s.conf.Path
 	if path == "" {
@@ -53,11 +96,19 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		return fmt.Errorf("unix: listen: %w", err)
 	}
 
+	return s.acceptLoop(ctx, ln, true)
+}
+
+func (s *Server) acceptLoop(ctx context.Context, ln net.Listener, removeOnClose bool) error {
+	s.ln = ln
+
 	connWg := &sync.WaitGroup{}
 
 	defer func() {
 		ln.Close()
-		os.Remove(path)
+		if removeOnClose {
+			os.Remove(s.conf.Path)
+		}
 
 		timeout := time.After(30 * time.Second)
 		doneCh := make(chan struct{})
@@ -78,7 +129,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	}()
 
 	close(s.ready)
-	s.l.Info("fujin unix server started", "path", path)
+	s.l.Info("fujin unix server started", "path", s.conf.Path)
 
 	go func() {
 		<-ctx.Done()
@@ -107,6 +158,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 
 			handler.HandleStream(ctx, conn, session.StreamOptions{
 				BaseConfig:            s.baseConfig,
+				BaseConfigProvider:    s.configProvider,
 				PingInterval:          s.conf.Fujin.PingInterval,
 				PingTimeout:           s.conf.Fujin.PingTimeout,
 				WriteDeadline:         s.conf.Fujin.WriteDeadline,

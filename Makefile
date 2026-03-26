@@ -17,7 +17,7 @@ BIND_MIDDLEWARES ?= github.com/fujin-io/fujin/public/plugins/middleware/bind/all
 CONNECTOR_MIDDLEWARES ?= github.com/fujin-io/fujin/public/plugins/middleware/connector/all
 
 BENCH_TIME ?= 1000000x
-BENCH_FUNC ?= Benchmark_Produce_1BPayload_Nop_TCP
+BENCH_FUNC ?= Benchmark_Produce_32KBPayload_Nop_TCP
 
 # Detect OS
 ifeq ($(OS),Windows_NT)
@@ -91,6 +91,16 @@ test:
 	@echo "==> Running tests"
 	@go test -v -tags=${GO_BUILD_TAGS} ./...
 
+.PHONY: cross-build
+cross-build:
+	@echo "==> Cross-compiling for Windows"
+	@GOOS=windows GOARCH=amd64 go build -tags=${GO_BUILD_TAGS} ./...
+	@echo "==> Cross-compiling for Linux"
+	@GOOS=linux GOARCH=amd64 go build -tags=${GO_BUILD_TAGS} ./...
+	@echo "==> Cross-compiling for Darwin (arm64)"
+	@GOOS=darwin GOARCH=arm64 go build -tags=${GO_BUILD_TAGS} ./...
+	@echo "==> All platforms OK"
+
 .PHONY: help
 help:
 	@echo "Fujin Makefile ($(DETECTED_OS))"
@@ -100,6 +110,7 @@ help:
 	@echo "  make run                                  Run binary."
 	@echo "  make clean                                Remove build artifacts."
 	@echo "  make test                                 Run all tests."
+	@echo "  make cross-build                          Verify cross-compilation (Windows, Linux, Darwin)."
 	@echo "  make bench                                Run benchmarks."
 	@echo ""
 	@echo "Variables:"

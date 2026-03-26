@@ -133,6 +133,9 @@ var (
 	conf    Config
 )
 
+// ShutdownSignals returns the platform-appropriate OS signals for graceful shutdown.
+func ShutdownSignals() []os.Signal { return shutdownSignals }
+
 func RunCLI(ctx context.Context) {
 	log.Printf("version: %s", Version)
 
@@ -144,11 +147,19 @@ func RunCLI(ctx context.Context) {
 		log.Fatal(err)
 	}
 
-	logLevel := os.Getenv("FUJIN_LOG_LEVEL")
 	logType := os.Getenv("FUJIN_LOG_TYPE")
-	logger := configureLogger(logLevel, logType)
+	logLevelVar := &slog.LevelVar{}
+	logLevelVar.Set(parseLogLevel(os.Getenv("FUJIN_LOG_LEVEL")))
+	logger := configureLoggerWithLevelVar(logType, logLevelVar)
 
 	logRegisteredPlugins(logger)
+
+	// If in upgrade mode, request FDs from old process before creating server
+	us, err := requestUpgradeFromOld(logger)
+	if err != nil {
+		logger.Error("upgrade request failed", "err", err)
+		os.Exit(1)
+	}
 
 	s, err := server.NewServer(serverConf, logger)
 	if err != nil {
@@ -156,37 +167,72 @@ func RunCLI(ctx context.Context) {
 		os.Exit(1)
 	}
 
-	if err := s.ListenAndServe(ctx); err != nil {
+	// Pass inherited FDs to server if in upgrade mode
+	us.applyTo(s)
+
+	// Use a cancellable context for the server so drain can stop it
+	serverCtx, serverCancel := context.WithCancel(ctx)
+	defer serverCancel()
+
+	// Start control socket for future upgrades (drain triggers serverCancel)
+	startUpgradeListener(ctx, s, serverCancel, logger)
+
+	// SIGHUP reload loop (Unix only, no-op on other platforms)
+	startReloadLoop(s, logLevelVar, logger)
+
+	// Start serving (blocks until context cancelled or error)
+	serveDone := make(chan error, 1)
+	go func() {
+		serveDone <- s.ListenAndServe(serverCtx)
+	}()
+
+	// Wait for server to be ready, then signal old process if upgrading
+	if us != nil {
+		if s.ReadyForConnections(30 * time.Second) {
+			signalOldProcessReady(us, logger)
+		} else {
+			logger.Error("upgrade mode: server did not become ready in time")
+		}
+	}
+
+	if err := <-serveDone; err != nil {
 		logger.Error("listen and serve", "err", err)
 	}
 }
 
-func configureLogger(logLevel, logType string) *slog.Logger {
-	var parsedLogLevel slog.Level
-	switch strings.ToUpper(logLevel) {
+func parseLogLevel(s string) slog.Level {
+	switch strings.ToUpper(s) {
 	case "DEBUG":
-		parsedLogLevel = slog.LevelDebug
+		return slog.LevelDebug
 	case "WARN":
-		parsedLogLevel = slog.LevelWarn
+		return slog.LevelWarn
 	case "ERROR":
-		parsedLogLevel = slog.LevelError
+		return slog.LevelError
 	default:
-		parsedLogLevel = slog.LevelInfo
+		return slog.LevelInfo
 	}
+}
 
+func configureLoggerWithLevelVar(logType string, level *slog.LevelVar) *slog.Logger {
 	var handler slog.Handler
 	switch strings.ToLower(logType) {
 	case "json":
 		handler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-			Level: parsedLogLevel,
+			Level: level,
 		})
 	default:
 		handler = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-			Level: parsedLogLevel,
+			Level: level,
 		})
 	}
 
 	return slog.New(handler)
+}
+
+func configureLogger(logLevel, logType string) *slog.Logger {
+	level := &slog.LevelVar{}
+	level.Set(parseLogLevel(logLevel))
+	return configureLoggerWithLevelVar(logType, level)
 }
 
 // loadConfig loads configuration

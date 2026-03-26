@@ -36,6 +36,8 @@ var (
 	messagingSystemFujin = semconv.MessagingSystemKey.String("fujin")
 	tracerProvider       *sdktrace.TracerProvider
 	tracerProviderOnce   sync.Once
+	tracerProviderMu     sync.Mutex
+	tracerShutdownOnce   sync.Once
 )
 
 // Config for otel connector middleware
@@ -137,12 +139,18 @@ func initTracerProvider(ctx context.Context, cfg Config, l *slog.Logger) {
 			attribute.String("service.version", cfg.ServiceVersion),
 			attribute.String("deployment.environment", cfg.Environment),
 		))
-		tracerProvider = sdktrace.NewTracerProvider(
+
+		tp := sdktrace.NewTracerProvider(
 			sdktrace.WithBatcher(exp),
 			sdktrace.WithSampler(sampler),
 			sdktrace.WithResource(res),
 		)
-		otel.SetTracerProvider(tracerProvider)
+
+		tracerProviderMu.Lock()
+		tracerProvider = tp
+		tracerProviderMu.Unlock()
+
+		otel.SetTracerProvider(tp)
 		otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 		l.Info("otel initialized", "endpoint", cfg.OTLPEndpoint, "service", cfg.ServiceName)
 	})
@@ -150,10 +158,16 @@ func initTracerProvider(ctx context.Context, cfg Config, l *slog.Logger) {
 
 // Shutdown gracefully shuts down the tracing provider
 func Shutdown(ctx context.Context) error {
-	if tracerProvider != nil {
-		return tracerProvider.Shutdown(ctx)
-	}
-	return nil
+	var err error
+	tracerShutdownOnce.Do(func() {
+		tracerProviderMu.Lock()
+		tp := tracerProvider
+		tracerProviderMu.Unlock()
+		if tp != nil {
+			err = tp.Shutdown(ctx)
+		}
+	})
+	return err
 }
 
 // otelMiddleware implements connector.Middleware
@@ -179,8 +193,11 @@ func (d *otelMiddleware) WrapReader(r connector.ReadCloser, connectorName string
 // Helper functions
 
 func tracer() trace.Tracer {
-	if tracerProvider != nil {
-		return tracerProvider.Tracer("fujin")
+	tracerProviderMu.Lock()
+	tp := tracerProvider
+	tracerProviderMu.Unlock()
+	if tp != nil {
+		return tp.Tracer("fujin")
 	}
 	return otel.Tracer("fujin")
 }

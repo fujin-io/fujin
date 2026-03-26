@@ -99,8 +99,7 @@ func (i *inbound) ReadLoop(ctx context.Context) {
 func (i *inbound) waitAndDisconnect() {
 	i.h.enqueueStop()
 	time.Sleep(i.ftt)
-	i.h.disconnect()
-	i.close()
+	i.closeRead()
 }
 
 func (i *inbound) close() {

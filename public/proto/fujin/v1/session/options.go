@@ -11,6 +11,7 @@ import (
 // Transports (QUIC, TCP, etc.) provide these options when handling a connection.
 type StreamOptions struct {
 	BaseConfig            config.ConnectorsConfig
+	BaseConfigProvider    func() config.ConnectorsConfig // if non-nil, called at BIND time for hot-reloaded config
 	PingInterval          time.Duration
 	PingTimeout           time.Duration
 	PingStream            bool

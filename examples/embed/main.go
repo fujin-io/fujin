@@ -11,7 +11,6 @@ import (
 	"math/big"
 	"os"
 	"os/signal"
-	"syscall"
 	"time"
 
 	cconfig "github.com/fujin-io/fujin/public/plugins/connector/config"
@@ -19,6 +18,7 @@ import (
 	"github.com/fujin-io/fujin/public/plugins/transport"
 	"github.com/fujin-io/fujin/public/server"
 	serverconfig "github.com/fujin-io/fujin/public/server/config"
+	"github.com/fujin-io/fujin/public/service"
 	nats_server "github.com/nats-io/nats-server/v2/server"
 )
 
@@ -71,7 +71,7 @@ var DefaultTestConfigWithNats = serverconfig.Config{
 // 2. Build with the "nats_core" tag
 // 3. Run from repo root: go run -tags quic,grpc ./examples/embed/main.go
 func main() {
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	ctx, cancel := signal.NotifyContext(context.Background(), service.ShutdownSignals()...)
 	defer cancel()
 
 	s := RunServer(ctx)

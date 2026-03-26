@@ -54,6 +54,7 @@ func NewReader(conf ConnectorConfig, autoCommit bool, l *slog.Logger) (*Reader, 
 func (r *Reader) Subscribe(ctx context.Context, h func(message []byte, topic string, args ...any)) error {
 	r.mu.Lock()
 	if r.channel != nil {
+		r.mu.Unlock()
 		return fmt.Errorf("rabbitmq_amqp09: reader busy")
 	}
 
@@ -66,6 +67,7 @@ func (r *Reader) Subscribe(ctx context.Context, h func(message []byte, topic str
 	r.channel, err = r.conn.Channel()
 	if err != nil {
 		_ = r.conn.Close()
+		r.conn = nil
 		r.mu.Unlock()
 		return fmt.Errorf("rabbitmq_amqp09: open channel: %w", err)
 	}
@@ -133,7 +135,10 @@ func (r *Reader) Subscribe(ctx context.Context, h func(message []byte, topic str
 		}
 	}
 
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		for d := range msgs {
 			handler(d)
 		}
@@ -141,13 +146,14 @@ func (r *Reader) Subscribe(ctx context.Context, h func(message []byte, topic str
 
 	<-ctx.Done()
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	if r.channel != nil {
 		if err := r.channel.Close(); err != nil {
 			r.l.Error("close channel", "err", err)
 		}
 		r.channel = nil
 	}
+	r.mu.Unlock()
+	wg.Wait()
 
 	return nil
 }
@@ -155,6 +161,7 @@ func (r *Reader) Subscribe(ctx context.Context, h func(message []byte, topic str
 func (r *Reader) SubscribeWithHeaders(ctx context.Context, h func(message []byte, topic string, hs [][]byte, args ...any)) error {
 	r.mu.Lock()
 	if r.channel != nil {
+		r.mu.Unlock()
 		return fmt.Errorf("rabbitmq_amqp09: reader busy")
 	}
 
@@ -167,6 +174,7 @@ func (r *Reader) SubscribeWithHeaders(ctx context.Context, h func(message []byte
 	r.channel, err = r.conn.Channel()
 	if err != nil {
 		_ = r.conn.Close()
+		r.conn = nil
 		r.mu.Unlock()
 		return fmt.Errorf("rabbitmq_amqp09: open channel: %w", err)
 	}
@@ -267,7 +275,10 @@ func (r *Reader) SubscribeWithHeaders(ctx context.Context, h func(message []byte
 		}
 	}
 
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		for d := range msgs {
 			handler(d)
 		}
@@ -275,13 +286,15 @@ func (r *Reader) SubscribeWithHeaders(ctx context.Context, h func(message []byte
 
 	<-ctx.Done()
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	if r.channel != nil {
 		if err := r.channel.Close(); err != nil {
 			r.l.Error("close channel", "err", err)
 		}
 		r.channel = nil
 	}
+	r.mu.Unlock()
+	wg.Wait()
+
 	return nil
 }
 

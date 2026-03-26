@@ -101,7 +101,7 @@ func (c *Connector) Fetch(
 	}
 
 	// We need to commit messages manually for some reason, even if auto commit is enabled
-	if c.autoCommit {
+	if c.autoCommit && rec != nil {
 		if err := c.cl.CommitRecords(ctx, rec); err != nil {
 			c.l.Error("kafka_franz: commit record", "err", err)
 		}
@@ -140,7 +140,7 @@ func (c *Connector) FetchWithHeaders(
 		c.headeredHandler(rec, msgHandler)
 	}
 
-	if c.autoCommit {
+	if c.autoCommit && rec != nil {
 		if err := c.cl.CommitRecords(ctx, rec); err != nil {
 			c.l.Error("kafka_franz: commit record", "err", err)
 		}

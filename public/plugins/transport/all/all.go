@@ -8,13 +8,7 @@
 package all
 
 import (
-	"fmt"
-
 	_ "github.com/fujin-io/fujin/public/plugins/transport/quic"
 	_ "github.com/fujin-io/fujin/public/plugins/transport/tcp"
 	_ "github.com/fujin-io/fujin/public/plugins/transport/unix"
 )
-
-func init() {
-	fmt.Println("init2")
-}

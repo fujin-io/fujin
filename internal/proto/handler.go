@@ -233,7 +233,8 @@ type Handler struct {
 	ctx             context.Context
 	out             *Outbound
 	str             session.Stream
-	baseConfig      config.ConnectorsConfig
+	baseConfig         config.ConnectorsConfig
+	baseConfigProvider func() config.ConnectorsConfig
 	connectorConfig config.ConnectorConfig
 	cman            *connectors.ManagerV2 // Created during BIND
 
@@ -264,7 +265,8 @@ type Handler struct {
 
 	acker connector.ReadCloser
 
-	disconnect func()
+	disconnect     func()
+	disconnectOnce sync.Once
 
 	wg       sync.WaitGroup
 	stopRead bool
@@ -277,11 +279,13 @@ func NewHandler(
 	ctx context.Context,
 	pingInterval time.Duration, pingTimeout time.Duration, pingStream bool,
 	baseConfig config.ConnectorsConfig,
+	baseConfigProvider func() config.ConnectorsConfig,
 	out *Outbound, str session.Stream, l *slog.Logger,
 ) *Handler {
 	h := &Handler{
 		ctx:                         ctx,
 		baseConfig:                  baseConfig,
+		baseConfigProvider:          baseConfigProvider,
 		pingInterval:                pingInterval,
 		pingTimeout:                 pingTimeout,
 		subIDPool:                   pool2.NewBytePool(),
@@ -1718,7 +1722,11 @@ func (h *Handler) handle(buf []byte) error {
 			if len(h.ps.argBuf) >= int(h.ps.ba.connectorNameLen) {
 				h.ps.ba.connectorNameValue = string(h.ps.argBuf)
 				pool.Put(h.ps.argBuf)
-				h.connectorConfig = h.baseConfig[h.ps.ba.connectorNameValue]
+				cfg := h.baseConfig
+				if h.baseConfigProvider != nil {
+					cfg = h.baseConfigProvider()
+				}
+				h.connectorConfig = cfg[h.ps.ba.connectorNameValue]
 				h.ps.state = OP_BIND_META_COUNT
 				h.ps.argBuf = pool.Get(v1.Uint16Len)
 			}
@@ -1900,7 +1908,6 @@ func (h *Handler) handle(buf []byte) error {
 						meta = make(map[string]string)
 					}
 					if err := h.handleBind(meta, h.ps.ba.configOverrides); err != nil {
-						fmt.Println("handleBind error", err)
 						return err
 					}
 					h.ps.ba = bindArgs{}
@@ -2078,7 +2085,6 @@ func (h *Handler) handle(buf []byte) error {
 
 // handleBind processes BIND command and creates Manager with config overrides
 func (h *Handler) handleBind(meta map[string]string, configOverrides map[string]string) error {
-	fmt.Println("handleBind", meta, configOverrides)
 	if h.connected {
 		// Already initialized, ignore
 		return fmt.Errorf("already initialized")
@@ -2150,6 +2156,10 @@ func (h *Handler) handleBind(meta map[string]string, configOverrides map[string]
 			unsub()
 		}
 		h.sMu.Unlock()
+
+		// Wait for all pending goroutines (subscribe + fetch) before closing resources
+		h.wg.Wait()
+
 		if h.cman != nil {
 			h.cman.Close()
 		}
@@ -2336,8 +2346,12 @@ func (h *Handler) fetch(topic string, autoCommit bool, n uint32) {
 	header = append(header, v1.ERR_CODE_NO)
 	// header = append(header, subID)
 
+	h.wg.Add(1)
 	go func(headered bool, subscriptionID byte) {
+		defer h.wg.Done()
+		h.sMu.Lock()
 		fetcher, ok := h.subscribers[subscriptionID]
+		h.sMu.Unlock()
 		if !ok {
 			var err error
 			fetcher, err = h.cman.GetReader(topic, autoCommit)
@@ -2356,10 +2370,10 @@ func (h *Handler) fetch(topic string, autoCommit bool, n uint32) {
 		}
 		h.sMu.Unlock()
 
+		h.out.Lock()
 		if headered {
 			fetcher.FetchWithHeaders(h.ctx, n,
 				func(n uint32, err error) {
-					h.out.Lock()
 					if err != nil {
 						header[5] = v1.ERR_CODE_YES
 						h.out.QueueOutboundNoLock(header)
@@ -2385,7 +2399,6 @@ func (h *Handler) fetch(topic string, autoCommit bool, n uint32) {
 
 		fetcher.Fetch(h.ctx, n,
 			func(n uint32, err error) {
-				h.out.Lock()
 				if err != nil {
 					header[5] = v1.ERR_CODE_YES
 					h.out.QueueOutboundNoLock(header)
@@ -2431,7 +2444,7 @@ func (h *Handler) flushBufs() {
 
 func (h *Handler) close() {
 	h.stopRead = true
-	h.disconnect()
+	h.disconnectOnce.Do(h.disconnect)
 	close(h.closed)
 }
 
@@ -2490,8 +2503,7 @@ func (h *Handler) enqueueWriteErrResponse(err error) {
 	buf = append(buf, h.ps.ca.cID...)
 	buf = append(buf, v1.ERR_CODE_YES)
 	buf = binary.BigEndian.AppendUint32(buf, uint32(errLen))
-	buf = append(buf,
-		unsafe.Slice((*byte)(unsafe.Pointer((*[2]uintptr)(unsafe.Pointer(&errPayload))[0])), len(errPayload))...)
+	buf = append(buf, unsafe.Slice(unsafe.StringData(errPayload), len(errPayload))...)
 	h.out.EnqueueProto(buf)
 	pool.Put(buf)
 }
@@ -2894,8 +2906,7 @@ func enqueueSubscribeErr(out *Outbound, cID []byte, respCode v1.RespCode, errCod
 	buf = append(buf, cID...)
 	buf = append(buf, byte(errCode))
 	buf = binary.BigEndian.AppendUint32(buf, uint32(errLen))
-	buf = append(buf,
-		unsafe.Slice((*byte)(unsafe.Pointer((*[2]uintptr)(unsafe.Pointer(&errPayload))[0])), len(errPayload))...)
+	buf = append(buf, unsafe.Slice(unsafe.StringData(errPayload), len(errPayload))...)
 	out.EnqueueProto(buf)
 	pool.Put(buf)
 }
@@ -2905,14 +2916,7 @@ func errProtoBuf(err error) []byte {
 	errLen := len(errPayload)
 	errBuf := pool.Get(v1.Uint32Len + errLen) // err len + err payload
 	errBuf = binary.BigEndian.AppendUint32(errBuf, uint32(errLen))
-	return append(errBuf,
-		unsafe.Slice((*byte)(unsafe.Pointer((*[2]uintptr)(unsafe.Pointer(&errPayload))[0])), len(errPayload))...)
-}
-
-func replaceUnsafe(slice []byte, start int, new []byte) {
-	ptr := unsafe.Pointer(&slice[start])
-	dst := (*[1 << 30]byte)(ptr)
-	copy(dst[:len(new)], new)
+	return append(errBuf, unsafe.Slice(unsafe.StringData(errPayload), len(errPayload))...)
 }
 
 func parseBool(b byte) (bool, error) {
