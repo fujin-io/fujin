@@ -15,6 +15,8 @@ import (
 	_ "github.com/fujin-io/fujin/public/plugins/connector/mqtt/paho"
 	// NATS Core connector plugin
 	_ "github.com/fujin-io/fujin/public/plugins/connector/nats/core"
+	// NATS JetStream connector plugin
+	_ "github.com/fujin-io/fujin/public/plugins/connector/nats/jetstream"
 	// NSQ connector plugin
 	_ "github.com/fujin-io/fujin/public/plugins/connector/nsq"
 	// Redis Rueidis PubSub connector plugin

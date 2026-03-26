@@ -19,6 +19,8 @@ import (
 	serverconfig "github.com/fujin-io/fujin/public/server/config"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/keepalive"
 )
 
@@ -33,6 +35,7 @@ type GRPCServer struct {
 
 	lis        net.Listener // stored for ListenerFDs
 	grpcServer *grpc.Server
+	healthSrv  *health.Server
 }
 
 // NewGRPCServer creates a new gRPC server instance
@@ -141,6 +144,11 @@ func (s *GRPCServer) initGRPCServer() {
 
 	s.grpcServer = grpc.NewServer(serverOpts...)
 	pb.RegisterFujinServiceServer(s.grpcServer, s)
+
+	// Register standard gRPC health check service
+	s.healthSrv = health.NewServer()
+	healthpb.RegisterHealthServer(s.grpcServer, s.healthSrv)
+	s.healthSrv.SetServingStatus("", healthpb.HealthCheckResponse_NOT_SERVING)
 }
 
 // Stop gracefully stops the gRPC server
@@ -160,9 +168,12 @@ func (s *GRPCServer) serveListener(ctx context.Context, lis net.Listener) error 
 		}
 	}()
 
+	s.healthSrv.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
+
 	select {
 	case <-ctx.Done():
 		s.l.Info("shutting down grpc server")
+		s.healthSrv.SetServingStatus("", healthpb.HealthCheckResponse_NOT_SERVING)
 		s.grpcServer.GracefulStop()
 		s.l.Info("grpc server stopped")
 		return nil

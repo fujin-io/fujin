@@ -26,6 +26,9 @@ import (
 	kafka "github.com/fujin-io/fujin/public/plugins/connector/kafka/franz"
 	mqtt "github.com/fujin-io/fujin/public/plugins/connector/mqtt/paho"
 	"github.com/fujin-io/fujin/public/plugins/connector/nats/core"
+	"github.com/fujin-io/fujin/public/plugins/connector/nats/jetstream"
+	natsgo "github.com/nats-io/nats.go"
+	natsjs "github.com/nats-io/nats.go/jetstream"
 	"github.com/fujin-io/fujin/public/plugins/connector/nsq"
 	"github.com/fujin-io/fujin/public/plugins/connector/rabbitmq/amqp09"
 	redis_config "github.com/fujin-io/fujin/public/plugins/connector/redis/rueidis/config"
@@ -395,6 +398,324 @@ var DefaultTestConfigWithKafka3BrokersTCP = MakeConfigWithTCP(connector_config.C
 			},
 		},
 	},
+	// Separate connector with its own consumer group for ack/nack tests.
+	// Avoids Kafka consumer group rebalancing conflicts with subscribe/fetch tests.
+	"ack_connector": {
+		Type: "kafka_franz",
+		Settings: kafka.Config{
+			Common: kafka.CommonSettings{
+				Brokers: []string{"localhost:9092", "localhost:9093", "localhost:9094"},
+			},
+			Clients: map[string]kafka.ClientSpecificSettings{
+				"sub": {
+					ConsumeTopics:          []string{"my_pub_topic"},
+					Group:                  "fujin_ack",
+					AllowAutoTopicCreation: true,
+				},
+				"pub": {
+					ProduceTopic:           "my_pub_topic",
+					AllowAutoTopicCreation: true,
+					Linger:                 10 * time.Millisecond,
+				},
+			},
+		},
+	},
+	"nack_connector": {
+		Type: "kafka_franz",
+		Settings: kafka.Config{
+			Common: kafka.CommonSettings{
+				Brokers: []string{"localhost:9092", "localhost:9093", "localhost:9094"},
+			},
+			Clients: map[string]kafka.ClientSpecificSettings{
+				"sub": {
+					ConsumeTopics:          []string{"my_pub_topic"},
+					Group:                  "fujin_nack",
+					AllowAutoTopicCreation: true,
+				},
+				"pub": {
+					ProduceTopic:           "my_pub_topic",
+					AllowAutoTopicCreation: true,
+					Linger:                 10 * time.Millisecond,
+				},
+			},
+		},
+	},
+})
+
+var DefaultTestConfigWithNatsTCP = MakeConfigWithTCP(connector_config.ConnectorsConfig{
+	"connector": {
+		Type: "nats_core",
+		Settings: core.Config{
+			Common: core.CommonSettings{
+				URL: "nats://localhost:4222",
+			},
+			Clients: map[string]core.ClientSpecificSettings{
+				"pub": {
+					Subject: "my_subject",
+				},
+				"sub": {
+					Subject: "my_subject",
+				},
+			},
+		},
+	},
+})
+
+var DefaultTestConfigWithNatsJetstreamTCP = MakeConfigWithTCP(connector_config.ConnectorsConfig{
+	"connector": {
+		Type: "nats_jetstream",
+		Settings: jetstream.Config{
+			Common: jetstream.CommonSettings{
+				URL:    "nats://localhost:4222",
+				Stream: "e2e_stream",
+			},
+			Clients: map[string]jetstream.ClientSpecificSettings{
+				"pub": {
+					Subject: "e2e.subject",
+				},
+				"sub": {
+					Subject:  "e2e.subject",
+					Consumer: "e2e_consumer",
+				},
+			},
+		},
+	},
+	// Separate connectors with own durable consumers to avoid conflicts.
+	"ack_connector": {
+		Type: "nats_jetstream",
+		Settings: jetstream.Config{
+			Common: jetstream.CommonSettings{
+				URL:    "nats://localhost:4222",
+				Stream: "e2e_stream",
+			},
+			Clients: map[string]jetstream.ClientSpecificSettings{
+				"pub": {
+					Subject: "e2e.subject",
+				},
+				"sub": {
+					Subject:  "e2e.subject",
+					Consumer: "e2e_ack_consumer",
+				},
+			},
+		},
+	},
+	"nack_connector": {
+		Type: "nats_jetstream",
+		Settings: jetstream.Config{
+			Common: jetstream.CommonSettings{
+				URL:    "nats://localhost:4222",
+				Stream: "e2e_stream",
+			},
+			Clients: map[string]jetstream.ClientSpecificSettings{
+				"pub": {
+					Subject: "e2e.subject",
+				},
+				"sub": {
+					Subject:  "e2e.subject",
+					Consumer: "e2e_nack_consumer",
+				},
+			},
+		},
+	},
+})
+
+var DefaultTestConfigWithAMQP091TCP = MakeConfigWithTCP(connector_config.ConnectorsConfig{
+	"connector": {
+		Type: "rabbitmq_amqp09",
+		Settings: amqp09.Config{
+			Clients: map[string]amqp09.ClientSpecificSettings{
+				"pub": {
+					Conn: amqp09.ConnConfig{
+						URL: "amqp://guest:guest@localhost",
+					},
+					Exchange: amqp09.ExchangeConfig{
+						Name: "events",
+						Kind: "fanout",
+					},
+					Queue: amqp09.QueueConfig{
+						Name: "my_queue",
+					},
+					QueueBind: amqp09.QueueBindConfig{
+						RoutingKey: "my_routing_key",
+					},
+					Publish: &amqp09.PublishConfig{
+						ContentType: "text/plain",
+					},
+				},
+				"sub": {
+					Conn: amqp09.ConnConfig{
+						URL: "amqp://guest:guest@localhost",
+					},
+					Exchange: amqp09.ExchangeConfig{
+						Name: "events",
+						Kind: "fanout",
+					},
+					Queue: amqp09.QueueConfig{
+						Name: "my_queue",
+					},
+					QueueBind: amqp09.QueueBindConfig{
+						RoutingKey: "my_routing_key",
+					},
+					Consume: &amqp09.ConsumeConfig{
+						Consumer: "fujin",
+					},
+				},
+			},
+		},
+	},
+})
+
+var DefaultTestConfigWithAMQP10TCP = MakeConfigWithTCP(connector_config.ConnectorsConfig{
+	"connector": {
+		Type: "azure_amqp1",
+		Settings: amqp1.Config{
+			Clients: map[string]amqp1.ClientSpecificSettings{
+				"pub": {
+					Conn: amqp1.ConnConfig{
+						Addr: "amqp://artemis:artemis@localhost:61616",
+					},
+					Sender: &amqp1.SenderConfig{
+						Target: "queue",
+					},
+				},
+				"sub": {
+					Conn: amqp1.ConnConfig{
+						Addr: "amqp://artemis:artemis@localhost:61616",
+					},
+					Receiver: &amqp1.ReceiverConfig{
+						Source: "queue",
+					},
+				},
+			},
+		},
+	},
+})
+
+var DefaultTestConfigWithRedisPubSubTCP = MakeConfigWithTCP(connector_config.ConnectorsConfig{
+	"connector": {
+		Type: "redis_rueidis_pubsub",
+		Settings: pubsub.Config{
+			Common: pubsub.CommonSettings{
+				RedisConfig: redis_config.RedisConfig{
+					InitAddress:  []string{"localhost:6379"},
+					DisableCache: true,
+				},
+				WriterBatchConfig: redis_config.WriterBatchConfig{
+					BatchSize: 1000,
+					Linger:    5 * time.Millisecond,
+				},
+			},
+			Clients: map[string]pubsub.ClientSpecificSettings{
+				"pub": {
+					Channel: "channel",
+				},
+				"sub": {
+					Channels: []string{"channel"},
+				},
+			},
+		},
+	},
+})
+
+var DefaultTestConfigWithRedisStreamsTCP = MakeConfigWithTCP(connector_config.ConnectorsConfig{
+	"connector": {
+		Type: "redis_rueidis_streams",
+		Settings: streams.Config{
+			Common: streams.CommonSettings{
+				RedisConfig: redis_config.RedisConfig{
+					InitAddress:  []string{"localhost:6379"},
+					DisableCache: true,
+				},
+				WriterBatchConfig: redis_config.WriterBatchConfig{
+					BatchSize: 1000,
+					Linger:    5 * time.Millisecond,
+				},
+			},
+			Clients: map[string]streams.ClientSpecificSettings{
+				"pub": {
+					Stream: "stream",
+				},
+				"sub": {
+					Streams: map[string]streams.StreamConf{
+						"stream": {
+							StartID:       ">",
+							GroupCreateID: "$",
+						},
+					},
+					Group: streams.GroupConf{
+						Name:     "fujin",
+						Consumer: "fujin",
+					},
+				},
+			},
+		},
+	},
+})
+
+var DefaultTestConfigWithMQTTTCP = MakeConfigWithTCP(connector_config.ConnectorsConfig{
+	"connector": {
+		Type: "mqtt_paho",
+		Settings: mqtt.Config{
+			Common: mqtt.CommonSettings{
+				BrokerURL:         "tcp://localhost:1883",
+				KeepAlive:         2,
+				DisconnectTimeout: 5 * time.Second,
+				ConnectTimeout:    300 * time.Second,
+			},
+			Clients: map[string]mqtt.ClientSpecificSettings{
+				"pub": {
+					ClientID:      "fujin_pub",
+					Topic:         "my_topic",
+					QoS:           0,
+					Retain:        true,
+					CleanStart:    true,
+					SessionExpiry: 5,
+					Pool: mqtt.PoolConfig{
+						Size:           1000000,
+						PreAlloc:       true,
+						ReleaseTimeout: 30 * time.Second,
+					},
+				},
+				"sub": {
+					ClientID:         "fujin_sub",
+					Topic:            "my_topic",
+					QoS:              0,
+					Retain:           false,
+					CleanStart:       true,
+					SessionExpiry:    0,
+					SendAcksInterval: 50 * time.Millisecond,
+					AckTTL:           5 * time.Minute,
+				},
+			},
+		},
+	},
+})
+
+var DefaultTestConfigWithNSQTCP = MakeConfigWithTCP(connector_config.ConnectorsConfig{
+	"connector": {
+		Type: "nsq",
+		Settings: nsq.Config{
+			Common: nsq.CommonSettings{
+				Address:   "localhost:4150",
+				Addresses: []string{"localhost:4150"},
+			},
+			Clients: map[string]nsq.ClientSpecificSettings{
+				"pub": {
+					Topic: "my_topic",
+					Pool: nsq.PoolConfig{
+						Size:           1000000,
+						PreAlloc:       true,
+						ReleaseTimeout: 5 * time.Second,
+					},
+				},
+				"sub": {
+					Topic:       "my_topic",
+					Channel:     "my_channel",
+					MaxInFlight: 1000000,
+				},
+			},
+		},
+	},
 })
 
 func RunDefaultServerWithNopTCP(ctx context.Context) *server.Server {
@@ -403,6 +724,58 @@ func RunDefaultServerWithNopTCP(ctx context.Context) *server.Server {
 
 func RunDefaultServerWithKafka3BrokersTCP(ctx context.Context) *server.Server {
 	return RunServer(ctx, DefaultTestConfigWithKafka3BrokersTCP)
+}
+
+func RunDefaultServerWithNatsTCP(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithNatsTCP)
+}
+
+func RunDefaultServerWithNatsJetstreamTCP(ctx context.Context) *server.Server {
+	// JetStream requires the stream to exist before use.
+	nc, err := natsgo.Connect("nats://localhost:4222")
+	if err != nil {
+		log.Fatalf("nats connect for stream setup: %v", err)
+	}
+	js, err := natsjs.New(nc)
+	if err != nil {
+		nc.Close()
+		log.Fatalf("jetstream context: %v", err)
+	}
+	_, err = js.CreateOrUpdateStream(ctx, natsjs.StreamConfig{
+		Name:     "e2e_stream",
+		Subjects: []string{"e2e.>"},
+	})
+	if err != nil {
+		nc.Close()
+		log.Fatalf("create stream: %v", err)
+	}
+	nc.Close()
+
+	return RunServer(ctx, DefaultTestConfigWithNatsJetstreamTCP)
+}
+
+func RunDefaultServerWithAMQP091TCP(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithAMQP091TCP)
+}
+
+func RunDefaultServerWithAMQP10TCP(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithAMQP10TCP)
+}
+
+func RunDefaultServerWithRedisPubSubTCP(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithRedisPubSubTCP)
+}
+
+func RunDefaultServerWithRedisStreamsTCP(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithRedisStreamsTCP)
+}
+
+func RunDefaultServerWithMQTTTCP(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithMQTTTCP)
+}
+
+func RunDefaultServerWithNSQTCP(ctx context.Context) *server.Server {
+	return RunServer(ctx, DefaultTestConfigWithNSQTCP)
 }
 
 func createTCPClientConn(addr string) net.Conn {

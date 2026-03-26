@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/fujin-io/fujin/internal/health"
 	grpc_server "github.com/fujin-io/fujin/internal/transport/grpc/v1/server"
 	connectorconfig "github.com/fujin-io/fujin/public/plugins/connector/config"
 	"github.com/fujin-io/fujin/public/plugins/transport"
@@ -21,6 +22,7 @@ type Server struct {
 
 	transportServers []transport.TransportServer
 	grpcServer       GRPCServer
+	healthServer     *health.Server
 
 	inheritedFDs map[string]*os.File // keyed by "type:addr", e.g. "tcp::4850"
 
@@ -75,6 +77,10 @@ func NewServer(conf config.Config, l *slog.Logger) (*Server, error) {
 			hr.SetBaseConfigProvider(configProvider)
 		}
 		s.grpcServer = wrapper
+	}
+
+	if conf.Health.Enabled {
+		s.healthServer = health.NewServer(conf.Health, s.l)
 	}
 
 	return s, nil
@@ -161,6 +167,12 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		}
 	}
 
+	if s.healthServer != nil {
+		eg.Go(func() error {
+			return s.healthServer.ListenAndServe(eCtx)
+		})
+	}
+
 	return eg.Wait()
 }
 
@@ -186,6 +198,9 @@ func (s *Server) ReadyForConnections(timeout time.Duration) bool {
 		if !ts.ReadyForConnections(remaining) {
 			return false
 		}
+	}
+	if s.healthServer != nil {
+		s.healthServer.SetReady(true)
 	}
 	return true
 }

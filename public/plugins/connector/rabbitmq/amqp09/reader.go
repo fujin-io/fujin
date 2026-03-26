@@ -81,6 +81,8 @@ func (r *Reader) Subscribe(ctx context.Context, h func(message []byte, topic str
 		r.conf.Exchange.NoWait,
 		r.conf.Exchange.Args,
 	); err != nil {
+		_ = r.channel.Close()
+		r.channel = nil
 		r.mu.Unlock()
 		return fmt.Errorf("rabbitmq_amqp09: declare exchange: %w", err)
 	}
@@ -94,6 +96,8 @@ func (r *Reader) Subscribe(ctx context.Context, h func(message []byte, topic str
 		r.conf.Queue.Args,
 	)
 	if err != nil {
+		_ = r.channel.Close()
+		r.channel = nil
 		r.mu.Unlock()
 		return fmt.Errorf("rabbitmq_amqp09: declare queue: %w", err)
 	}
@@ -105,6 +109,8 @@ func (r *Reader) Subscribe(ctx context.Context, h func(message []byte, topic str
 		r.conf.QueueBind.NoWait,
 		r.conf.QueueBind.Args,
 	); err != nil {
+		_ = r.channel.Close()
+		r.channel = nil
 		r.mu.Unlock()
 		return fmt.Errorf("rabbitmq_amqp09: queue bind: %w", err)
 	}
@@ -188,6 +194,8 @@ func (r *Reader) SubscribeWithHeaders(ctx context.Context, h func(message []byte
 		r.conf.Exchange.NoWait,
 		r.conf.Exchange.Args,
 	); err != nil {
+		_ = r.channel.Close()
+		r.channel = nil
 		r.mu.Unlock()
 		return fmt.Errorf("rabbitmq_amqp09: declare exchange: %w", err)
 	}
@@ -201,6 +209,8 @@ func (r *Reader) SubscribeWithHeaders(ctx context.Context, h func(message []byte
 		r.conf.Queue.Args,
 	)
 	if err != nil {
+		_ = r.channel.Close()
+		r.channel = nil
 		r.mu.Unlock()
 		return fmt.Errorf("rabbitmq_amqp09: declare queue: %w", err)
 	}
@@ -212,6 +222,8 @@ func (r *Reader) SubscribeWithHeaders(ctx context.Context, h func(message []byte
 		r.conf.QueueBind.NoWait,
 		r.conf.QueueBind.Args,
 	); err != nil {
+		_ = r.channel.Close()
+		r.channel = nil
 		r.mu.Unlock()
 		return fmt.Errorf("rabbitmq_amqp09: queue bind: %w", err)
 	}
@@ -320,8 +332,11 @@ func (r *Reader) Ack(
 	ackMsgHandler func([]byte, error),
 ) {
 	ackHandler(nil)
+	r.mu.Lock()
+	ch := r.channel
+	r.mu.Unlock()
 	for _, msgID := range msgIDs {
-		ackMsgHandler(msgID, r.channel.Ack(binary.BigEndian.Uint64(msgID), r.conf.Ack.Multiple))
+		ackMsgHandler(msgID, ch.Ack(binary.BigEndian.Uint64(msgID), r.conf.Ack.Multiple))
 	}
 }
 
@@ -331,13 +346,16 @@ func (r *Reader) Nack(
 	nackMsgHandler func([]byte, error),
 ) {
 	nackHandler(nil)
+	r.mu.Lock()
+	ch := r.channel
+	r.mu.Unlock()
 	for _, msgID := range msgIDs {
-		nackMsgHandler(msgID, r.channel.Nack(binary.BigEndian.Uint64(msgID), r.conf.Nack.Multiple, r.conf.Nack.Requeue))
+		nackMsgHandler(msgID, ch.Nack(binary.BigEndian.Uint64(msgID), r.conf.Nack.Multiple, r.conf.Nack.Requeue))
 	}
 }
 
 func (r *Reader) EncodeMsgID(buf []byte, topic string, args ...any) []byte {
-	return binary.BigEndian.AppendUint32(buf, uint32(args[0].(int64)))
+	return binary.BigEndian.AppendUint64(buf, args[0].(uint64))
 }
 
 func (r *Reader) MsgIDArgsLen() int {

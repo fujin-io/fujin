@@ -12,6 +12,7 @@ import (
 type Config struct {
 	Transports []transport.Config
 	GRPC       GRPCServerConfig
+	Health     HealthConfig
 	Connectors config.ConnectorsConfig
 }
 
@@ -95,8 +96,16 @@ type ClientKeepAliveConfig struct {
 	PermitWithoutStream bool
 }
 
+type HealthConfig struct {
+	Enabled bool
+	Addr    string // default ":8080"
+}
+
 func (c *Config) SetDefaults() {
 	if c.GRPC.Addr == "" {
 		c.GRPC.Addr = ":4849"
+	}
+	if c.Health.Addr == "" {
+		c.Health.Addr = ":8080"
 	}
 }
