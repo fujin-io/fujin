@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"os/signal"
-	"syscall"
 
 	"github.com/fujin-io/fujin/public/service"
 
@@ -27,7 +26,7 @@ import (
 // It accepts an optional config file path as an argument.
 // Run from repo root: export FUJIN_CONFIGURATOR=file && export FUJIN_CONFIGURATOR_YAML_PATHS=./examples/plugins/config.yaml && go run -tags 'quic,tcp' examples/plugins/main.go
 func main() {
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	ctx, cancel := signal.NotifyContext(context.Background(), service.ShutdownSignals()...)
 	defer cancel()
 
 	service.RunCLI(ctx)

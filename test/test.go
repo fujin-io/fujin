@@ -13,6 +13,7 @@ import (
 	"log"
 	"log/slog"
 	"math/big"
+	mathrand "math/rand"
 	"net"
 	"os"
 	"testing"
@@ -60,6 +61,27 @@ var DefaultTestConfigWithNopQUIC = MakeConfigWithQUIC(connector_config.Connector
 		Type: "nop",
 	},
 })
+
+func MakeGenConfig(msgSize int) connector_config.ConnectorsConfig {
+	return connector_config.ConnectorsConfig{
+		"connector": {
+			Type:     "gen",
+			Settings: GenConfig{MsgSize: msgSize},
+		},
+	}
+}
+
+func RunServerWithGenQUIC(ctx context.Context, msgSize int) *server.Server {
+	return RunServer(ctx, MakeConfigWithQUIC(MakeGenConfig(msgSize)))
+}
+
+func RunServerWithGenTCP(ctx context.Context, msgSize int) *server.Server {
+	return RunServer(ctx, MakeConfigWithTCP(MakeGenConfig(msgSize)))
+}
+
+func RunServerWithGenUnix(ctx context.Context, msgSize int) *server.Server {
+	return RunServer(ctx, MakeConfigWithUnix(MakeGenConfig(msgSize)))
+}
 
 var DefaultTestConfigWithKafka3BrokersQUIC = MakeConfigWithQUIC(connector_config.ConnectorsConfig{
 	"connector": {
@@ -305,6 +327,7 @@ var DefaultTestConfigWithNSQQUIC = MakeConfigWithQUIC(connector_config.Connector
 func RunDefaultServerWithNopQUIC(ctx context.Context) *server.Server {
 	return RunServer(ctx, DefaultTestConfigWithNopQUIC)
 }
+
 
 func RunDefaultServerWithKafka3BrokersQUIC(ctx context.Context) *server.Server {
 	return RunServer(ctx, DefaultTestConfigWithKafka3BrokersQUIC)
@@ -617,4 +640,18 @@ func appendFujinUint16StringArray(buf []byte, m map[string]string) []byte {
 		buf = append(buf, v...)
 	}
 	return buf
+}
+
+var ch = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@$#%^&*()")
+
+func sizedBytes(sz int) []byte {
+	b := make([]byte, sz)
+	for i := range b {
+		b[i] = ch[mathrand.Intn(len(ch))]
+	}
+	return b
+}
+
+func sizedString(sz int) string {
+	return string(sizedBytes(sz))
 }

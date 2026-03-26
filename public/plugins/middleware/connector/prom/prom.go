@@ -37,8 +37,10 @@ var (
 	errorsTotal              *prometheus.CounterVec
 	connectorWriteLatencySec *prometheus.HistogramVec
 
-	httpSrv     *http.Server
-	httpSrvOnce sync.Once
+	httpSrv         *http.Server
+	httpSrvOnce     sync.Once
+	httpSrvMu       sync.Mutex
+	httpShutdownOnce sync.Once
 )
 
 // Config for prom connector middleware
@@ -120,7 +122,11 @@ func initHTTPServer(addr, path string, l *slog.Logger) {
 		}
 		mux := http.NewServeMux()
 		mux.Handle(path, promhttp.Handler())
+
+		httpSrvMu.Lock()
 		httpSrv = &http.Server{Addr: addr, Handler: mux}
+		httpSrvMu.Unlock()
+
 		go func() {
 			if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				l.Error("metrics http server", "err", err)
@@ -144,10 +150,16 @@ func Init(ctx context.Context, addr, path string, l *slog.Logger) error {
 
 // Shutdown gracefully shuts down the metrics HTTP server
 func Shutdown(ctx context.Context) error {
-	if httpSrv != nil {
-		return httpSrv.Shutdown(ctx)
-	}
-	return nil
+	var err error
+	httpShutdownOnce.Do(func() {
+		httpSrvMu.Lock()
+		srv := httpSrv
+		httpSrvMu.Unlock()
+		if srv != nil {
+			err = srv.Shutdown(ctx)
+		}
+	})
+	return err
 }
 
 // IncOp increments the operations counter (exported for compatibility with v1 connectors)

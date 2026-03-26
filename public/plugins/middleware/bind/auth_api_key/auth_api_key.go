@@ -19,6 +19,7 @@ package auth_api_key
 
 import (
 	"context"
+	"crypto/subtle"
 	"fmt"
 	"log/slog"
 
@@ -74,8 +75,8 @@ func (m *authAPIKeyMiddleware) ProcessBind(
 		return fmt.Errorf("authentication required: api_key missing in meta")
 	}
 
-	// Validate API key
-	if providedAPIKey != m.apiKey {
+	// Validate API key (constant-time comparison to prevent timing attacks)
+	if subtle.ConstantTimeCompare([]byte(providedAPIKey), []byte(m.apiKey)) != 1 {
 		m.l.Warn("bind rejected: invalid api_key")
 		return fmt.Errorf("authentication failed: invalid api_key")
 	}

@@ -131,6 +131,8 @@ func (m *ManagerV2) PutWriter(c connector.WriteCloser, name string) {
 }
 
 func (m *ManagerV2) Close() {
+	m.cmu.Lock()
+	defer m.cmu.Unlock()
 	for _, p := range m.cpools {
 		p.Close()
 	}

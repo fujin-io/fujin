@@ -249,8 +249,8 @@ func TestHandler_InitArgs(t *testing.T) {
 	h.ps.ba.overridesCount = 2
 	h.ps.ba.overridesRead = 2
 
-	assert.Equal(t, uint32(2), h.ps.ba.overridesCount)
-	assert.Equal(t, uint32(2), h.ps.ba.overridesRead)
+	assert.Equal(t, uint16(2), h.ps.ba.overridesCount)
+	assert.Equal(t, uint16(2), h.ps.ba.overridesRead)
 	assert.Equal(t, "my-tx-id", h.ps.ba.configOverrides["writer.pub.transactional_id"])
 	assert.Equal(t, "my-group", h.ps.ba.configOverrides["reader.sub.group"])
 }

@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"math/rand"
+	"io"
 	"testing"
 	"time"
 
@@ -612,16 +612,364 @@ func benchProduceUnix(b *testing.B, typ, topic, payload string) {
 	}
 }
 
-var ch = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@$#%^&*()")
+// Fetch (consumer) benchmarks - Nop
 
-func sizedBytes(sz int) []byte {
-	b := make([]byte, sz)
-	for i := range b {
-		b[i] = ch[rand.Intn(len(ch))]
-	}
-	return b
+func Benchmark_Fetch_Nop_QUIC(b *testing.B) {
+	benchFetchQUIC(b, "nop", "sub")
 }
 
-func sizedString(sz int) string {
-	return string(sizedBytes(sz))
+func Benchmark_Fetch_Nop_TCP(b *testing.B) {
+	benchFetchTCP(b, "nop", "sub")
+}
+
+func Benchmark_Fetch_Nop_Unix(b *testing.B) {
+	benchFetchUnix(b, "nop", "sub")
+}
+
+func benchFetchQUIC(b *testing.B, typ, topic string) {
+	ctx, cancel := context.WithCancel(b.Context())
+	defer cancel()
+
+	var s *server.Server
+
+	b.StopTimer()
+	switch typ {
+	case "nop":
+		s = RunDefaultServerWithNopQUIC(ctx)
+	default:
+		panic("invalid typ")
+	}
+
+	defer func() {
+		cancel()
+		<-s.Done()
+	}()
+
+	c := createClientConn(ctx, PERF_ADDR)
+	p := doDefaultBind(c)
+
+	cmd := buildFetchCmd(topic, 1)
+
+	b.SetBytes(int64(len(cmd)))
+	bw := bufio.NewWriterSize(p, defaultSendBufSize)
+
+	bytes := make(chan int)
+
+	go drainStream(b, p, bytes)
+
+	b.StartTimer()
+
+	startTime := time.Now()
+	for b.Loop() {
+		bw.Write(cmd)
+	}
+	bw.Write([]byte{byte(v1.OP_CODE_DISCONNECT)})
+
+	bw.Flush()
+	elapsed := time.Since(startTime)
+	fmt.Println("seconds to write full buf to quic stream:", elapsed.Seconds())
+	res := <-bytes
+	b.StopTimer()
+	p.Close()
+	_ = c.CloseWithError(0x0, "")
+	// fetch response: RESP_CODE_FETCH(1) + cID(4) + ERR_CODE_NO(1) + subID(1) + count(4) = 11 bytes
+	// bind(2) + disconnect(1) = 3
+	expected := b.N*11 + 3
+	if res != expected {
+		panic(fmt.Errorf("Invalid number of bytes read: bytes: %d, expected: %d", res, expected))
+	}
+}
+
+func benchFetchTCP(b *testing.B, typ, topic string) {
+	ctx, cancel := context.WithCancel(b.Context())
+	defer cancel()
+
+	var s *server.Server
+
+	b.StopTimer()
+	switch typ {
+	case "nop":
+		s = RunDefaultServerWithNopTCP(ctx)
+	default:
+		panic("invalid typ")
+	}
+
+	defer func() {
+		cancel()
+		<-s.Done()
+	}()
+
+	c := createTCPClientConn(PERF_TCP_ADDR)
+	doDefaultBindTCP(c)
+
+	cmd := buildFetchCmd(topic, 1)
+
+	b.SetBytes(int64(len(cmd)))
+	bw := bufio.NewWriterSize(c, defaultSendBufSize)
+
+	bytes := make(chan int)
+
+	go drainTCPConn(b, c, bytes)
+
+	b.StartTimer()
+
+	startTime := time.Now()
+	for b.Loop() {
+		bw.Write(cmd)
+	}
+	bw.Write([]byte{byte(v1.OP_CODE_DISCONNECT)})
+
+	bw.Flush()
+	elapsed := time.Since(startTime)
+	fmt.Println("seconds to write full buf to tcp conn:", elapsed.Seconds())
+	res := <-bytes
+	b.StopTimer()
+	c.Close()
+	expected := b.N*11 + 3
+	if res != expected {
+		panic(fmt.Errorf("Invalid number of bytes read: bytes: %d, expected: %d", res, expected))
+	}
+}
+
+func benchFetchUnix(b *testing.B, typ, topic string) {
+	ctx, cancel := context.WithCancel(b.Context())
+	defer cancel()
+
+	var s *server.Server
+
+	b.StopTimer()
+	switch typ {
+	case "nop":
+		s = RunDefaultServerWithNopUnix(ctx)
+	default:
+		panic("invalid typ")
+	}
+
+	defer func() {
+		cancel()
+		<-s.Done()
+	}()
+
+	c := createUnixClientConn(PERF_UNIX_PATH)
+	doDefaultBindUnix(c)
+
+	cmd := buildFetchCmd(topic, 1)
+
+	b.SetBytes(int64(len(cmd)))
+	bw := bufio.NewWriterSize(c, defaultSendBufSize)
+
+	bytes := make(chan int)
+
+	go drainUnixConn(b, c, bytes)
+
+	b.StartTimer()
+
+	startTime := time.Now()
+	for b.Loop() {
+		bw.Write(cmd)
+	}
+	bw.Write([]byte{byte(v1.OP_CODE_DISCONNECT)})
+
+	bw.Flush()
+	elapsed := time.Since(startTime)
+	fmt.Println("seconds to write full buf to unix conn:", elapsed.Seconds())
+	res := <-bytes
+	b.StopTimer()
+	c.Close()
+	expected := b.N*11 + 3
+	if res != expected {
+		panic(fmt.Errorf("Invalid number of bytes read: bytes: %d, expected: %d", res, expected))
+	}
+}
+
+func buildFetchCmd(topic string, n uint32) []byte {
+	cmd := []byte{byte(v1.OP_CODE_FETCH)}
+	// correlation ID (4 bytes)
+	cmd = append(cmd, 0, 0, 0, 0)
+	// autoCommit (1 byte) - true
+	cmd = append(cmd, 1)
+	// topic length (4 bytes)
+	lenBuf := make([]byte, 4)
+	binary.BigEndian.PutUint32(lenBuf, uint32(len(topic)))
+	cmd = append(cmd, lenBuf...)
+	// topic
+	cmd = append(cmd, []byte(topic)...)
+	// n (4 bytes) - number of messages to fetch
+	binary.BigEndian.PutUint32(lenBuf, n)
+	cmd = append(cmd, lenBuf...)
+	return cmd
+}
+
+// Subscribe (consumer push) benchmarks - Gen connector
+
+func Benchmark_Subscribe_1BPayload_Gen_TCP(b *testing.B) {
+	benchSubscribeTCP(b, 1)
+}
+
+func Benchmark_Subscribe_1BPayload_Gen_Unix(b *testing.B) {
+	benchSubscribeUnix(b, 1)
+}
+
+func Benchmark_Subscribe_1BPayload_Gen_QUIC(b *testing.B) {
+	benchSubscribeQUIC(b, 1)
+}
+
+func Benchmark_Subscribe_32BPayload_Gen_TCP(b *testing.B) {
+	benchSubscribeTCP(b, 32)
+}
+
+func Benchmark_Subscribe_32BPayload_Gen_Unix(b *testing.B) {
+	benchSubscribeUnix(b, 32)
+}
+
+func Benchmark_Subscribe_32BPayload_Gen_QUIC(b *testing.B) {
+	benchSubscribeQUIC(b, 32)
+}
+
+func buildSubscribeCmd(topic string) []byte {
+	cmd := []byte{byte(v1.OP_CODE_SUBSCRIBE)}
+	// correlation ID (4 bytes)
+	cmd = append(cmd, 0, 0, 0, 0)
+	// autoCommit (1 byte) - true
+	cmd = append(cmd, 1)
+	// topic length (4 bytes)
+	lenBuf := make([]byte, 4)
+	binary.BigEndian.PutUint32(lenBuf, uint32(len(topic)))
+	cmd = append(cmd, lenBuf...)
+	// topic
+	cmd = append(cmd, []byte(topic)...)
+	return cmd
+}
+
+func benchSubscribeTCP(b *testing.B, msgSize int) {
+	ctx, cancel := context.WithCancel(b.Context())
+	defer cancel()
+
+	b.StopTimer()
+	s := RunServerWithGenTCP(ctx, msgSize)
+
+	defer func() {
+		cancel()
+		<-s.Done()
+	}()
+
+	c := createTCPClientConn(PERF_TCP_ADDR)
+	doDefaultBindTCP(c)
+
+	// MSG response (autoCommit=true): RESP_CODE_MSG(1) + subID(1) + msgLen(4) + msg(N)
+	msgRespSize := 6 + msgSize
+	b.SetBytes(int64(msgRespSize))
+
+	// Send SUBSCRIBE
+	subCmd := buildSubscribeCmd("sub")
+	c.Write(subCmd)
+
+	// Read subscribe response: RESP_CODE_SUBSCRIBE(1) + cID(4) + ERR_CODE_NO(1) + subID(1) = 7 bytes
+	// + bind response: RESP_CODE_BIND(1) + ERR_CODE_NO(1) = 2 bytes
+	header := make([]byte, 9)
+	io.ReadFull(c, header)
+
+	b.StartTimer()
+
+	// Read exactly b.N MSG responses
+	remaining := b.N * msgRespSize
+	buf := make([]byte, defaultRecvBufSize)
+	for remaining > 0 {
+		n, err := c.Read(buf)
+		if err != nil {
+			b.Fatal(err)
+		}
+		remaining -= n
+	}
+
+	b.StopTimer()
+
+	// Disconnect
+	c.Write([]byte{byte(v1.OP_CODE_DISCONNECT)})
+	c.Close()
+}
+
+func benchSubscribeUnix(b *testing.B, msgSize int) {
+	ctx, cancel := context.WithCancel(b.Context())
+	defer cancel()
+
+	b.StopTimer()
+	s := RunServerWithGenUnix(ctx, msgSize)
+
+	defer func() {
+		cancel()
+		<-s.Done()
+	}()
+
+	c := createUnixClientConn(PERF_UNIX_PATH)
+	doDefaultBindUnix(c)
+
+	msgRespSize := 6 + msgSize
+	b.SetBytes(int64(msgRespSize))
+
+	subCmd := buildSubscribeCmd("sub")
+	c.Write(subCmd)
+
+	header := make([]byte, 9)
+	io.ReadFull(c, header)
+
+	b.StartTimer()
+
+	remaining := b.N * msgRespSize
+	buf := make([]byte, defaultRecvBufSize)
+	for remaining > 0 {
+		n, err := c.Read(buf)
+		if err != nil {
+			b.Fatal(err)
+		}
+		remaining -= n
+	}
+
+	b.StopTimer()
+
+	c.Write([]byte{byte(v1.OP_CODE_DISCONNECT)})
+	c.Close()
+}
+
+func benchSubscribeQUIC(b *testing.B, msgSize int) {
+	ctx, cancel := context.WithCancel(b.Context())
+	defer cancel()
+
+	b.StopTimer()
+	s := RunServerWithGenQUIC(ctx, msgSize)
+
+	defer func() {
+		cancel()
+		<-s.Done()
+	}()
+
+	c := createClientConn(ctx, PERF_ADDR)
+	p := doDefaultBind(c)
+
+	msgRespSize := 6 + msgSize
+	b.SetBytes(int64(msgRespSize))
+
+	subCmd := buildSubscribeCmd("sub")
+	p.Write(subCmd)
+
+	header := make([]byte, 9)
+	io.ReadFull(p, header)
+
+	b.StartTimer()
+
+	remaining := b.N * msgRespSize
+	buf := make([]byte, defaultRecvBufSize)
+	for remaining > 0 {
+		n, err := p.Read(buf)
+		if err != nil {
+			b.Fatal(err)
+		}
+		remaining -= n
+	}
+
+	b.StopTimer()
+
+	p.Write([]byte{byte(v1.OP_CODE_DISCONNECT)})
+	p.Close()
+	_ = c.CloseWithError(0x0, "")
 }

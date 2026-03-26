@@ -28,8 +28,10 @@ type GRPCServer struct {
 
 	conf             serverconfig.GRPCServerConfig
 	connectorsConfig connectorconfig.ConnectorsConfig
+	configProvider   func() connectorconfig.ConnectorsConfig
 	l                *slog.Logger
 
+	lis        net.Listener // stored for ListenerFDs
 	grpcServer *grpc.Server
 }
 
@@ -42,6 +44,18 @@ func NewGRPCServer(conf serverconfig.GRPCServerConfig, connectorsConfig connecto
 	}
 }
 
+// SetBaseConfigProvider enables hot reload of connectors config.
+func (s *GRPCServer) SetBaseConfigProvider(p func() connectorconfig.ConnectorsConfig) {
+	s.configProvider = p
+}
+
+func (s *GRPCServer) currentConnectorsConfig() connectorconfig.ConnectorsConfig {
+	if s.configProvider != nil {
+		return s.configProvider()
+	}
+	return s.connectorsConfig
+}
+
 // ListenAndServe starts the gRPC server
 func (s *GRPCServer) ListenAndServe(ctx context.Context) error {
 	lis, err := net.Listen("tcp", s.conf.Addr)
@@ -49,6 +63,21 @@ func (s *GRPCServer) ListenAndServe(ctx context.Context) error {
 		return fmt.Errorf("failed to listen on %s: %w", s.conf.Addr, err)
 	}
 
+	s.initGRPCServer()
+	s.l.Info("grpc server started", "addr", s.conf.Addr)
+
+	return s.serveListener(ctx, lis)
+}
+
+// ListenAndServeInherited starts the gRPC server on an inherited listener.
+func (s *GRPCServer) ListenAndServeInherited(ctx context.Context, lis net.Listener) error {
+	s.initGRPCServer()
+	s.l.Info("grpc server started (inherited)", "addr", s.conf.Addr)
+
+	return s.serveListener(ctx, lis)
+}
+
+func (s *GRPCServer) initGRPCServer() {
 	var serverOpts []grpc.ServerOption
 
 	// Connection settings
@@ -112,7 +141,18 @@ func (s *GRPCServer) ListenAndServe(ctx context.Context) error {
 
 	s.grpcServer = grpc.NewServer(serverOpts...)
 	pb.RegisterFujinServiceServer(s.grpcServer, s)
-	s.l.Info("grpc server started", "addr", s.conf.Addr)
+}
+
+// Stop gracefully stops the gRPC server
+func (s *GRPCServer) Stop() {
+	if s.grpcServer != nil {
+		s.grpcServer.GracefulStop()
+	}
+}
+
+func (s *GRPCServer) serveListener(ctx context.Context, lis net.Listener) error {
+	s.lis = lis
+
 	errCh := make(chan error, 1)
 	go func() {
 		if err := s.grpcServer.Serve(lis); err != nil {
@@ -131,20 +171,13 @@ func (s *GRPCServer) ListenAndServe(ctx context.Context) error {
 	}
 }
 
-// Stop gracefully stops the gRPC server
-func (s *GRPCServer) Stop() {
-	if s.grpcServer != nil {
-		s.grpcServer.GracefulStop()
-	}
-}
-
 // Stream implements the bidirectional streaming RPC
 func (s *GRPCServer) Stream(stream pb.FujinService_StreamServer) error {
 	ctx := stream.Context()
 
 	session := &streamSession{
 		stream:           stream,
-		connectorsConfig: s.connectorsConfig,
+		connectorsConfig: s.currentConnectorsConfig(),
 		cman:             nil, // Will be created during Init
 		l:                s.l,
 		ctx:              ctx,
