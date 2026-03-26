@@ -207,3 +207,53 @@ broker-help:
 .PHONY: bench
 bench:
 	@go test -bench=${BENCH_FUNC} -benchtime=${BENCH_TIME} -tags=${GO_BUILD_TAGS} ./test
+
+# E2E tests (requires broker running via make up-<connector>)
+E2E_TIMEOUT ?= 120s
+
+.PHONY: e2e-kafka_franz e2e-nats_core e2e-nats_jetstream e2e-rabbitmq_amqp09 e2e-azure_amqp1 e2e-redis_rueidis_pubsub e2e-redis_rueidis_streams e2e-mqtt_paho e2e-nsq
+
+e2e-kafka_franz:
+	docker compose -f resources/docker-compose.kafka.yaml up -d --wait
+	-go test -v -tags=${GO_BUILD_TAGS} -run TestE2E_KafkaFranz -timeout ${E2E_TIMEOUT} ./test
+	docker compose -f resources/docker-compose.kafka.yaml down
+
+e2e-nats_core:
+	docker compose -f resources/docker-compose.nats_core.yaml up -d --wait
+	-go test -v -tags=${GO_BUILD_TAGS} -run TestE2E_NatsCore -timeout ${E2E_TIMEOUT} ./test
+	docker compose -f resources/docker-compose.nats_core.yaml down
+
+e2e-nats_jetstream:
+	docker compose -f resources/docker-compose.nats_jetstream.yaml up -d --wait
+	-go test -v -tags=${GO_BUILD_TAGS} -run TestE2E_NatsJetstream -timeout ${E2E_TIMEOUT} ./test
+	docker compose -f resources/docker-compose.nats_jetstream.yaml down
+
+e2e-rabbitmq_amqp09:
+	docker compose -f resources/docker-compose.rabbitmq.yaml up -d --wait
+	-go test -v -tags=${GO_BUILD_TAGS} -run TestE2E_RabbitMQ -timeout ${E2E_TIMEOUT} ./test
+	docker compose -f resources/docker-compose.rabbitmq.yaml down
+
+e2e-azure_amqp1:
+	docker compose -f resources/docker-compose.artemis.yaml up -d --wait
+	-go test -v -tags=${GO_BUILD_TAGS} -run TestE2E_AzureAMQP1 -timeout ${E2E_TIMEOUT} ./test
+	docker compose -f resources/docker-compose.artemis.yaml down
+
+e2e-redis_rueidis_pubsub:
+	docker compose -f resources/docker-compose.valkey.yaml up -d --wait
+	-go test -v -tags=${GO_BUILD_TAGS} -run TestE2E_RedisPubSub -timeout ${E2E_TIMEOUT} ./test
+	docker compose -f resources/docker-compose.valkey.yaml down
+
+e2e-redis_rueidis_streams:
+	docker compose -f resources/docker-compose.valkey.yaml up -d --wait
+	-go test -v -tags=${GO_BUILD_TAGS} -run TestE2E_RedisStreams -timeout ${E2E_TIMEOUT} ./test
+	docker compose -f resources/docker-compose.valkey.yaml down
+
+e2e-mqtt_paho:
+	docker compose -f resources/docker-compose.emqx.yaml up -d --wait
+	-go test -v -tags=${GO_BUILD_TAGS} -run TestE2E_MQTT -timeout ${E2E_TIMEOUT} ./test
+	docker compose -f resources/docker-compose.emqx.yaml down
+
+e2e-nsq:
+	docker compose -f resources/docker-compose.nsq.yaml up -d --wait
+	-go test -v -tags=${GO_BUILD_TAGS} -run TestE2E_NSQ -timeout ${E2E_TIMEOUT} ./test
+	docker compose -f resources/docker-compose.nsq.yaml down

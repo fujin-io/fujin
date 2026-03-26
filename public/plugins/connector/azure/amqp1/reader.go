@@ -3,6 +3,7 @@ package amqp1
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"log/slog"
 	"reflect"
@@ -46,6 +47,7 @@ func NewReader(conf ConnectorConfig, autoCommit bool, l *slog.Logger) (*Reader, 
 		MaxLinks: conf.Session.MaxLinks,
 	})
 	if err != nil {
+		_ = conn.Close()
 		return nil, fmt.Errorf("azure_amqp1: new session: %w", err)
 	}
 
@@ -67,6 +69,8 @@ func NewReader(conf ConnectorConfig, autoCommit bool, l *slog.Logger) (*Reader, 
 		SettlementMode:            &settlementMode,
 	})
 	if err != nil {
+		_ = session.Close(context.Background())
+		_ = conn.Close()
 		return nil, fmt.Errorf("azure_amqp1: new receiver: %w", err)
 	}
 
@@ -217,11 +221,11 @@ func (r *Reader) Nack(
 }
 
 func (r *Reader) EncodeMsgID(buf []byte, topic string, args ...any) []byte {
-	return binary.BigEndian.AppendUint32(buf, uint32(args[0].(int64)))
+	return binary.BigEndian.AppendUint32(buf, args[0].(uint32))
 }
 
 func (r *Reader) MsgIDArgsLen() int {
-	return 8
+	return 4
 }
 
 func (r *Reader) AutoCommit() bool {
@@ -229,20 +233,23 @@ func (r *Reader) AutoCommit() bool {
 }
 
 func (r *Reader) Close() error {
+	var errs []error
 	if r.receiver != nil {
 		if err := r.receiver.Close(context.Background()); err != nil {
-			r.l.Error("azure_amqp1: close receiver", "err", err)
+			errs = append(errs, fmt.Errorf("close receiver: %w", err))
 		}
 	}
 	if r.session != nil {
 		if err := r.session.Close(context.Background()); err != nil {
-			r.l.Error("azure_amqp1: close session", "err", err)
+			errs = append(errs, fmt.Errorf("close session: %w", err))
 		}
 	}
 	if r.conn != nil {
-		_ = r.conn.Close()
+		if err := r.conn.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close conn: %w", err))
+		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // deliveryIDOffset is computed once at init via reflect, so it stays correct

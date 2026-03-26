@@ -21,6 +21,7 @@ Fujin decouples applications from brokers. Your app talks to Fujin over a simple
 |--------|-----------|
 | Kafka | `kafka/franz` |
 | NATS Core | `nats/core` |
+| NATS JetStream | `nats/jetstream` |
 | RabbitMQ | `rabbitmq_amqp09` |
 | Azure Service Bus / ActiveMQ | `azure_amqp1` |
 | Redis/Valkey (PubSub) | `resp/pubsub` |
@@ -82,11 +83,11 @@ Everything is pluggable: transports, connectors, config loaders, and middleware.
 |-------------|----------|
 | Transports | `tcp`, `quic`, `unix` |
 | Connectors | `kafka/franz`, `nats/core`, `rabbitmq_amqp09`, ... |
-| Configurators | `yaml` |
+| Configurators | `yaml`, `env` |
 | Bind middleware | `auth_api_key` |
-| Connector middleware | `prom`, `otel` |
+| Connector middleware | `prom`, `otel`, `schema/json`, `transform/jq`, `filter/jq`, `dedup`, `compress/zstd`, `rate_limit/token_bucket` |
 
-Write your own plugins — see [`examples/plugins/`](examples/plugins/) for a complete example with a custom connector and rate-limiting middleware.
+Write your own plugins — see [`examples/plugins/`](examples/plugins/) for a complete example with a custom connector and rate-limiting middleware. Each plugin has a README with configuration examples in its package directory under [`public/plugins/`](public/plugins/).
 
 ### Cross-Platform
 
@@ -111,8 +112,7 @@ docker build --build-arg FUJIN_CONNECTORS=github.com/fujin-io/fujin/public/plugi
 
 ### Kubernetes
 
-Example manifests in [`examples/deployment/`](examples/deployment/):
-- `kubernetes-sidecar.yaml` — Fujin as a sidecar container
+Deploy with the Helm chart (see below), or use the Docker Compose example in [`examples/deployment/`](examples/deployment/).
 
 ### Helm
 
@@ -159,7 +159,7 @@ export FUJIN_UPGRADE_SOCK=/tmp/fujin-upgrade.sock
 
 ### Health Checks
 
-HTTP health check server for Kubernetes liveness and readiness probes. Requires the `health` build tag (included by default in `make build`).
+HTTP health check server for Kubernetes liveness and readiness probes.
 
 Enable in config:
 ```yaml
@@ -181,6 +181,7 @@ Apple M2, macOS arm64, single connection, localhost. Raw results: [`test/bench_t
 - [Native Protocol Specification](protocol.md)
 - [gRPC Proto Definition](public/proto/grpc/v1/fujin.proto)
 - [Configuration Example](examples/assets/config/config.yaml)
+- Plugin docs — each plugin has a README in its package under [`public/plugins/`](public/plugins/)
 
 ## License
 

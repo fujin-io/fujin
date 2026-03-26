@@ -28,11 +28,11 @@ func TestMsgIDArgsLen(t *testing.T) {
 
 func TestEncodeMsgID(t *testing.T) {
 	r := &Reader{}
-	buf := r.EncodeMsgID(nil, "topic", int64(42))
-	if len(buf) != 4 {
-		t.Fatalf("expected 4 bytes, got %d", len(buf))
+	buf := r.EncodeMsgID(nil, "topic", uint64(42))
+	if len(buf) != 8 {
+		t.Fatalf("expected 8 bytes, got %d", len(buf))
 	}
-	got := binary.BigEndian.Uint32(buf)
+	got := binary.BigEndian.Uint64(buf)
 	if got != 42 {
 		t.Fatalf("expected 42, got %d", got)
 	}
@@ -41,14 +41,14 @@ func TestEncodeMsgID(t *testing.T) {
 func TestEncodeMsgIDAppends(t *testing.T) {
 	r := &Reader{}
 	prefix := []byte{0xFF}
-	buf := r.EncodeMsgID(prefix, "topic", int64(1))
-	if len(buf) != 5 {
-		t.Fatalf("expected 5 bytes, got %d", len(buf))
+	buf := r.EncodeMsgID(prefix, "topic", uint64(1))
+	if len(buf) != 9 {
+		t.Fatalf("expected 9 bytes, got %d", len(buf))
 	}
 	if buf[0] != 0xFF {
 		t.Fatal("prefix byte corrupted")
 	}
-	got := binary.BigEndian.Uint32(buf[1:])
+	got := binary.BigEndian.Uint64(buf[1:])
 	if got != 1 {
 		t.Fatalf("expected 1, got %d", got)
 	}

@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 	"unsafe"
 
@@ -26,7 +25,6 @@ type Reader struct {
 	marshal         func(v any) ([]byte, error)
 	autoCommit      bool
 	streams         map[string]string
-	strSlicePool    sync.Pool
 	l               *slog.Logger
 }
 
@@ -58,12 +56,7 @@ func NewReader(conf ConnectorConfig, autoCommit bool, l *slog.Logger) (connector
 		marshal:    marshalFunc(conf.Marshaller),
 		autoCommit: autoCommit,
 		streams:    streams,
-		strSlicePool: sync.Pool{
-			New: func() any {
-				return make([]string, 0, len(conf.Streams))
-			},
-		},
-		l: l.With("reader_type", "redis_rueidis_streams"),
+		l:          l.With("reader_type", "redis_rueidis_streams"),
 	}
 
 	if r.conf.Group.Name != "" {
@@ -365,25 +358,13 @@ func (r *Reader) Close() error {
 	return nil
 }
 
-func (r *Reader) keys(m map[string]string) []string {
-	keys := r.strSlicePool.Get().([]string)[:0]
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
-}
-
-func (r *Reader) values(m map[string]string) []string {
-	values := r.strSlicePool.Get().([]string)[:0]
-	for _, v := range m {
-		values = append(values, v)
-	}
-	return values
-}
-
 func (r *Reader) cmd() rueidis.Completed {
-	streams := r.keys(r.streams)
-	ids := r.values(r.streams)
+	streams := make([]string, 0, len(r.streams))
+	ids := make([]string, 0, len(r.streams))
+	for k, v := range r.streams {
+		streams = append(streams, k)
+		ids = append(ids, v)
+	}
 
 	if r.conf.Group.Name == "" {
 		return r.client.B().
@@ -413,8 +394,7 @@ func marshalFunc(proto Marshaller) func(v any) ([]byte, error) {
 	default:
 		return func(v any) ([]byte, error) {
 			val := v.(map[string]string)["msg"]
-			data := unsafe.Slice((*byte)(unsafe.StringData(val)), len(val))
-			return data, nil
+			return unsafe.Slice((*byte)(unsafe.StringData(val)), len(val)), nil
 		}
 	}
 }
