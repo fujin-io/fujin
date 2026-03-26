@@ -16,6 +16,9 @@ import (
 	// Available tags: [kafka nats_core rabbitmq_amqp09 azure_amqp1 resp_pubsub redis_streams mqtt nsq]
 	// Example: go build -tags kafka ...
 
+	// Import transport plugins:
+	_ "github.com/fujin-io/fujin/public/plugins/transport/tcp"
+
 	// Import your custom connector plugin:
 	_ "github.com/fujin-io/fujin/examples/plugins/connector/faker"
 	_ "github.com/fujin-io/fujin/examples/plugins/middleware/connector/ratelimit"
@@ -24,7 +27,7 @@ import (
 
 // This example demonstrates how to run a Fujin server with custom plugins.
 // It accepts an optional config file path as an argument.
-// Run from repo root: export FUJIN_CONFIGURATOR=file && export FUJIN_CONFIGURATOR_YAML_PATHS=./examples/plugins/config.yaml && go run -tags 'quic,tcp' examples/plugins/main.go
+// Run from repo root: FUJIN_CONFIGURATOR=yaml FUJIN_CONFIGURATOR_YAML_PATHS=./examples/plugins/config.yaml go run ./examples/plugins/main.go
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), service.ShutdownSignals()...)
 	defer cancel()

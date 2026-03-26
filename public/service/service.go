@@ -29,6 +29,7 @@ var (
 type Config struct {
 	Fujin      FujinConfig                      `yaml:"fujin"`
 	GRPC       GRPCConfig                       `yaml:"grpc"`
+	Health     HealthConfig                     `yaml:"health"`
 	Connectors connectorconfig.ConnectorsConfig `yaml:"connectors"`
 }
 
@@ -70,9 +71,15 @@ func (c *Config) parse() (serverconfig.Config, error) {
 		return serverconfig.Config{}, fmt.Errorf("parse grpc server config: %w", err)
 	}
 
+	healthEnabled := c.Health.Enabled != nil && *c.Health.Enabled
+
 	return serverconfig.Config{
 		Transports: c.Fujin.Transports,
 		GRPC:       grpcConf,
+		Health: serverconfig.HealthConfig{
+			Enabled: healthEnabled,
+			Addr:    c.Health.Addr,
+		},
 		Connectors: c.Connectors,
 	}, nil
 }
@@ -126,6 +133,11 @@ func (c *ClientKeepAliveConfig) parse() serverconfig.ClientKeepAliveConfig {
 		MinTime:             c.MinTime,
 		PermitWithoutStream: c.PermitWithoutStream,
 	}
+}
+
+type HealthConfig struct {
+	Enabled *bool  `yaml:"enabled,omitempty"` // nil = false (default)
+	Addr    string `yaml:"addr"`
 }
 
 var (
@@ -187,12 +199,12 @@ func RunCLI(ctx context.Context) {
 	}()
 
 	// Wait for server to be ready, then signal old process if upgrading
-	if us != nil {
-		if s.ReadyForConnections(30 * time.Second) {
+	if s.ReadyForConnections(30 * time.Second) {
+		if us != nil {
 			signalOldProcessReady(us, logger)
-		} else {
-			logger.Error("upgrade mode: server did not become ready in time")
 		}
+	} else {
+		logger.Error("server did not become ready in time")
 	}
 
 	if err := <-serveDone; err != nil {

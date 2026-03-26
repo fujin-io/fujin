@@ -22,6 +22,8 @@ go.work
 go.work.sum
 
 .vscode
+.cursor
+.claude
 .DS_Store
 bin/
 

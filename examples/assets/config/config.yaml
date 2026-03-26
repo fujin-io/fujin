@@ -9,8 +9,8 @@ fujin:
         keepalive_period: 2s
         tls:
           enabled: true
-          server_cert_pem_path: ./resources/assets/certs/fujin.io.pem
-          server_key_pem_path: ./resources/assets/certs/fujin.io-key.pem
+          server_cert_pem_path: ./examples/assets/certs/fujin.io.pem
+          server_key_pem_path: ./examples/assets/certs/fujin.io-key.pem
         fujin:
           ping_interval: 5s
           ping_timeout: 10s

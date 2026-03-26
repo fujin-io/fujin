@@ -98,6 +98,34 @@ GOOS=windows GOARCH=amd64 go build -tags=fujin,grpc ./...
 
 On Windows, Unix-only features (Unix socket transport, SIGHUP reload, graceful binary upgrade) are unavailable. TCP, QUIC, and gRPC work normally.
 
+## Deployment
+
+### Docker
+
+```bash
+docker build -t fujin .
+
+# Custom build (Kafka only, Fujin + gRPC)
+docker build --build-arg FUJIN_CONNECTORS=github.com/fujin-io/fujin/public/plugins/connector/kafka/franz -t fujin .
+```
+
+### Kubernetes
+
+Example manifests in [`examples/deployment/`](examples/deployment/):
+- `kubernetes-sidecar.yaml` — Fujin as a sidecar container
+
+### Helm
+
+```bash
+# Standalone: Fujin as a separate Deployment + Service
+helm install fujin ./deploy/helm/fujin
+
+# Sidecar: ConfigMap + helper templates to embed in your Deployment
+helm install fujin ./deploy/helm/fujin --set mode=sidecar
+```
+
+See [`deploy/helm/fujin/values.yaml`](deploy/helm/fujin/values.yaml) for all options.
+
 ## Operations
 
 ### Hot Reload
@@ -128,6 +156,21 @@ Custom socket path (default: `/run/fujin/upgrade.sock`):
 ```bash
 export FUJIN_UPGRADE_SOCK=/tmp/fujin-upgrade.sock
 ```
+
+### Health Checks
+
+HTTP health check server for Kubernetes liveness and readiness probes. Requires the `health` build tag (included by default in `make build`).
+
+Enable in config:
+```yaml
+health:
+  enabled: true
+  addr: ":8080"
+```
+
+Endpoints:
+- `GET /healthz` — liveness probe, always returns 200
+- `GET /readyz` — readiness probe, returns 200 when all transports are up, 503 otherwise
 
 ## Benchmarks
 
