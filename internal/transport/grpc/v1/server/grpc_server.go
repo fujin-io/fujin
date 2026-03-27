@@ -405,34 +405,16 @@ func (s *streamSession) handleProduce(req *pb.ProduceRequest) error {
 	s.mu.Lock()
 	inTx := s.inTx
 	if inTx {
-		// Get or create transactional writer
-		if s.currentTxWriter == nil {
-			w, err := s.cman.GetWriter(req.Topic)
-			if err != nil {
-				s.mu.Unlock()
-				return s.sendResponse(&pb.FujinResponse{
-					Response: &pb.FujinResponse_Produce{
-						Produce: &pb.ProduceResponse{
-							CorrelationId: req.CorrelationId,
-							Error:         err.Error(),
-						},
+		if err := s.ensureTxWriter(req.Topic); err != nil {
+			s.mu.Unlock()
+			return s.sendResponse(&pb.FujinResponse{
+				Response: &pb.FujinResponse_Produce{
+					Produce: &pb.ProduceResponse{
+						CorrelationId: req.CorrelationId,
+						Error:         err.Error(),
 					},
-				})
-			}
-			if err := w.BeginTx(s.ctx); err != nil {
-				s.cman.PutWriter(w, req.Topic)
-				s.mu.Unlock()
-				return s.sendResponse(&pb.FujinResponse{
-					Response: &pb.FujinResponse_Produce{
-						Produce: &pb.ProduceResponse{
-							CorrelationId: req.CorrelationId,
-							Error:         err.Error(),
-						},
-					},
-				})
-			}
-			s.currentTxWriter = w
-			s.currentTxWriterTopic = req.Topic
+				},
+			})
 		}
 	}
 	s.mu.Unlock()
@@ -500,34 +482,16 @@ func (s *streamSession) handleHProduce(req *pb.HProduceRequest) error {
 	s.mu.Lock()
 	inTx := s.inTx
 	if inTx {
-		// Get or create transactional writer
-		if s.currentTxWriter == nil {
-			w, err := s.cman.GetWriter(req.Topic)
-			if err != nil {
-				s.mu.Unlock()
-				return s.sendResponse(&pb.FujinResponse{
-					Response: &pb.FujinResponse_Hproduce{
-						Hproduce: &pb.HProduceResponse{
-							CorrelationId: req.CorrelationId,
-							Error:         err.Error(),
-						},
+		if err := s.ensureTxWriter(req.Topic); err != nil {
+			s.mu.Unlock()
+			return s.sendResponse(&pb.FujinResponse{
+				Response: &pb.FujinResponse_Hproduce{
+					Hproduce: &pb.HProduceResponse{
+						CorrelationId: req.CorrelationId,
+						Error:         err.Error(),
 					},
-				})
-			}
-			if err := w.BeginTx(s.ctx); err != nil {
-				s.cman.PutWriter(w, req.Topic)
-				s.mu.Unlock()
-				return s.sendResponse(&pb.FujinResponse{
-					Response: &pb.FujinResponse_Hproduce{
-						Hproduce: &pb.HProduceResponse{
-							CorrelationId: req.CorrelationId,
-							Error:         err.Error(),
-						},
-					},
-				})
-			}
-			s.currentTxWriter = w
-			s.currentTxWriterTopic = req.Topic
+				},
+			})
 		}
 	}
 	s.mu.Unlock()
@@ -581,6 +545,25 @@ func (s *streamSession) handleHProduce(req *pb.HProduceRequest) error {
 			}
 		})
 
+	return nil
+}
+
+// ensureTxWriter lazily initializes the transaction writer on first produce within a TX.
+// Must be called with s.mu held.
+func (s *streamSession) ensureTxWriter(topic string) error {
+	if s.currentTxWriter != nil {
+		return nil
+	}
+	w, err := s.cman.GetWriter(topic)
+	if err != nil {
+		return err
+	}
+	if err := w.BeginTx(s.ctx); err != nil {
+		s.cman.PutWriter(w, topic)
+		return err
+	}
+	s.currentTxWriter = w
+	s.currentTxWriterTopic = topic
 	return nil
 }
 

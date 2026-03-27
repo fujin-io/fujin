@@ -343,7 +343,6 @@ func TestHandler_ParseTopicWithUnicode(t *testing.T) {
 func TestHandler_ErrorConstants(t *testing.T) {
 	assert.Error(t, ErrClose)
 	assert.Error(t, ErrParseProto)
-	assert.Error(t, ErrWriterCanNotBeReusedInTx)
 	assert.Error(t, ErrFetchArgNotProvided)
 	assert.Error(t, ErrInvalidReaderType)
 	assert.Error(t, ErrReaderNameSizeArgNotProvided)

@@ -127,8 +127,7 @@ const (
 var (
 	ErrClose                        = errors.New("close")
 	ErrParseProto                   = errors.New("parse proto")
-	ErrWriterCanNotBeReusedInTx     = errors.New("writer can not be reuse in tx")
-	ErrFetchArgNotProvided          = errors.New("fetch arg not provided")
+	ErrFetchArgNotProvided = errors.New("fetch arg not provided")
 	ErrInvalidReaderType            = errors.New("invalid reader type")
 	ErrReaderNameSizeArgNotProvided = errors.New("reader name size arg not provided")
 
@@ -562,7 +561,7 @@ func (h *Handler) handle(buf []byte) error {
 						h.nonTxSessionWriters[h.ps.pa.topic] = w
 					}
 
-					h.produce(h.ps.payloadBuf)
+					h.produce(h.nonTxSessionWriters[h.ps.pa.topic], h.ps.payloadBuf)
 					pool.Put(h.ps.ca.cID)
 					h.ps.ca.cID, h.ps.payloadBuf, h.ps.pa, h.ps.state = nil, nil, produceArgs{}, OP_START
 				}
@@ -582,7 +581,7 @@ func (h *Handler) handle(buf []byte) error {
 						}
 						h.nonTxSessionWriters[h.ps.pa.topic] = w
 					}
-					h.produce(h.ps.payloadBuf)
+					h.produce(h.nonTxSessionWriters[h.ps.pa.topic], h.ps.payloadBuf)
 					pool.Put(h.ps.ca.cID)
 					h.ps.ca.cID, h.ps.payloadBuf, h.ps.pa, h.ps.state = nil, nil, produceArgs{}, OP_START
 				}
@@ -779,7 +778,7 @@ func (h *Handler) handle(buf []byte) error {
 						h.nonTxSessionWriters[h.ps.pa.topic] = w
 					}
 
-					h.hproduce(h.ps.payloadBuf)
+					h.hproduce(h.nonTxSessionWriters[h.ps.pa.topic], h.ps.payloadBuf)
 					pool.Put(h.ps.ca.cID)
 					h.ps.ca.cID, h.ps.payloadBuf, h.ps.pa, h.ps.state = nil, nil, produceArgs{}, OP_START
 				}
@@ -799,7 +798,7 @@ func (h *Handler) handle(buf []byte) error {
 						}
 						h.nonTxSessionWriters[h.ps.pa.topic] = w
 					}
-					h.hproduce(h.ps.payloadBuf)
+					h.hproduce(h.nonTxSessionWriters[h.ps.pa.topic], h.ps.payloadBuf)
 					pool.Put(h.ps.ca.cID)
 					h.ps.ca.cID, h.ps.payloadBuf, h.ps.pa, h.ps.state = nil, nil, produceArgs{}, OP_START
 				}
@@ -1181,31 +1180,16 @@ func (h *Handler) handle(buf []byte) error {
 				}
 
 				if len(h.ps.payloadBuf) >= int(h.ps.pma.size) {
-					if h.currentTxWriter == nil {
-						var err error // 1 byte (resp op code) + 4 bytes (request id) + 1 byte (success/failure)
-						currentTxWriter, err := h.cman.GetWriter(h.ps.pa.topic)
-						if err != nil {
-							h.l.Error("get writer", "err", err)
-							h.enqueueWriteErrResponse(err)
-							pool.Put(h.ps.ca.cID)
-							pool.Put(h.ps.payloadBuf)
-							h.ps.ca.cID, h.ps.payloadBuf, h.ps.pa, h.ps.state = nil, nil, produceArgs{}, OP_START
-							continue
-						}
-
-						if err := currentTxWriter.BeginTx(h.ctx); err != nil {
-							h.l.Error("begin tx", "err", err)
-							h.enqueueWriteErrResponse(err)
-							pool.Put(h.ps.ca.cID)
-							pool.Put(h.ps.payloadBuf)
-							h.ps.ca.cID, h.ps.payloadBuf, h.ps.pa, h.ps.state = nil, nil, produceArgs{}, OP_START
-							continue
-						}
-
-						h.currentTxWriter, h.currentTxWriterTopic = currentTxWriter, h.ps.pa.topic
+					if err := h.ensureTxWriter(); err != nil {
+						h.l.Error("ensure tx writer", "err", err)
+						h.enqueueWriteErrResponse(err)
+						pool.Put(h.ps.ca.cID)
+						pool.Put(h.ps.payloadBuf)
+						h.ps.ca.cID, h.ps.payloadBuf, h.ps.pa, h.ps.state = nil, nil, produceArgs{}, OP_START
+						continue
 					}
 
-					h.produceTx(h.ps.payloadBuf)
+					h.produce(h.currentTxWriter, h.ps.payloadBuf)
 					pool.Put(h.ps.ca.cID)
 					h.ps.ca.cID, h.ps.payloadBuf, h.ps.pa, h.ps.state = nil, nil, produceArgs{}, OP_START
 				}
@@ -1214,31 +1198,16 @@ func (h *Handler) handle(buf []byte) error {
 				h.ps.payloadBuf = append(h.ps.payloadBuf, b)
 
 				if len(h.ps.payloadBuf) >= int(h.ps.pma.size) {
-					if h.currentTxWriter == nil {
-						var err error // 1 byte (resp op code) + 4 bytes (request id) + 1 byte (success/failure)
-						currentTxWriter, err := h.cman.GetWriter(h.ps.pa.topic)
-						if err != nil {
-							h.l.Error("get writer", "err", err)
-							h.enqueueWriteErrResponse(err)
-							pool.Put(h.ps.ca.cID)
-							pool.Put(h.ps.payloadBuf)
-							h.ps.ca.cID, h.ps.payloadBuf, h.ps.pa, h.ps.state = nil, nil, produceArgs{}, OP_START
-							continue
-						}
-
-						if err := currentTxWriter.BeginTx(h.ctx); err != nil {
-							h.l.Error("begin tx", "err", err)
-							h.enqueueWriteErrResponse(err)
-							pool.Put(h.ps.ca.cID)
-							pool.Put(h.ps.payloadBuf)
-							h.ps.ca.cID, h.ps.payloadBuf, h.ps.pa, h.ps.state = nil, nil, produceArgs{}, OP_START
-							continue
-						}
-
-						h.currentTxWriter, h.currentTxWriterTopic = currentTxWriter, h.ps.pa.topic
+					if err := h.ensureTxWriter(); err != nil {
+						h.l.Error("ensure tx writer", "err", err)
+						h.enqueueWriteErrResponse(err)
+						pool.Put(h.ps.ca.cID)
+						pool.Put(h.ps.payloadBuf)
+						h.ps.ca.cID, h.ps.payloadBuf, h.ps.pa, h.ps.state = nil, nil, produceArgs{}, OP_START
+						continue
 					}
 
-					h.produceTx(h.ps.payloadBuf)
+					h.produce(h.currentTxWriter, h.ps.payloadBuf)
 					pool.Put(h.ps.ca.cID)
 					h.ps.ca.cID, h.ps.payloadBuf, h.ps.pa, h.ps.state = nil, nil, produceArgs{}, OP_START
 				}
@@ -1408,31 +1377,16 @@ func (h *Handler) handle(buf []byte) error {
 				}
 
 				if len(h.ps.payloadBuf) >= int(h.ps.pma.size) {
-					if h.currentTxWriter == nil {
-						var err error // 1 byte (resp op code) + 4 bytes (request id) + 1 byte (success/failure)
-						currentTxWriter, err := h.cman.GetWriter(h.ps.pa.topic)
-						if err != nil {
-							h.l.Error("get writer", "err", err)
-							h.enqueueWriteErrResponse(err)
-							pool.Put(h.ps.ca.cID)
-							pool.Put(h.ps.payloadBuf)
-							h.ps.ca.cID, h.ps.payloadBuf, h.ps.pa, h.ps.state = nil, nil, produceArgs{}, OP_START
-							continue
-						}
-
-						if err := currentTxWriter.BeginTx(h.ctx); err != nil {
-							h.l.Error("begin tx", "err", err)
-							h.enqueueWriteErrResponse(err)
-							pool.Put(h.ps.ca.cID)
-							pool.Put(h.ps.payloadBuf)
-							h.ps.ca.cID, h.ps.payloadBuf, h.ps.pa, h.ps.state = nil, nil, produceArgs{}, OP_START
-							continue
-						}
-
-						h.currentTxWriter, h.currentTxWriterTopic = currentTxWriter, h.ps.pa.topic
+					if err := h.ensureTxWriter(); err != nil {
+						h.l.Error("ensure tx writer", "err", err)
+						h.enqueueWriteErrResponse(err)
+						pool.Put(h.ps.ca.cID)
+						pool.Put(h.ps.payloadBuf)
+						h.ps.ca.cID, h.ps.payloadBuf, h.ps.pa, h.ps.state = nil, nil, produceArgs{}, OP_START
+						continue
 					}
 
-					h.hproduceTx(h.ps.payloadBuf)
+					h.hproduce(h.currentTxWriter, h.ps.payloadBuf)
 					pool.Put(h.ps.ca.cID)
 					h.ps.ca.cID, h.ps.payloadBuf, h.ps.pa, h.ps.state = nil, nil, produceArgs{}, OP_START
 				}
@@ -1441,31 +1395,16 @@ func (h *Handler) handle(buf []byte) error {
 				h.ps.payloadBuf = append(h.ps.payloadBuf, b)
 
 				if len(h.ps.payloadBuf) >= int(h.ps.pma.size) {
-					if h.currentTxWriter == nil {
-						var err error // 1 byte (resp op code) + 4 bytes (request id) + 1 byte (success/failure)
-						currentTxWriter, err := h.cman.GetWriter(h.ps.pa.topic)
-						if err != nil {
-							h.l.Error("get writer", "err", err)
-							h.enqueueWriteErrResponse(err)
-							pool.Put(h.ps.ca.cID)
-							pool.Put(h.ps.payloadBuf)
-							h.ps.ca.cID, h.ps.payloadBuf, h.ps.pa, h.ps.state = nil, nil, produceArgs{}, OP_START
-							continue
-						}
-
-						if err := currentTxWriter.BeginTx(h.ctx); err != nil {
-							h.l.Error("begin tx", "err", err)
-							h.enqueueWriteErrResponse(err)
-							pool.Put(h.ps.ca.cID)
-							pool.Put(h.ps.payloadBuf)
-							h.ps.ca.cID, h.ps.payloadBuf, h.ps.pa, h.ps.state = nil, nil, produceArgs{}, OP_START
-							continue
-						}
-
-						h.currentTxWriter, h.currentTxWriterTopic = currentTxWriter, h.ps.pa.topic
+					if err := h.ensureTxWriter(); err != nil {
+						h.l.Error("ensure tx writer", "err", err)
+						h.enqueueWriteErrResponse(err)
+						pool.Put(h.ps.ca.cID)
+						pool.Put(h.ps.payloadBuf)
+						h.ps.ca.cID, h.ps.payloadBuf, h.ps.pa, h.ps.state = nil, nil, produceArgs{}, OP_START
+						continue
 					}
 
-					h.hproduceTx(h.ps.payloadBuf)
+					h.hproduce(h.currentTxWriter, h.ps.payloadBuf)
 					pool.Put(h.ps.ca.cID)
 					h.ps.ca.cID, h.ps.payloadBuf, h.ps.pa, h.ps.state = nil, nil, produceArgs{}, OP_START
 				}
@@ -1574,8 +1513,9 @@ func (h *Handler) handle(buf []byte) error {
 					if h.currentTxWriter != nil {
 						if err := h.currentTxWriter.CommitTx(h.ctx); err != nil {
 							h.enqueueTxCommitErr(h.ps.ca.cID, err)
+							h.cman.PutWriter(h.currentTxWriter, h.currentTxWriterTopic)
 							pool.Put(h.ps.ca.cID)
-							h.ps.ca.cID, h.ps.state = nil, OP_START // We are keeping transaction opened here?
+							h.ps.ca.cID, h.currentTxWriter, h.sessionState, h.ps.state = nil, nil, STREAM_STATE_CONNECTED, OP_START
 							continue
 						}
 						h.cman.PutWriter(h.currentTxWriter, h.currentTxWriterTopic)
@@ -2215,10 +2155,26 @@ func (h *Handler) hsubscribe(ctx context.Context, subID byte, r connector.ReadCl
 	}
 }
 
-func (h *Handler) produce(msg []byte) {
+func (h *Handler) ensureTxWriter() error {
+	if h.currentTxWriter != nil {
+		return nil
+	}
+	w, err := h.cman.GetWriter(h.ps.pa.topic)
+	if err != nil {
+		return err
+	}
+	if err := w.BeginTx(h.ctx); err != nil {
+		h.cman.PutWriter(w, h.ps.pa.topic)
+		return err
+	}
+	h.currentTxWriter, h.currentTxWriterTopic = w, h.ps.pa.topic
+	return nil
+}
+
+func (h *Handler) produce(w connector.Writer, msg []byte) {
 	buf := pool.Get(6) // 1 byte (resp op code) + 4 bytes (request id) + 1 byte (err no/err yes)
 	successResp := server.ProduceResponseSuccess(buf, h.ps.ca.cID)
-	h.nonTxSessionWriters[h.ps.pa.topic].Produce(
+	w.Produce(
 		h.ctx, msg,
 		func(err error) {
 			pool.Put(msg)
@@ -2237,13 +2193,13 @@ func (h *Handler) produce(msg []byte) {
 		})
 }
 
-func (h *Handler) hproduce(msg []byte) {
+func (h *Handler) hproduce(w connector.Writer, msg []byte) {
 	buf := pool.Get(6)
 	hdr := buf[:0]
 	hdr = append(hdr, byte(v1.RESP_CODE_HPRODUCE))
 	hdr = append(hdr, h.ps.ca.cID...)
 	hdr = append(hdr, v1.ERR_CODE_NO)
-	h.nonTxSessionWriters[h.ps.pa.topic].HProduce(
+	w.HProduce(
 		h.ctx, msg, h.ps.ha.headersKV,
 		func(err error) {
 			pool.Put(msg)
@@ -2259,48 +2215,6 @@ func (h *Handler) hproduce(msg []byte) {
 			h.out.EnqueueProto(hdr)
 			pool.Put(buf)
 		})
-}
-
-func (h *Handler) produceTx(msg []byte) {
-	buf := pool.Get(6) // 1 byte (resp op code) + 4 bytes (request id) + 1 byte (success/failure)
-	successResp := server.ProduceResponseSuccess(buf, h.ps.ca.cID)
-	h.currentTxWriter.Produce(h.ctx, msg, func(err error) {
-		pool.Put(msg)
-		if err != nil {
-			h.l.Error("produce", "err", err)
-
-			successResp[5] = v1.ERR_CODE_YES
-			errProtoBuf := errProtoBuf(err)
-			h.out.EnqueueProtoMulti(successResp, errProtoBuf)
-			pool.Put(errProtoBuf)
-			pool.Put(buf)
-			return
-		}
-		h.out.EnqueueProto(successResp)
-		pool.Put(buf)
-	})
-}
-
-func (h *Handler) hproduceTx(msg []byte) {
-	buf := pool.Get(6)
-	hdr := buf[:0]
-	hdr = append(hdr, byte(v1.RESP_CODE_HPRODUCE))
-	hdr = append(hdr, h.ps.ca.cID...)
-	hdr = append(hdr, v1.ERR_CODE_NO)
-	h.currentTxWriter.HProduce(h.ctx, msg, h.ps.ha.headersKV, func(err error) {
-		pool.Put(msg)
-		if err != nil {
-			h.l.Error("hproduce", "err", err)
-			hdr[5] = v1.ERR_CODE_YES
-			errProto := errProtoBuf(err)
-			h.out.EnqueueProtoMulti(hdr, errProto)
-			pool.Put(errProto)
-			pool.Put(buf)
-			return
-		}
-		h.out.EnqueueProto(hdr)
-		pool.Put(buf)
-	})
 }
 
 func (h *Handler) fetch(topic string, autoCommit bool, n uint32) {
