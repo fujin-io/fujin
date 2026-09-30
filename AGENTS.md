@@ -15,6 +15,14 @@ adapters delegate session semantics to one transport-neutral Session Core.
 - Primary documents: `README.md`, `protocol.md`, package-local crate documentation
 - gRPC schema: `crates/fujin-grpc-proto/proto/fujin.proto`
 
+## Documentation-first workflow
+
+Before every task, including delegated work, inspect the **current** `docs/` directory tree
+(for example, `tree docs` where available, or a directory listing tool), then read
+`docs/README.md` for task-oriented navigation. Open only the pages relevant to the task and
+follow their links to authoritative specifications and source documents as needed. Do not copy
+the tree into this file or read every documentation page by default.
+
 ## Source of truth
 
 1. Current executable Rust code and public interfaces.

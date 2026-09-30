@@ -7,6 +7,8 @@ target/
 *.dll
 *.so
 *.dylib
+node_modules/
+skills-lock.json
 
 # Generated composition state
 .fujin/
@@ -19,19 +21,20 @@ __pycache__/
 .cursor
 .claude
 .DS_Store
+.omp
+.agents
 
-## Observability
+# Observability
 grafana
 prometheus
 tempo
 
-## Dev configs
+# Dev configs
 config.dev.yaml
 bootstrap.dev.yaml
 .env
-.omp
 
-## test files and dirs
+# Test files and dirs
 sandbox
 TEST_COVERAGE_PLAN.md
 PLUGIN_ROADMAP.md
