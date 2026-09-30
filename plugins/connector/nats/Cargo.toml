@@ -1,0 +1,30 @@
+[package]
+name = "fujin-connector-nats"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "NATS JetStream connector plugin for Fujin"
+homepage.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+async-nats.workspace = true
+bytes.workspace = true
+futures-util.workspace = true
+fujin-connector.workspace = true
+fujin-error.workspace = true
+parking_lot.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+
+[dev-dependencies]
+fujin-core.workspace = true

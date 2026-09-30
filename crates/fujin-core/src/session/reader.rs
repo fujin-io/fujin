@@ -538,7 +538,7 @@ impl SessionCore {
     /// # Errors
     ///
     /// Returns an error for invalid session state or capabilities, reader acquisition failure,
-    /// missing readiness notification, or adapter readiness rejection.
+    /// broker attachment failure, missing readiness notification, or adapter readiness rejection.
     pub async fn subscribe<F>(
         &mut self,
         route: &str,
@@ -556,22 +556,31 @@ impl SessionCore {
             .create_reader(route, profile, auto_settle, with_headers, None)
             .await?;
         let (reader, router) = self.reader_parts(id)?;
-        let result = Arc::new(Mutex::new(None));
-        let callback_result = Arc::clone(&result);
+        let (readiness_sender, readiness_receiver) = oneshot::channel();
         let callback_router = Arc::clone(&router);
-        let callback: crate::ReadyCallback = Box::new(move || {
-            let outcome = ready(id);
+        let callback: crate::ReadyCallback = Box::new(move |attached| {
+            if readiness_sender.is_closed() {
+                return Err(CoreError::Closed);
+            }
+            let outcome = attached.and_then(|()| ready(id));
             if outcome.is_ok() {
                 callback_router.activate();
             }
-            *callback_result.lock() = Some(outcome.clone());
+            let _ = readiness_sender.send(outcome.clone());
             outcome
         });
-        let accepted = reader.subscribe(with_headers, callback);
-        let readiness = result.lock().take().ok_or_else(|| {
-            CoreError::SubscriptionEnded("connector returned before readiness".into())
-        });
-        let outcome = accepted.and(readiness).and_then(|result| result);
+        if let Err(error) = reader.subscribe(with_headers, callback) {
+            return Err(self.cleanup_reader_error(id, error).await);
+        }
+        let outcome = tokio::time::timeout(std::time::Duration::from_secs(30), readiness_receiver)
+            .await
+            .map_err(|_| CoreError::SubscriptionEnded("connector readiness timed out".into()))
+            .and_then(|result| {
+                result.map_err(|_| {
+                    CoreError::SubscriptionEnded("connector returned without readiness".into())
+                })
+            })
+            .and_then(|result| result);
         if let Err(error) = outcome {
             return Err(self.cleanup_reader_error(id, error).await);
         }

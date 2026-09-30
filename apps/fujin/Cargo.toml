@@ -16,6 +16,7 @@ full = [
     "configurator-env",
     "configurator-file",
     "connector-kafka",
+    "connector-nats",
     "transport-tcp",
     "transport-unix",
     "transport-websocket",
@@ -25,6 +26,7 @@ full = [
 configurator-env = ["dep:fujin-configurator-env"]
 configurator-file = ["dep:fujin-configurator-file"]
 connector-kafka = ["dep:fujin-connector-kafka"]
+connector-nats = ["dep:fujin-connector-nats"]
 transport-tcp = ["dep:fujin-transport-tcp"]
 transport-unix = ["dep:fujin-transport-unix"]
 transport-websocket = ["dep:fujin-transport-websocket"]
@@ -37,6 +39,7 @@ fujin = { path = "../../crates/fujin", default-features = false }
 fujin-configurator-env = { path = "../../plugins/configurator/env", optional = true }
 fujin-configurator-file = { path = "../../plugins/configurator/file", optional = true }
 fujin-connector-kafka = { path = "../../plugins/connector/kafka", optional = true }
+fujin-connector-nats = { path = "../../plugins/connector/nats", optional = true }
 fujin-transport-quic = { path = "../../plugins/transport/quic", optional = true }
 fujin-transport-tcp = { path = "../../plugins/transport/tcp", optional = true }
 fujin-transport-unix = { path = "../../plugins/transport/unix", optional = true }

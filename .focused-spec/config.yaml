@@ -1,0 +1,12 @@
+version: 2
+specifications:
+  documents:
+    - match: openspec/specs/**/spec.md
+      scope: current
+    - match: openspec/changes/{scope}/specs/**/spec.md
+      exclude:
+        - openspec/changes/archive/**
+runners:
+  cargo-test:
+    module: ./.focused-spec/runners/cargo-test.mjs
+    timeoutMs: 300000

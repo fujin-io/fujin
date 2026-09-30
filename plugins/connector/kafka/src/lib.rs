@@ -486,7 +486,7 @@ mod implementation {
 
     impl Reader for KafkaReader {
         fn subscribe(&self, with_headers: bool, ready: ReadyCallback) -> Result<()> {
-            ready()?;
+            ready(Ok(()))?;
             self.commands
                 .send(ReaderCommand::Subscribe { with_headers })
                 .map_err(|_| CoreError::Closed)

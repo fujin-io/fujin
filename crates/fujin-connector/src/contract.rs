@@ -280,7 +280,8 @@ pub enum SettlementKind {
     Nack,
 }
 
-pub type ReadyCallback = Box<dyn FnOnce() -> Result<()> + Send + 'static>;
+/// Completes subscription readiness; `Err` rejects the pending subscription before delivery.
+pub type ReadyCallback = Box<dyn FnOnce(Result<()>) -> Result<()> + Send + 'static>;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Delivery {
@@ -319,12 +320,14 @@ pub trait ReaderEventSink: Send + Sync + 'static {
 
 /// Reader operations are accepted synchronously and report through the installed sink.
 pub trait Reader: Send + Sync + 'static {
-    /// Starts the receive lifecycle and invokes `ready` exactly once before message delivery.
+    /// Starts the receive lifecycle and invokes `ready(Ok(()))` exactly once after broker
+    /// attachment succeeds and before message delivery. The callback may be invoked after this
+    /// method returns; invoke `ready(Err(error))` if attachment fails asynchronously.
     ///
     /// # Errors
     ///
     /// Returns an error when the lifecycle cannot be started. An asynchronously terminating
-    /// lifecycle reports [`ReaderEvent::Terminal`].
+    /// lifecycle after readiness reports [`ReaderEvent::Terminal`].
     fn subscribe(&self, with_headers: bool, ready: ReadyCallback) -> Result<()>;
     /// Accepts one bounded fetch operation.
     ///

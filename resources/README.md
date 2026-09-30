@@ -53,3 +53,15 @@ The equivalent shortcut is `make down-kafka-fujin`.
 
 To run only Kafka for connector development, continue using `make up-kafka`, `make down-kafka`, or
 `make e2e-kafka`.
+
+## NATS JetStream test broker
+
+The connector integration tests use an isolated local JetStream-enabled broker on `127.0.0.1:4222`:
+
+```bash
+docker compose -f resources/docker-compose.nats.yaml up -d --wait
+FUJIN_NATS_E2E=1 cargo test -p fujin-connector-nats --test nats_e2e -- --test-threads=1
+docker compose -f resources/docker-compose.nats.yaml down -v
+```
+
+Tests provision their own streams and durable explicit-ACK pull consumers; deployment configuration must provision these separately. The test stack is not a production security template. Configure NATS credentials and TLS and mount a protected `.creds` file in production ([configuration](../docs/configuration.md#nats-jetstream-instances-and-routes)).

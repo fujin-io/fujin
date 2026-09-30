@@ -94,6 +94,41 @@ async fn subscribe_emits_success_before_delivery_and_reuses_id_after_failed_setu
 }
 
 #[tokio::test]
+async fn subscribe_awaits_asynchronous_attachment_and_cleans_rejected_reader() {
+    let (catalog, state, _) = catalog_and_state().await;
+    let mut core = SessionCore::new(
+        Arc::clone(&catalog),
+        Arc::new(NoBindMiddleware),
+        Arc::new(CompletionRecorder::default()),
+    );
+    core.bind("connector", &mut BTreeMap::new(), &BTreeMap::new())
+        .await
+        .expect("bind connector");
+
+    state.push_reader_plan(ReaderPlan {
+        ready_error: Some(CoreError::Unavailable("broker consumer missing".into())),
+        deferred_ready: true,
+        ..ReaderPlan::default()
+    });
+    let rejected = core.subscribe("read", false, false, |_| Ok(())).await;
+    assert!(matches!(rejected, Err(CoreError::Unavailable(_))));
+    assert_eq!(state.readers()[0].snapshot().close, 1);
+    state.push_reader_plan(ReaderPlan {
+        deferred_ready: true,
+        ..ReaderPlan::default()
+    });
+
+    let subscription = core
+        .subscribe("read", false, false, |_| Ok(()))
+        .await
+        .expect("subscribe after failure");
+    assert_eq!(subscription, 0);
+    core.unsubscribe(subscription).await.expect("unsubscribe");
+    core.close().await.expect("close session");
+    catalog.close().await.expect("close catalog");
+}
+
+#[tokio::test]
 async fn fetch_reuses_implicit_reader_and_validates_bounds_and_header_mode() {
     let (catalog, state, _) = catalog_and_state().await;
     state.push_reader_plan(ReaderPlan {

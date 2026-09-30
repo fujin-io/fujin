@@ -924,6 +924,77 @@ connectors:
     }
 
     #[tokio::test]
+    async fn nats_application_builder_serves_native_bind_without_broker() {
+        let config: RuntimeConfig = serde_json::from_value(serde_json::json!({
+            "fujin": {"transports": [{"type": "tcp", "settings": {"addr": "127.0.0.1:0"}}]},
+            "grpc": {"enabled": false},
+            "connectors": {"events": {"type": "nats", "settings": {
+                "common": {"servers": ["nats://127.0.0.1:1"]},
+                "routes": {"publish": {"publish_subject": "events.created"}}
+            }}}
+        }))
+        .expect("parse NATS config");
+        let application = Application::builder()
+            .graceful_upgrade(false)
+            .config(config)
+            .connector(fujin_connector_nats::plugin())
+            .transport(fujin_transport_tcp::plugin())
+            .build()
+            .await
+            .expect("build NATS application without broker connection");
+        let running = application.start().await.expect("start NATS application");
+        let address = &running.endpoints().first().expect("TCP listener").address;
+        let mut stream = tokio::net::TcpStream::connect(address)
+            .await
+            .expect("connect application");
+        let mut hello = vec![0_u8, 1, 1, 1];
+        for field in [b"client".as_slice(), b"build".as_slice()] {
+            hello.extend_from_slice(
+                &u32::try_from(field.len())
+                    .expect("client field length")
+                    .to_be_bytes(),
+            );
+            hello.extend_from_slice(field);
+        }
+        stream.write_all(&hello).await.expect("send HELLO");
+        let mut hello_prefix = [0; 4];
+        stream
+            .read_exact(&mut hello_prefix)
+            .await
+            .expect("read HELLO");
+        assert_eq!(hello_prefix, [19, 0, 1, 1]);
+        let server_name_length = stream.read_u32().await.expect("server name length") as usize;
+        let mut server_name = vec![0; server_name_length];
+        stream
+            .read_exact(&mut server_name)
+            .await
+            .expect("server name");
+        let mut bind = vec![1_u8];
+        bind.extend_from_slice(&6_u32.to_be_bytes());
+        bind.extend_from_slice(b"events");
+        bind.extend_from_slice(&[0; 4]);
+        stream.write_all(&bind).await.expect("send BIND");
+        let mut bind_prefix = [0; 6];
+        stream
+            .read_exact(&mut bind_prefix)
+            .await
+            .expect("read BIND");
+        assert_eq!(bind_prefix, [16, 0, 0, 0, 0, 1]);
+        let route_length = stream.read_u32().await.expect("route length") as usize;
+        let mut route = vec![0; route_length];
+        stream.read_exact(&mut route).await.expect("route");
+        assert_eq!(route, b"publish");
+        let mut profile = [0; 4];
+        stream
+            .read_exact(&mut profile)
+            .await
+            .expect("route profile");
+        assert_eq!(profile, [1, 2, 0, 0]);
+        drop(stream);
+        running.shutdown().await.expect("shutdown NATS application");
+    }
+
+    #[tokio::test]
     async fn builder_rejects_configured_unregistered_transport() {
         let error = Application::builder()
             .graceful_upgrade(false)

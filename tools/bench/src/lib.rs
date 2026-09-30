@@ -357,7 +357,7 @@ impl SessionBenchReader {
 
 impl Reader for SessionBenchReader {
     fn subscribe(&self, with_headers: bool, ready: ReadyCallback) -> Result<()> {
-        ready()?;
+        ready(Ok(()))?;
         let events = Arc::clone(&self.events);
         let payload = self.payload.clone();
         let subscribe_gate = Arc::clone(&self.subscribe_gate);

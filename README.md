@@ -27,13 +27,14 @@ Fujin decouples applications from brokers. Your app talks to Fujin over TCP, QUI
 
 ## Supported Brokers
 
-The production Rust binary includes the `kafka` connector. Additional connectors,
+The production Rust binary includes `kafka` and NATS JetStream (`nats`) connectors. Additional connectors,
 configurators, native transports, and middleware are ordinary Rust crates linked into an embedded
 application or custom binary and registered explicitly through `ApplicationBuilder`.
 
 | Broker | Configuration `type` |
 |---|---|
 | Kafka | `kafka` |
+| NATS JetStream | `nats` |
 
 ## Client Interfaces
 
@@ -79,7 +80,7 @@ for the container deployment shape.
 The production Cargo workspace lives at the repository root.
 
 ```bash
-# Full production binary: Kafka, TCP, QUIC, WebSocket, Unix, and gRPC
+# Full production binary: Kafka, NATS JetStream, TCP, QUIC, WebSocket, Unix, and gRPC
 make build
 
 # Minimal built-in binary selected by Cargo features
@@ -89,8 +90,8 @@ cargo build --release \
 ```
 
 Available `fujin-app` features are `configurator-file`, `configurator-env`, `connector-kafka`,
-`transport-tcp`, `transport-unix`, `transport-websocket`, `transport-quic`, and `grpc`; `full`
-enables all of them and is the default.
+`connector-nats`, `transport-tcp`, `transport-unix`, `transport-websocket`, `transport-quic`, and
+`grpc`; `full` enables all of them and is the default.
 `VERSION` sets the build string returned by `--version` and native HELLO for `fujin-app`.
 
 
@@ -174,7 +175,8 @@ Every plugin implementation is one independent leaf crate in one of five plugin 
 ```text
 plugins/
 ├── connector/
-│   └── kafka/                  # fujin-connector-kafka
+│   ├── kafka/                  # fujin-connector-kafka
+│   └── nats/                   # fujin-connector-nats
 ├── configurator/
 │   ├── env/                    # fujin-configurator-env
 │   └── file/                   # fujin-configurator-file
@@ -308,6 +310,12 @@ Kafka `common.properties` and route-level `properties` map directly to librdkafk
 Connector compilation validates configuration without broker I/O; broker clients are opened lazily
 when a bound session first uses a route.
 
+For NATS JetStream use `type: nats`, `common.servers`, an optional protected `credentials_file`,
+and route `publish_subject` and/or a provisioned `stream` plus explicit-ACK durable pull
+`consumer`. Fujin does not provision broker resources; native/gRPC route profiles advertise
+peer-acknowledged produce and read/settlement without headers or transactions. See the
+[NATS configuration guide](docs/configuration.md#nats-jetstream-instances-and-routes).
+
 Native `settings.fujin` controls protocol PING/PONG, bounded output, write deadlines, and graceful
 STOP termination. QUIC fields mirror `quinn::TransportConfig`; gRPC fields mirror Tonic's
 `Server` and generated service limit methods. Unknown settings are rejected rather than ignored.
@@ -419,6 +427,10 @@ Historical Go-versus-Rust migration measurements are retained in Git history; ac
 tools exercise only the root Rust workspace.
 
 ## Documentation
+
+Start with the [task-oriented documentation](docs/README.md) for setup, configuration,
+client interfaces, operations, architecture, and development. The references below remain
+the authoritative contracts.
 
 - [Native Protocol Specification](protocol.md)
 - [gRPC Proto Definition](crates/fujin-grpc-proto/proto/fujin.proto)

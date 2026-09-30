@@ -47,3 +47,6 @@ tonic-health = { workspace = true, optional = true }
 tonic-prost = { workspace = true, optional = true }
 tracing.workspace = true
 
+[dev-dependencies]
+fujin-connector-nats.workspace = true
+

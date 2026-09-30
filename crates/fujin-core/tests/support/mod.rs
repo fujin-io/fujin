@@ -58,6 +58,7 @@ pub struct SettlementPlan {
 #[derive(Clone, Debug, Default)]
 pub struct ReaderPlan {
     pub ready_error: Option<CoreError>,
+    pub deferred_ready: bool,
     pub subscription_messages: Vec<Delivery>,
     pub terminal: Option<CoreError>,
     pub fetches: VecDeque<FetchPlan>,
@@ -416,23 +417,39 @@ impl TestReader {
 impl Reader for TestReader {
     fn subscribe(&self, _with_headers: bool, ready: ReadyCallback) -> Result<()> {
         self.subscribe_count.fetch_add(1, Ordering::Relaxed);
-        let (ready_error, messages, terminal) = {
+        let (ready_error, deferred_ready, messages, terminal) = {
             let mut plan = self.plan.lock();
             (
                 plan.ready_error.take(),
+                plan.deferred_ready,
                 std::mem::take(&mut plan.subscription_messages),
                 plan.terminal.take(),
             )
         };
-        if let Some(error) = ready_error {
-            return Err(error);
-        }
-        ready()?;
-        for message in messages {
-            self.events.emit(ReaderEvent::Message(message));
-        }
-        if let Some(error) = terminal {
-            self.events.emit(ReaderEvent::Terminal(Err(error)));
+        if deferred_ready {
+            let events = Arc::clone(&self.events);
+            tokio::spawn(async move {
+                tokio::task::yield_now().await;
+                if ready(ready_error.map_or(Ok(()), Err)).is_ok() {
+                    for message in messages {
+                        events.emit(ReaderEvent::Message(message));
+                    }
+                    if let Some(error) = terminal {
+                        events.emit(ReaderEvent::Terminal(Err(error)));
+                    }
+                }
+            });
+        } else {
+            if let Some(error) = ready_error {
+                return Err(error);
+            }
+            ready(Ok(()))?;
+            for message in messages {
+                self.events.emit(ReaderEvent::Message(message));
+            }
+            if let Some(error) = terminal {
+                self.events.emit(ReaderEvent::Terminal(Err(error)));
+            }
         }
         Ok(())
     }

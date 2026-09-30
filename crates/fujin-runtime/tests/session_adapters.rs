@@ -198,7 +198,7 @@ struct TestReader {
 
 impl Reader for TestReader {
     fn subscribe(&self, with_headers: bool, ready: ReadyCallback) -> Result<()> {
-        ready()?;
+        ready(Ok(()))?;
         self.events.emit(ReaderEvent::Message(reader_message(
             b"subscribed",
             with_headers,

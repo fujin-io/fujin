@@ -38,3 +38,4 @@ tracing.workspace = true
 serde_json.workspace = true
 yaml_serde.workspace = true
 fujin-transport-tcp.workspace = true
+fujin-connector-nats.workspace = true

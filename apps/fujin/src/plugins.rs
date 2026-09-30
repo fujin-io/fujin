@@ -12,6 +12,8 @@ pub mod configurator {
 pub mod connector {
     #[cfg(feature = "connector-kafka")]
     pub use fujin_connector_kafka::plugin as kafka;
+    #[cfg(feature = "connector-nats")]
+    pub use fujin_connector_nats::plugin as nats;
 }
 
 /// Native protocol transports.
@@ -36,6 +38,8 @@ pub fn full(builder: fujin::ApplicationBuilder) -> fujin::ApplicationBuilder {
     let builder = builder.configurator(configurator::file());
     #[cfg(feature = "connector-kafka")]
     let builder = builder.connector(connector::kafka());
+    #[cfg(feature = "connector-nats")]
+    let builder = builder.connector(connector::nats());
     #[cfg(feature = "transport-tcp")]
     let builder = builder.transport(transport::tcp());
     #[cfg(all(feature = "transport-unix", unix))]
